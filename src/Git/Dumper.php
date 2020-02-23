@@ -22,6 +22,10 @@ class Dumper {
      */
     public $threads = 3;
     /**
+     * @var bool
+     */
+    public $cachePath;
+    /**
      * @var array
      */
     protected $queue = [];
@@ -33,7 +37,7 @@ class Dumper {
 
     protected $processedHashes = [];
 
-    public function __construct( $url, $path, $threads = 3 ) {
+    public function __construct( $url, $path, $threads = 3, $cachePath = false ) {
 
         $url = fix_url( $url );
         $url = str_replace( '.git/HEAD', '', $url );
@@ -45,6 +49,7 @@ class Dumper {
 
         $this->repo = new Repository( $path );
 
+        $this->cachePath = $cachePath;
     }
 
     public function dump() {
@@ -67,20 +72,21 @@ class Dumper {
             //                $this->processFile( $file, file_get_contents( $this->path . '/.git/' . $file ) );
             //                continue;
             //            }
-            $client->addRequest(
-                Request::make( $this->url . '/.git/' . $file )
-                       ->cache()
-                       ->onSuccess( function ( Request $request ) use ( $file ) {
-                           $this->info( $file );
-                           $this->saveFile( $file, $request->response()->body() );
-                           $this->processFile( $file, $request->response()->body() );
-                       } )
-                       ->onFail( function ( Request $request ) use ( $file ) {
-                           $this->error( $file );
-                           $this->processedHashes [ $file ] = 1;
-                       } )
-            );
+            $r = Request::make( $this->url . '/.git/' . $file );
+            if ( $this->cachePath ) {
+                $r = $r->cache( $this->cachePath );
+            }
 
+            $r = $r->onSuccess( function ( Request $request ) use ( $file ) {
+                $this->info( $file );
+                $this->saveFile( $file, $request->response()->body() );
+                $this->processFile( $file, $request->response()->body() );
+            } )->onFail( function ( Request $request ) use ( $file ) {
+                $this->error( $file );
+                $this->processedHashes [ $file ] = 1;
+            } );
+
+            $client->addRequest( $r );
         }
 
         $client->run();
