@@ -34,6 +34,11 @@ class Dumper {
     protected $processedHashes = [];
 
     public function __construct( $url, $path, $threads = 3 ) {
+
+        $url = fix_url( $url );
+        $url = str_replace( '.git/HEAD', '', $url );
+        $url = str_replace( '.git', '', $url );
+
         $this->url     = $url;
         $this->path    = $path;
         $this->threads = $threads;
