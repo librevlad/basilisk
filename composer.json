@@ -41,5 +41,6 @@
                 "Librevlad\\Basilisk\\BasiliskServiceProvider"
             ]
         }
-    }
+    },
+    "bin": "bin/basilisk"
 }

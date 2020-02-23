@@ -10,6 +10,7 @@ class Extractor {
     use OutputOnCommand;
 
     public $path;
+    public $extractedPath;
     /**
      * @var Repository
      */
@@ -17,8 +18,9 @@ class Extractor {
 
     protected $index = [];
 
-    public function __construct( $path ) {
+    public function __construct( $path, $extractedPath = null ) {
         $this->path = $path;
+        $this->extractedPath = $extractedPath ?? $this->path;
         $this->repo = new Repository( $path );
     }
 
@@ -34,7 +36,7 @@ class Extractor {
     }
 
     protected function traverseCommit( $hash ) {
-        $path = $this->path . '/extracted';
+        $path = $this->extractedPath;
         $this->traverseTree( $hash, $path );
     }
 
