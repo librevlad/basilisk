@@ -1,6 +1,6 @@
-# Librevlad Basilisk
+# Basilisk
 
-Work in progress
+Version Control System Penetration Testing Toolkit
 
 ## Installation
 
@@ -10,7 +10,7 @@ You can install the package via composer:
 composer require librevlad/basilisk
 ```
 
-## Usage
+## Usage (as library)
 
 Work In Progress. This means that the API may change at any time.
 
