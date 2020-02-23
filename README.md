@@ -10,6 +10,22 @@ You can install the package via composer:
 composer global require librevlad/basilisk
 ```
 
+Add `~/.config/composer/vendor/bin/` to your `PATH`
+
+Find repositories:
+```bash
+basilisk git:find -o gits.txt --threads=10 urls.txt
+```
+Fetch repository:
+```bash
+basilisk git:dump -t 10 http://example.com ./examplecom
+```
+Extract repository:
+```bash
+basilisk git:extract ./examplecom
+```
+
+
 ## Usage (as library)
 
 ```bash
