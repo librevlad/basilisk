@@ -1,0 +1,33 @@
+# Basilisk — Default Configuration
+
+http:
+  timeout: 10.0
+  max_connections: 100
+  max_connections_per_host: 30
+  user_agent: "Basilisk/2.0"
+  follow_redirects: true
+  verify_ssl: false
+
+dns:
+  timeout: 5.0
+  nameservers:
+    - "8.8.8.8"
+    - "1.1.1.1"
+  retries: 2
+
+scan:
+  default_ports: [80, 443, 8080, 8443, 21, 22, 25, 3306, 5432, 3389]
+  port_timeout: 3.0
+  max_concurrency: 50
+
+rate_limit:
+  requests_per_second: 100.0
+  burst: 20
+
+storage:
+  wal_mode: true
+  cache_size_mb: 64
+  mmap_size_mb: 2048
+  bulk_chunk_size: 1000
+
+log_level: INFO

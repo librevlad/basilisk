@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ title }}</title>
+<style>
+  :root { --bg: #0d1117; --fg: #c9d1d9; --card: #161b22; --border: #30363d; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', monospace; background: var(--bg); color: var(--fg); padding: 2rem; }
+  h1 { font-size: 1.8rem; margin-bottom: 0.5rem; color: #58a6ff; }
+  .meta { color: #8b949e; margin-bottom: 2rem; }
+  .stats { display: flex; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap; }
+  .stat { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.5rem; min-width: 120px; text-align: center; }
+  .stat .num { font-size: 2rem; font-weight: bold; }
+  .stat .label { font-size: 0.8rem; color: #8b949e; text-transform: uppercase; }
+  .stat.critical .num { color: #f85149; }
+  .stat.high .num { color: #db6d28; }
+  .stat.medium .num { color: #d29922; }
+  .stat.low .num { color: #3fb950; }
+  .stat.info .num { color: #58a6ff; }
+  .finding { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 0.75rem; border-left: 4px solid; }
+  .finding.CRITICAL { border-left-color: #f85149; }
+  .finding.HIGH { border-left-color: #db6d28; }
+  .finding.MEDIUM { border-left-color: #d29922; }
+  .finding.LOW { border-left-color: #3fb950; }
+  .finding.INFO { border-left-color: #58a6ff; }
+  .finding .header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+  .badge { padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; }
+  .badge.CRITICAL { background: #f8514922; color: #f85149; }
+  .badge.HIGH { background: #db6d2822; color: #db6d28; }
+  .badge.MEDIUM { background: #d2992222; color: #d29922; }
+  .badge.LOW { background: #3fb95022; color: #3fb950; }
+  .badge.INFO { background: #58a6ff22; color: #58a6ff; }
+  .finding .title { font-weight: 600; }
+  .finding .target { color: #8b949e; font-size: 0.85rem; }
+  .finding .details { margin-top: 0.5rem; font-size: 0.85rem; color: #8b949e; }
+  .evidence { background: #0d1117; border: 1px solid var(--border); border-radius: 4px; padding: 0.5rem; margin-top: 0.5rem; font-family: monospace; font-size: 0.8rem; white-space: pre-wrap; word-break: break-all; }
+  .tags { display: flex; gap: 0.25rem; margin-top: 0.5rem; flex-wrap: wrap; }
+  .tag { background: #30363d; padding: 2px 6px; border-radius: 3px; font-size: 0.7rem; }
+  footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); color: #8b949e; font-size: 0.8rem; }
+</style>
+</head>
+<body>
+<h1>{{ title }}</h1>
+<p class="meta">Generated: {{ timestamp }} | Status: {{ status }}</p>
+
+<div class="stats">
+  <div class="stat critical"><div class="num">{{ severity_counts.get('CRITICAL', 0) }}</div><div class="label">Critical</div></div>
+  <div class="stat high"><div class="num">{{ severity_counts.get('HIGH', 0) }}</div><div class="label">High</div></div>
+  <div class="stat medium"><div class="num">{{ severity_counts.get('MEDIUM', 0) }}</div><div class="label">Medium</div></div>
+  <div class="stat low"><div class="num">{{ severity_counts.get('LOW', 0) }}</div><div class="label">Low</div></div>
+  <div class="stat info"><div class="num">{{ severity_counts.get('INFO', 0) }}</div><div class="label">Info</div></div>
+</div>
+
+<h2 style="margin-bottom: 1rem; color: #c9d1d9;">Findings ({{ findings|length }})</h2>
+
+{% for f in findings %}
+<div class="finding {{ f.severity }}">
+  <div class="header">
+    <span class="badge {{ f.severity }}">{{ f.severity }}</span>
+    <span class="title">{{ f.title }}</span>
+    <span class="target">{{ f.target }} / {{ f.plugin }}</span>
+  </div>
+  {% if f.description %}<div class="details">{{ f.description }}</div>{% endif %}
+  {% if f.evidence %}<div class="evidence">{{ f.evidence }}</div>{% endif %}
+  {% if f.remediation %}<div class="details"><strong>Fix:</strong> {{ f.remediation }}</div>{% endif %}
+  {% if f.tags %}<div class="tags">{% for tag in f.tags %}<span class="tag">{{ tag }}</span>{% endfor %}</div>{% endif %}
+</div>
+{% endfor %}
+
+<footer>Basilisk v2.0 Security Audit Framework</footer>
+</body>
+</html>
