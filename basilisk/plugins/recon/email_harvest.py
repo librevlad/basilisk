@@ -24,36 +24,55 @@ class EmailHarvestPlugin(BasePlugin):
         r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}",
     )
 
+    # File-like extensions to exclude from email results
+    _EXCLUDE_EXT = (
+        ".png", ".jpg", ".jpeg", ".gif", ".svg", ".css", ".js",
+        ".ico", ".woff", ".woff2", ".ttf", ".eot", ".map",
+    )
+
+    _PAGES = [
+        "/", "/contact", "/contacts", "/about", "/team",
+        "/impressum", "/privacy", "/legal", "/staff",
+        "/about-us", "/support", "/help",
+    ]
+
     async def run(self, target: Target, ctx) -> PluginResult:
         if ctx.http is None:
             return PluginResult.fail(
-                self.meta.name, target.host, error="HTTP client not available"
+                self.meta.name, target.host, error="HTTP client not available",
             )
+
+        from basilisk.utils.http_check import resolve_base_url
 
         emails: set[str] = set()
 
-        # Scrape main page and common pages
-        pages = [
-            f"/{p}"
-            for p in ("", "contact", "contacts", "about", "team", "impressum")
-        ]
+        base_url = await resolve_base_url(target.host, ctx)
+        if not base_url:
+            return PluginResult.success(
+                self.meta.name, target.host,
+                findings=[Finding.info("Host not reachable")],
+                data={"domain_emails": [], "other_emails": []},
+            )
 
-        for page in pages:
-            for scheme in ("https", "http"):
-                url = f"{scheme}://{target.host}{page}"
-                try:
-                    async with ctx.rate:
-                        resp = await ctx.http.get(url, timeout=8.0)
-                        if resp.status == 200:
-                            body = await resp.text(encoding="utf-8", errors="replace")
-                            found = self.EMAIL_RE.findall(body)
-                            for email in found:
-                                email = email.lower()
-                                if not email.endswith((".png", ".jpg", ".gif", ".css", ".js")):
-                                    emails.add(email)
-                            break
-                except Exception:
-                    continue
+        # Scrape pages for emails
+        for page in self._PAGES:
+            if ctx.should_stop:
+                break
+            url = f"{base_url}{page}"
+            try:
+                async with ctx.rate:
+                    resp = await ctx.http.get(url, timeout=8.0)
+                    if resp.status == 200:
+                        body = await resp.text(
+                            encoding="utf-8", errors="replace",
+                        )
+                        found = self.EMAIL_RE.findall(body)
+                        for email in found:
+                            email = email.lower()
+                            if not email.endswith(self._EXCLUDE_EXT):
+                                emails.add(email)
+            except Exception:
+                continue
 
         domain_emails = {e for e in emails if e.endswith(f"@{target.host}")}
         other_emails = emails - domain_emails

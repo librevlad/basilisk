@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from enum import StrEnum
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
     from basilisk.core.executor import PluginContext
-    from basilisk.models.result import PluginResult
+    from basilisk.models.result import Finding, PluginResult, Severity
     from basilisk.models.target import Target
 
 
@@ -33,6 +33,9 @@ class PluginMeta(BaseModel):
     provides: str | None = None  # e.g. "subdomains" — for ProviderPool
     default_enabled: bool = True
     timeout: float = 30.0
+    requires_auth: bool = False     # Skip if no auth session available
+    requires_browser: bool = False  # Skip if headless browser unavailable
+    requires_callback: bool = False  # Skip if OOB callback server unavailable
 
 
 class BasePlugin(ABC):
@@ -56,6 +59,52 @@ class BasePlugin(ABC):
 
     async def teardown(self) -> None:  # noqa: B027
         """Called once after all targets are processed."""
+
+    @staticmethod
+    def make_finding(
+        title: str,
+        severity: Severity,
+        *,
+        evidence: str,
+        description: str = "",
+        remediation: str = "",
+        confidence: float = 1.0,
+        verified: bool = False,
+        false_positive_risk: str = "low",
+        tags: list[str] | None = None,
+    ) -> Finding:
+        """Factory for findings with mandatory evidence for HIGH/CRITICAL.
+
+        Use this instead of Finding.high/critical directly to ensure quality.
+        """
+        from basilisk.models.result import Finding as _Finding
+        from basilisk.models.result import Severity as _Sev
+
+        if severity >= _Sev.HIGH and not evidence:
+            raise ValueError(
+                f"Evidence is required for HIGH/CRITICAL findings: {title}"
+            )
+        return _Finding(
+            title=title,
+            severity=severity,
+            evidence=evidence,
+            description=description,
+            remediation=remediation,
+            confidence=confidence,
+            verified=verified,
+            false_positive_risk=false_positive_risk,
+            tags=tags or [],
+        )
+
+    @staticmethod
+    async def baseline_request(url: str, ctx: Any) -> str | None:
+        """Fetch a 'clean' baseline response for comparison."""
+        try:
+            async with ctx.rate:
+                resp = await ctx.http.get(url, timeout=8.0)
+                return await resp.text(encoding="utf-8", errors="replace")
+        except Exception:
+            return None
 
     def __repr__(self) -> str:
         return f"<Plugin {self.meta.name}>"

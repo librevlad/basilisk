@@ -1,7 +1,12 @@
 """Shared test fixtures."""
 
+import logging
+from unittest.mock import AsyncMock
+
 import pytest
 
+from basilisk.config import Settings
+from basilisk.core.executor import PluginContext
 from basilisk.models.result import Finding, PluginResult
 from basilisk.models.target import Target, TargetScope
 
@@ -45,3 +50,29 @@ def sample_result(sample_finding):
         data={"protocol": "TLSv1.3"},
         duration=1.5,
     )
+
+
+@pytest.fixture
+def mock_ctx():
+    """PluginContext with all dependencies mocked for plugin testing."""
+    rate = AsyncMock()
+    rate.__aenter__ = AsyncMock(return_value=rate)
+    rate.__aexit__ = AsyncMock(return_value=False)
+
+    http = AsyncMock()
+    dns = AsyncMock()
+    net = AsyncMock()
+    wordlists = AsyncMock()
+
+    ctx = PluginContext(
+        config=Settings(),
+        http=http,
+        dns=dns,
+        net=net,
+        rate=rate,
+        wordlists=wordlists,
+        log=logging.getLogger("test"),
+        pipeline={},
+        state={"http_scheme": {"example.com": "https"}},
+    )
+    return ctx

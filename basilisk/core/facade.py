@@ -57,6 +57,8 @@ class Audit:
         self._wordlists: list[str] | None = None
         self._project: Project | None = None
         self._live_report_path: Path | None = None
+        self._credentials: dict[str, tuple[str, str]] = {}
+        self._bearer_tokens: dict[str, str] = {}
 
     @classmethod
     def targets(cls, target_list: list[str], **kwargs: Any) -> Audit:
@@ -108,6 +110,18 @@ class Audit:
         self._project = project
         return self
 
+    def authenticate(
+        self, host: str, username: str, password: str,
+    ) -> Audit:
+        """Set credentials for authenticated scanning of a host."""
+        self._credentials[host] = (username, password)
+        return self
+
+    def bearer(self, host: str, token: str) -> Audit:
+        """Set bearer token for a host."""
+        self._bearer_tokens[host] = token
+        return self
+
     def live_report(self, path: str | Path) -> Audit:
         """Enable live HTML report at specified path."""
         self._live_report_path = Path(path)
@@ -154,6 +168,60 @@ class Audit:
         wordlists_mgr = WordlistManager()
         provider_pool = ProviderPool(registry)
 
+        # Initialize new engines
+        from basilisk.core.exploit_chain import ExploitChainEngine
+        from basilisk.utils.diff import ResponseDiffer
+        from basilisk.utils.dynamic_wordlist import DynamicWordlistGenerator
+        from basilisk.utils.payloads import PayloadEngine
+        from basilisk.utils.waf_bypass import WafBypassEngine
+        differ = ResponseDiffer()
+        payload_engine = PayloadEngine()
+        waf_engine = WafBypassEngine()
+        exploit_chain_engine = ExploitChainEngine()
+        dynamic_wordlist_gen = DynamicWordlistGenerator()
+
+        auth_manager = None
+        if settings.auth.enabled or self._credentials or self._bearer_tokens:
+            from basilisk.core.auth import AuthManager, FormLoginStrategy
+            auth_manager = AuthManager()
+            # Add form login strategy with global or per-host credentials
+            if settings.auth.username:
+                auth_manager.add_strategy(FormLoginStrategy(
+                    username=settings.auth.username,
+                    password=settings.auth.password,
+                    login_url=settings.auth.login_url,
+                ))
+            if settings.auth.bearer_token:
+                for t in self._targets:
+                    auth_manager.set_bearer(t, settings.auth.bearer_token)
+            for _host, (user, pwd) in self._credentials.items():
+                auth_manager.add_strategy(FormLoginStrategy(
+                    username=user, password=pwd,
+                ))
+            for host, token in self._bearer_tokens.items():
+                auth_manager.set_bearer(host, token)
+            # Load persisted sessions if available
+            if settings.auth.session_file:
+                auth_manager.load(Path(settings.auth.session_file))
+
+        callback_server = None
+        if settings.callback.enabled:
+            from basilisk.core.callback import CallbackServer
+            callback_server = CallbackServer(
+                http_port=settings.callback.http_port,
+                dns_port=settings.callback.dns_port,
+                callback_domain=settings.callback.domain,
+            )
+
+        browser_manager = None
+        if settings.browser.enabled:
+            from basilisk.utils.browser import BrowserManager
+            browser_manager = BrowserManager(
+                max_pages=settings.browser.max_pages,
+                timeout=settings.browser.timeout,
+                user_agent=settings.http.user_agent,
+            )
+
         ctx = PluginContext(
             config=settings,
             http=http,
@@ -162,6 +230,14 @@ class Audit:
             rate=rate,
             wordlists=wordlists_mgr,
             providers=provider_pool,
+            auth=auth_manager,
+            browser=browser_manager,
+            callback=callback_server,
+            differ=differ,
+            payloads=payload_engine,
+            waf_bypass=waf_engine,
+            exploit_chain=exploit_chain_engine,
+            dynamic_wordlist=dynamic_wordlist_gen,
         )
         if self._on_finding:
             ctx.emit = self._on_finding
@@ -199,12 +275,27 @@ class Audit:
         phases = self._phases or ["recon", "scanning", "analysis", "pentesting"]
 
         try:
+            # Start optional engines
+            if callback_server:
+                await callback_server.start()
+            if browser_manager:
+                await browser_manager.start()
+
             state = await pipeline.run(scope, self._plugins, phases)
             if ctx.db and run_id:
                 await ctx.db.finish_run(run_id)
+
+            # Save auth sessions for future runs
+            if auth_manager and settings.auth.session_file:
+                auth_manager.save(Path(settings.auth.session_file))
+
             return state
         finally:
             await http.close()
+            if callback_server:
+                await callback_server.stop()
+            if browser_manager:
+                await browser_manager.stop()
             if db:
                 from basilisk.storage.db import close_db
                 await close_db(db)

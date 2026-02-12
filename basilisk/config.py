@@ -72,6 +72,28 @@ class StorageSettings(BaseSettings):
     bulk_chunk_size: int = 1000
 
 
+class AuthSettings(BaseSettings):
+    enabled: bool = False
+    username: str = ""
+    password: str = ""
+    bearer_token: str = ""
+    login_url: str = ""
+    session_file: str = ""
+
+
+class BrowserSettings(BaseSettings):
+    enabled: bool = False
+    max_pages: int = 5
+    timeout: float = 15.0
+
+
+class CallbackSettings(BaseSettings):
+    enabled: bool = False
+    http_port: int = 8880
+    dns_port: int = 8853
+    domain: str = ""
+
+
 class Settings(BaseSettings):
     """Root settings — merges defaults, YAML config, and env vars."""
 
@@ -80,6 +102,9 @@ class Settings(BaseSettings):
     scan: ScanSettings = Field(default_factory=ScanSettings)
     rate_limit: RateLimitSettings = Field(default_factory=RateLimitSettings)
     storage: StorageSettings = Field(default_factory=StorageSettings)
+    auth: AuthSettings = Field(default_factory=AuthSettings)
+    browser: BrowserSettings = Field(default_factory=BrowserSettings)
+    callback: CallbackSettings = Field(default_factory=CallbackSettings)
     projects_dir: Path = PROJECTS_DIR
     wordlists_dir: Path = WORDLISTS_DIR
     log_level: str = "INFO"

@@ -28,23 +28,47 @@ class SubdomainVirusTotalPlugin(BasePlugin):
             )
 
         subdomains: set[str] = set()
-        url = f"https://www.virustotal.com/ui/domains/{target.host}/subdomains?limit=40"
+        base_url = (
+            f"https://www.virustotal.com/ui/domains"
+            f"/{target.host}/subdomains?limit=40"
+        )
 
-        try:
-            async with ctx.rate:
-                resp = await ctx.http.get(url, timeout=15.0)
-                if resp.status == 200:
+        # Paginated API fetch (up to 5 pages = 200 subdomains)
+        cursor = ""
+        for _ in range(5):
+            if ctx.should_stop:
+                break
+            url = base_url + (f"&cursor={cursor}" if cursor else "")
+            try:
+                async with ctx.rate:
+                    resp = await ctx.http.get(url, timeout=15.0)
+                    if resp.status != 200:
+                        break
                     data = await resp.json(content_type=None)
-                    for item in data.get("data", []):
+                    items = data.get("data", [])
+                    if not items:
+                        break
+                    for item in items:
                         sub = item.get("id", "").strip().lower()
-                        if sub and sub != target.host and sub.endswith(f".{target.host}"):
+                        if (
+                            sub
+                            and sub != target.host
+                            and sub.endswith(f".{target.host}")
+                        ):
                             subdomains.add(sub)
-        except Exception:
-            # Fallback: try scraping search page
+                    cursor = data.get("links", {}).get("next", "")
+                    if not cursor:
+                        break
+            except Exception:
+                break
+
+        # Fallback: try scraping search page if API fails
+        if not subdomains:
             try:
                 async with ctx.rate:
                     resp = await ctx.http.get(
-                        f"https://www.virustotal.com/gui/domain/{target.host}/relations",
+                        f"https://www.virustotal.com/gui/domain"
+                        f"/{target.host}/relations",
                         timeout=15.0,
                     )
                     body = await resp.text(encoding="utf-8", errors="replace")

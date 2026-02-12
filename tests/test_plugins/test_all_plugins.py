@@ -17,26 +17,30 @@ class TestAllPluginsMeta:
     def test_all_plugins_discovered(self):
         plugins = self._get_all_plugins()
         names = {p.meta.name for p in plugins}
-        # 74 plugins total (removed misconfig, clickjacking_check, error_page_analyze; added service_brute)
+        # 110 plugins total (Level 3: +4 pentesting)
         expected = {
-            # Recon (17)
+            # Recon (21)
             "dns_enum", "subdomain_crtsh", "subdomain_hackertarget",
             "subdomain_rapiddns", "subdomain_bruteforce", "reverse_ip", "whois",
             "subdomain_dnsdumpster", "subdomain_virustotal", "subdomain_alienvault",
             "subdomain_wayback", "email_harvest", "asn_lookup",
             "dns_zone_transfer", "robots_parser", "sitemap_parser", "s3_bucket_finder",
+            "web_crawler", "shodan_lookup", "github_dorking", "cloud_bucket_enum",
             # Scanning (13)
             "port_scan", "ssl_check", "service_detect",
             "cors_scan", "cookie_scan", "tls_cipher_scan", "http_methods_scan",
             "websocket_detect", "graphql_detect", "cdn_detect", "dnssec_check",
             "redirect_chain", "ipv6_scan",
-            # Analysis (17) — removed error_page_analyze
+            # Analysis (21)
             "http_headers", "tech_detect", "takeover_check",
             "waf_detect", "csp_analyzer", "js_secret_scan", "meta_extract",
             "link_extractor", "form_analyzer", "comment_finder", "version_detect",
             "favicon_hash", "security_txt", "cloud_detect",
             "ssl_cert_chain", "api_detect", "cms_detect",
-            # Pentesting (27) — removed misconfig, clickjacking_check; added service_brute
+            "waf_bypass", "prometheus_scrape", "js_api_extract",
+            "openapi_parser",
+            # Pentesting (55 — Level 3: +sqli_advanced, +xss_advanced, +ssrf_advanced,
+            #              +deserialization_check)
             "dir_brute", "git_exposure", "backup_finder", "ftp_anon",
             "sqli_basic", "xss_basic", "open_redirect", "lfi_check",
             "crlf_injection", "host_header_inject",
@@ -46,6 +50,11 @@ class TestAllPluginsMeta:
             "port_vuln_check", "admin_brute", "ssrf_check", "path_traversal",
             "http_smuggling", "param_pollution", "subdomain_takeover_active",
             "command_injection", "service_brute",
+            "pp_exploit", "idor_exploit", "cloud_metadata_ssrf", "oauth_attack",
+            "graphql_exploit", "cors_exploit", "password_reset_poison",
+            "race_condition", "param_discover",
+            "sqli_advanced", "xss_advanced", "ssrf_advanced",
+            "deserialization_check",
         }
         assert expected.issubset(names), f"Missing: {expected - names}"
 

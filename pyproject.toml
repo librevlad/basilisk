@@ -2,8 +2,26 @@
 name = "basilisk"
 version = "2.0.0"
 description = "Professional modular security audit framework for domain reconnaissance, analysis, and pentesting"
+readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
+authors = [
+    { name = "librevlad" },
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Security",
+    "Topic :: Internet :: WWW/HTTP",
+    "Typing :: Typed",
+]
 dependencies = [
     "typer>=0.12",
     "rich>=13.0",
@@ -28,6 +46,9 @@ full = [
     "python-nmap>=0.7",
     "shodan>=1.30",
 ]
+browser = [
+    "playwright>=1.40",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
@@ -38,6 +59,12 @@ dev = [
 
 [project.scripts]
 basilisk = "basilisk.cli:app"
+
+[project.urls]
+Homepage = "https://github.com/librevlad/basilisk"
+Repository = "https://github.com/librevlad/basilisk"
+Issues = "https://github.com/librevlad/basilisk/issues"
+Changelog = "https://github.com/librevlad/basilisk/blob/main/CHANGELOG.md"
 
 [build-system]
 requires = ["hatchling"]

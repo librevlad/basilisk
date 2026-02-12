@@ -29,31 +29,43 @@ class SubdomainDnsDumpsterPlugin(BasePlugin):
 
         subdomains: set[str] = set()
 
+        # Try the API endpoint first (JSON)
         try:
             async with ctx.rate:
                 resp = await ctx.http.get(
-                    f"https://dnsdumpster.com/static/map/{target.host}.png",
+                    f"https://api.dnsdumpster.com/domain/{target.host}",
                     timeout=15.0,
                 )
+                if resp.status == 200:
+                    data = await resp.json(content_type=None)
+                    for entry in data.get("dns_records", {}).get("host", []):
+                        host = entry.get("host", "").strip().lower()
+                        if (
+                            host
+                            and host != target.host
+                            and host.endswith(f".{target.host}")
+                        ):
+                            subdomains.add(host)
         except Exception:
             pass
 
         # Fallback: scrape the HTML page
-        try:
-            async with ctx.rate:
-                resp = await ctx.http.get(
-                    f"https://dnsdumpster.com/?q={target.host}",
-                    timeout=15.0,
-                )
-                body = await resp.text(encoding="utf-8", errors="replace")
-                pattern = rf"([\w.-]+\.{re.escape(target.host)})"
-                matches = re.findall(pattern, body, re.IGNORECASE)
-                for m in matches:
-                    sub = m.strip().lower().rstrip(".")
-                    if sub != target.host and sub.endswith(f".{target.host}"):
-                        subdomains.add(sub)
-        except Exception:
-            pass
+        if not subdomains:
+            try:
+                async with ctx.rate:
+                    resp = await ctx.http.get(
+                        f"https://dnsdumpster.com/?q={target.host}",
+                        timeout=15.0,
+                    )
+                    body = await resp.text(encoding="utf-8", errors="replace")
+                    pattern = rf"([\w.-]+\.{re.escape(target.host)})"
+                    matches = re.findall(pattern, body, re.IGNORECASE)
+                    for m in matches:
+                        sub = m.strip().lower().rstrip(".")
+                        if sub != target.host and sub.endswith(f".{target.host}"):
+                            subdomains.add(sub)
+            except Exception:
+                pass
 
         findings = [Finding.info(
             f"DNSDumpster: {len(subdomains)} subdomains",

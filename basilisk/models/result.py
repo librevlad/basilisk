@@ -5,7 +5,7 @@ from __future__ import annotations
 from enum import IntEnum
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class Severity(IntEnum):
@@ -41,6 +41,20 @@ class Finding(BaseModel):
     evidence: str = ""
     remediation: str = ""
     tags: list[str] = Field(default_factory=list)
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+    verified: bool = False
+    false_positive_risk: Literal["low", "medium", "high"] = "low"
+
+    @model_validator(mode="after")
+    def _warn_missing_evidence(self) -> Finding:
+        """Log warning for HIGH/CRITICAL findings without evidence."""
+        if self.severity >= Severity.MEDIUM and not self.evidence:
+            import logging
+            logging.getLogger("basilisk.quality").warning(
+                "Finding '%s' (severity=%s) has no evidence",
+                self.title, self.severity.label,
+            )
+        return self
 
     @classmethod
     def critical(cls, title: str, **kwargs: Any) -> Finding:

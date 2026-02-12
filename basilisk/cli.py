@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime
 from pathlib import Path
 
 import typer
@@ -67,16 +68,23 @@ def audit(
         audit_builder = audit_builder.plugins(*plugins.split(","))
     if wordlist:
         audit_builder = audit_builder.wordlists(*wordlist.split(","))
+    project_obj = None
     if project_name:
-        audit_builder = _attach_project(audit_builder, project_name, target)
+        audit_builder, project_obj = _attach_project(audit_builder, project_name, target)
 
     audit_builder = audit_builder.discover().scan().analyze().pentest()
 
-    # Setup live HTML report
+    # Build scan output directory: target_YYYYMMDD_HHMMSS
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_target = target.replace(":", "_").replace("/", "_")
+    base_reports = project_obj.reports_dir if project_obj else Path(output)
+    scan_dir = base_reports / f"{safe_target}_{timestamp}"
+    scan_dir.mkdir(parents=True, exist_ok=True)
+
+    # Setup live HTML report in scan directory
     from basilisk.reporting.live_html import LiveHtmlRenderer
 
-    output_dir = Path(output)
-    live_report_path = output_dir / "live_report.html"
+    live_report_path = scan_dir / "live_report.html"
     live_renderer = LiveHtmlRenderer(live_report_path)
 
     def on_progress(state):
@@ -93,23 +101,30 @@ def audit(
 
     state = asyncio.run(audit_builder.run())
 
-    # Generate reports
+    # Generate reports — always include json + html
     formats = format.split(",")
+    for required in ("json", "html"):
+        if required not in formats:
+            formats.append(required)
+
     engine = ReportEngine()
     engine.register("json", JsonRenderer())
     engine.register("csv", CsvRenderer())
     engine.register("html", HtmlRenderer())
 
-    paths = engine.generate(state, output_dir, formats)
+    paths = engine.generate(state, scan_dir, formats)
 
     console.print(f"\n[bold green]Audit complete![/] {state.total_findings} findings")
-    console.print(f"  Live report: {live_report_path}")
+    console.print(f"  Reports: {scan_dir}")
     for p in paths:
-        console.print(f"  Report: {p}")
+        console.print(f"  - {p.name}")
 
 
-def _attach_project(audit_builder, name: str, target: str):
-    """Load or create project and attach to audit builder."""
+def _attach_project(audit_builder, name: str, target: str) -> tuple:
+    """Load or create project and attach to audit builder.
+
+    Returns (audit_builder, project) tuple.
+    """
     from basilisk.config import Settings
     from basilisk.core.project_manager import ProjectManager
 
@@ -119,7 +134,7 @@ def _attach_project(audit_builder, name: str, target: str):
     except FileNotFoundError:
         proj = pm.create(name, targets=[target])
         console.print(f"[green]Created project '{name}'[/]")
-    return audit_builder.for_project(proj)
+    return audit_builder.for_project(proj), proj
 
 
 def _run_tui_audit(

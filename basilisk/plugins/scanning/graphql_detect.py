@@ -23,7 +23,11 @@ class GraphqlDetectPlugin(BasePlugin):
     GQL_PATHS = [
         "/graphql", "/graphiql", "/gql", "/api/graphql",
         "/v1/graphql", "/v2/graphql", "/query", "/api/gql",
-        "/graphql/console", "/playground",
+        "/graphql/console", "/playground", "/graphql/playground",
+        "/api/v1/graphql", "/api/v2/graphql", "/graphql/v1",
+        "/graphql/schema", "/altair", "/voyager",
+        "/admin/graphql", "/internal/graphql", "/graph",
+        "/graphql-explorer", "/api/graph",
     ]
 
     INTROSPECTION_QUERY = json.dumps({
@@ -38,17 +42,9 @@ class GraphqlDetectPlugin(BasePlugin):
 
         findings: list[Finding] = []
         endpoints: list[dict] = []
-        base_url = ""
+        from basilisk.utils.http_check import resolve_base_url
 
-        for scheme in ("https", "http"):
-            try:
-                async with ctx.rate:
-                    await ctx.http.head(f"{scheme}://{target.host}/", timeout=5.0)
-                    base_url = f"{scheme}://{target.host}"
-                    break
-            except Exception:
-                continue
-
+        base_url = await resolve_base_url(target.host, ctx)
         if not base_url:
             return PluginResult.success(
                 self.meta.name, target.host,
@@ -57,7 +53,12 @@ class GraphqlDetectPlugin(BasePlugin):
             )
 
         for path in self.GQL_PATHS:
+            if ctx.should_stop:
+                break
             url = f"{base_url}{path}"
+
+            # Try POST first (standard)
+            found = False
             try:
                 async with ctx.rate:
                     resp = await ctx.http.post(
@@ -70,27 +71,81 @@ class GraphqlDetectPlugin(BasePlugin):
 
                     if resp.status == 200 and "__schema" in body:
                         endpoints.append({
-                            "path": path, "introspection": True,
+                            "path": path, "introspection": True, "method": "POST",
                         })
                         findings.append(Finding.medium(
                             f"GraphQL introspection enabled at {path}",
                             description=(
-                                "GraphQL introspection reveals the entire API schema"
+                                "GraphQL introspection reveals the entire API "
+                                "schema"
                             ),
                             evidence=f"{url} returns schema data",
                             remediation="Disable introspection in production",
                             tags=["scanning", "graphql", "introspection"],
                         ))
-                    elif resp.status == 200 and ("data" in body or "errors" in body):
+                        found = True
+                    elif resp.status == 200 and (
+                        "data" in body or "errors" in body
+                    ):
                         endpoints.append({
                             "path": path, "introspection": False,
+                            "method": "POST",
                         })
                         findings.append(Finding.info(
-                            f"GraphQL endpoint at {path} (introspection disabled)",
+                            f"GraphQL endpoint at {path} "
+                            "(introspection disabled)",
                             tags=["scanning", "graphql"],
                         ))
+                        found = True
             except Exception:
-                continue
+                pass
+
+            # Try GET-based query (some servers only accept GET)
+            if not found:
+                try:
+                    get_url = (
+                        f"{url}?query="
+                        "%7B__schema%7Btypes%7Bname%7D%7D%7D"
+                    )
+                    async with ctx.rate:
+                        resp = await ctx.http.get(get_url, timeout=8.0)
+                        body = await resp.text(
+                            encoding="utf-8", errors="replace",
+                        )
+                        if resp.status == 200 and "__schema" in body:
+                            endpoints.append({
+                                "path": path, "introspection": True,
+                                "method": "GET",
+                            })
+                            findings.append(Finding.medium(
+                                f"GraphQL introspection via GET at {path}",
+                                description=(
+                                    "GraphQL accepts GET queries with "
+                                    "introspection enabled"
+                                ),
+                                evidence=f"{get_url}",
+                                remediation=(
+                                    "Disable introspection in production. "
+                                    "Restrict to POST-only."
+                                ),
+                                tags=[
+                                    "scanning", "graphql", "introspection",
+                                ],
+                            ))
+                        elif resp.status == 200 and (
+                            "data" in body or "errors" in body
+                        ):
+                            endpoints.append({
+                                "path": path, "introspection": False,
+                                "method": "GET",
+                            })
+                            findings.append(Finding.info(
+                                f"GraphQL endpoint at {path} (GET, no "
+                                "introspection)",
+                                tags=["scanning", "graphql"],
+                            ))
+                except Exception:
+                    continue
 
         if not findings:
             findings.append(Finding.info(

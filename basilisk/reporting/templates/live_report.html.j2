@@ -3,115 +3,872 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-{% if refresh_interval %}<meta http-equiv="refresh" content="{{ refresh_interval }}">{% endif %}
 <title>{{ title }}</title>
 <style>
-  :root { --bg: #0d1117; --fg: #c9d1d9; --card: #161b22; --border: #30363d; }
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap');
+  :root {
+    --bg: #06080d;
+    --bg2: #0b0f18;
+    --bg3: #0f1420;
+    --bg4: #131926;
+    --fg: #c8d0df;
+    --fg-dim: #5a6580;
+    --fg-muted: #384058;
+    --border: #1a2236;
+    --border-glow: #1e2d4a;
+
+    --neon-green: #00ff6a;
+    --neon-cyan: #00e5ff;
+    --neon-blue: #4d7cff;
+    --neon-purple: #b44dff;
+    --neon-pink: #ff2d7b;
+    --neon-orange: #ff8a00;
+    --neon-yellow: #ffe100;
+    --neon-red: #ff1744;
+
+    --critical: #ff1744;
+    --critical-bg: rgba(255,23,68,0.08);
+    --high: #ff6b35;
+    --high-bg: rgba(255,107,53,0.08);
+    --medium: #ffb800;
+    --medium-bg: rgba(255,184,0,0.08);
+    --low: #00ff6a;
+    --low-bg: rgba(0,255,106,0.08);
+    --info: #4d7cff;
+    --info-bg: rgba(77,124,255,0.08);
+
+    --sidebar-w: 220px;
+    --radius: 6px;
+  }
+
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', monospace; background: var(--bg); color: var(--fg); padding: 2rem; }
-  h1 { font-size: 1.8rem; margin-bottom: 0.5rem; color: #58a6ff; }
-  h2 { margin: 1.5rem 0 1rem; color: #c9d1d9; }
-  .meta { color: #8b949e; margin-bottom: 1.5rem; }
-  .status-badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 0.85rem; font-weight: bold; }
-  .status-badge.running { background: #1f6feb33; color: #58a6ff; animation: pulse 2s infinite; }
-  .status-badge.completed { background: #3fb95033; color: #3fb950; }
-  .status-badge.failed { background: #f8514933; color: #f85149; }
-  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
-  .stats { display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
-  .stat { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.5rem; min-width: 110px; text-align: center; }
-  .stat .num { font-size: 2rem; font-weight: bold; }
-  .stat .label { font-size: 0.8rem; color: #8b949e; text-transform: uppercase; }
-  .stat.critical .num { color: #f85149; }
-  .stat.high .num { color: #db6d28; }
-  .stat.medium .num { color: #d29922; }
-  .stat.low .num { color: #3fb950; }
-  .stat.info .num { color: #58a6ff; }
-  .phases { display: flex; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap; }
-  .phase { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; flex: 1; min-width: 180px; }
-  .phase .name { font-weight: 600; text-transform: capitalize; margin-bottom: 0.5rem; }
-  .phase .bar-bg { background: #30363d; border-radius: 4px; height: 8px; overflow: hidden; }
-  .phase .bar-fill { height: 100%; border-radius: 4px; background: #58a6ff; transition: width 0.5s ease; }
-  .phase .bar-fill.done { background: #3fb950; }
-  .phase .bar-fill.running { background: #58a6ff; }
-  .phase .detail { font-size: 0.8rem; color: #8b949e; margin-top: 0.4rem; }
-  .finding { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 0.75rem; border-left: 4px solid; }
-  .finding.CRITICAL { border-left-color: #f85149; }
-  .finding.HIGH { border-left-color: #db6d28; }
-  .finding.MEDIUM { border-left-color: #d29922; }
-  .finding.LOW { border-left-color: #3fb950; }
-  .finding.INFO { border-left-color: #58a6ff; }
-  .finding .header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
-  .badge { padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; }
-  .badge.CRITICAL { background: #f8514922; color: #f85149; }
-  .badge.HIGH { background: #db6d2822; color: #db6d28; }
-  .badge.MEDIUM { background: #d2992222; color: #d29922; }
-  .badge.LOW { background: #3fb95022; color: #3fb950; }
-  .badge.INFO { background: #58a6ff22; color: #58a6ff; }
-  .finding .title { font-weight: 600; }
-  .finding .target { color: #8b949e; font-size: 0.85rem; }
-  .finding .details { margin-top: 0.5rem; font-size: 0.85rem; color: #8b949e; }
-  .evidence { background: #0d1117; border: 1px solid var(--border); border-radius: 4px; padding: 0.5rem; margin-top: 0.5rem; font-family: monospace; font-size: 0.8rem; white-space: pre-wrap; word-break: break-all; }
-  .tags { display: flex; gap: 0.25rem; margin-top: 0.5rem; flex-wrap: wrap; }
-  .tag { background: #30363d; padding: 2px 6px; border-radius: 3px; font-size: 0.7rem; }
-  footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); color: #8b949e; font-size: 0.8rem; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    background: var(--bg); color: var(--fg); line-height: 1.6; font-size: 13px;
+  }
+
+  /* CRT scanlines */
+  body::after {
+    content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 9999;
+    background: repeating-linear-gradient(0deg,
+      transparent, transparent 2px,
+      rgba(0,255,106,0.008) 2px, rgba(0,255,106,0.008) 4px);
+    mix-blend-mode: overlay;
+  }
+
+  /* Grid background */
+  body::before {
+    content: ''; position: fixed; inset: 0; pointer-events: none; z-index: -1;
+    background-image:
+      linear-gradient(rgba(0,229,255,0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,255,0.02) 1px, transparent 1px);
+    background-size: 60px 60px;
+  }
+
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border-glow); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--neon-green); }
+
+  /* --- Sidebar --- */
+  .sidebar {
+    position: fixed; top: 0; left: 0; width: var(--sidebar-w); height: 100vh;
+    background: var(--bg2); border-right: 1px solid var(--border);
+    padding: 0; overflow-y: auto; z-index: 100;
+  }
+  .sidebar-brand {
+    padding: 1rem; border-bottom: 1px solid var(--border);
+  }
+  .sidebar-brand pre {
+    color: var(--neon-green); font-size: 0.45rem; line-height: 1.15;
+    text-shadow: 0 0 10px rgba(0,255,106,0.3); margin-bottom: 0.3rem;
+  }
+  .sidebar-brand .brand-sub {
+    font-size: 0.58rem; color: var(--fg-dim); letter-spacing: 0.12em; text-transform: uppercase;
+  }
+  .sidebar nav { padding: 0.4rem 0; }
+  .sidebar nav a {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 0.4rem 1rem; color: var(--fg-dim); text-decoration: none;
+    font-size: 0.7rem; font-weight: 500;
+    border-left: 2px solid transparent; transition: all 0.2s;
+  }
+  .sidebar nav a:hover, .sidebar nav a.active {
+    color: var(--neon-green); border-left-color: var(--neon-green);
+    background: rgba(0,255,106,0.04);
+  }
+  .sidebar nav a .cnt {
+    background: var(--bg4); padding: 1px 5px; border-radius: 8px;
+    font-size: 0.58rem; color: var(--fg-dim);
+  }
+  .sidebar .sep { height: 1px; background: var(--border); margin: 0.3rem 1rem; }
+
+  /* --- Main --- */
+  .main { margin-left: var(--sidebar-w); padding: 1.5rem 2.5rem; max-width: 1200px; }
+
+  /* Glitch */
+  @keyframes glitch {
+    0%, 90%, 100% { text-shadow: none; }
+    91% { text-shadow: -2px 0 var(--neon-pink), 2px 0 var(--neon-cyan); }
+    93% { text-shadow: 2px 0 var(--neon-pink), -2px 0 var(--neon-cyan); }
+    95% { text-shadow: -1px 0 var(--neon-cyan), 1px 0 var(--neon-pink); }
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  @keyframes scan-line {
+    0% { top: -5%; }
+    100% { top: 105%; }
+  }
+
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* --- Header --- */
+  .header-card {
+    border: 1px solid var(--border); border-radius: var(--radius);
+    background: var(--bg2); padding: 1.25rem; margin-bottom: 1.5rem;
+    position: relative; overflow: hidden;
+  }
+  .header-card::before {
+    content: ''; position: absolute; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--neon-green), transparent);
+    animation: scan-line 4s linear infinite; opacity: 0.3;
+  }
+  .header-card .ascii-logo {
+    color: var(--neon-green); font-size: 0.5rem; line-height: 1.15;
+    text-shadow: 0 0 15px rgba(0,255,106,0.4); margin-bottom: 0.5rem;
+  }
+  .header-card h1 {
+    font-size: 1.3rem; color: var(--fg); font-weight: 700;
+    animation: glitch 8s ease-in-out infinite;
+    display: flex; align-items: center; gap: 0.75rem;
+  }
+  .live-badge {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    padding: 3px 10px; border-radius: 10px; font-size: 0.62rem;
+    font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .live-badge.running { background: rgba(0,255,106,0.12); color: var(--neon-green); }
+  .live-badge.running .dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--neon-green);
+    animation: pulse-glow 1.2s ease-in-out infinite;
+  }
+  .live-badge.completed { background: rgba(0,229,255,0.12); color: var(--neon-cyan); }
+  .live-badge.failed { background: var(--critical-bg); color: var(--critical); }
+
+  .meta-row {
+    display: flex; gap: 1.25rem; flex-wrap: wrap; margin-top: 0.75rem; font-size: 0.75rem;
+  }
+  .meta-row span { display: flex; align-items: center; gap: 0.3rem; }
+  .meta-row .label { color: var(--fg-dim); }
+  .meta-row .value { color: var(--neon-cyan); }
+
+  /* Severity bar */
+  .sev-bar {
+    display: flex; height: 6px; border-radius: 3px; overflow: hidden;
+    background: var(--border); margin-top: 0.75rem;
+  }
+  .sev-bar .seg { height: 100%; transition: width 0.5s; }
+  .sev-legend {
+    display: flex; gap: 0.75rem; margin-top: 0.4rem; font-size: 0.62rem; color: var(--fg-dim); flex-wrap: wrap;
+  }
+  .sev-legend span { display: flex; align-items: center; gap: 0.25rem; }
+  .sev-legend .dot { width: 7px; height: 7px; border-radius: 50%; }
+
+  /* --- Section --- */
+  .section { margin-bottom: 1.5rem; }
+  .section-hdr {
+    display: flex; align-items: center; gap: 0.4rem;
+    margin-bottom: 0.75rem; padding-bottom: 0.4rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .section-hdr .icon {
+    color: var(--neon-green); font-size: 0.72rem;
+    text-shadow: 0 0 8px rgba(0,255,106,0.3);
+  }
+  .section-hdr h2 { font-size: 0.9rem; font-weight: 700; color: var(--fg); }
+  .section-hdr .cnt { font-size: 0.7rem; color: var(--fg-dim); font-weight: 400; }
+
+  /* --- Pipeline / Kill Chain --- */
+  .kill-chain {
+    display: flex; gap: 0; margin-bottom: 1.5rem; overflow-x: auto;
+  }
+  .kc-phase {
+    flex: 1; min-width: 140px; background: var(--bg2); border: 1px solid var(--border);
+    padding: 0.75rem; text-align: center; position: relative;
+  }
+  .kc-phase:first-child { border-radius: var(--radius) 0 0 var(--radius); }
+  .kc-phase:last-child { border-radius: 0 var(--radius) var(--radius) 0; }
+  .kc-phase:not(:last-child)::after {
+    content: ''; position: absolute; right: -8px; top: 50%; transform: translateY(-50%);
+    width: 0; height: 0; border: 8px solid transparent;
+    border-left-color: var(--neon-green); z-index: 2; opacity: 0.5;
+  }
+  .kc-phase .kc-name {
+    font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--fg-dim); margin-bottom: 0.2rem;
+  }
+  .kc-phase .kc-count { font-size: 1.5rem; font-weight: 800; color: var(--neon-green); line-height: 1; }
+  .kc-phase .kc-detail { font-size: 0.58rem; color: var(--fg-dim); margin-top: 0.2rem; }
+  .kc-phase.done { border-color: rgba(0,255,106,0.2); }
+  .kc-phase.done .kc-name { color: var(--neon-green); }
+  .kc-phase.running { border-color: rgba(0,229,255,0.3); }
+  .kc-phase.running .kc-name { color: var(--neon-cyan); }
+  .kc-phase .kc-bar {
+    margin-top: 0.4rem; height: 3px; background: var(--border); border-radius: 2px; overflow: hidden;
+  }
+  .kc-phase .kc-bar-fill { height: 100%; border-radius: 2px; transition: width 0.5s; }
+  .kc-phase .kc-bar-fill.done { background: var(--neon-cyan); }
+  .kc-phase .kc-bar-fill.running {
+    background: linear-gradient(90deg, var(--neon-green) 0%, rgba(0,255,106,0.3) 50%, var(--neon-green) 100%);
+    background-size: 200% 100%; animation: shimmer 1.5s ease-in-out infinite;
+  }
+  .kc-phase .kc-bar-fill.waiting { background: var(--fg-muted); }
+
+  /* --- Severity cards --- */
+  .sev-cards { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+  .sev-card {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 0.5rem 0.7rem; min-width: 80px; text-align: center; transition: all 0.2s;
+  }
+  .sev-card:hover { box-shadow: 0 0 12px rgba(0,255,106,0.06); }
+  .sev-card .num { font-size: 1.5rem; font-weight: 800; }
+  .sev-card .lbl { font-size: 0.58rem; text-transform: uppercase; color: var(--fg-dim); letter-spacing: 0.06em; }
+  .sev-card.critical .num { color: var(--critical); }
+  .sev-card.high .num { color: var(--high); }
+  .sev-card.medium .num { color: var(--medium); }
+  .sev-card.low .num { color: var(--low); }
+  .sev-card.info .num { color: var(--info); }
+
+  /* --- Attack Surface --- */
+  .atk-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 0.6rem; margin-bottom: 1rem;
+  }
+  .atk-card {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 0.75rem 0.85rem; transition: all 0.2s;
+  }
+  .atk-card:hover { border-color: var(--border-glow); }
+  .atk-card-hdr {
+    display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.4rem;
+    font-size: 0.78rem; font-weight: 700;
+  }
+  .atk-card-hdr .host { color: var(--neon-green); }
+
+  .port-table { width: 100%; font-size: 0.7rem; border-collapse: collapse; }
+  .port-table th {
+    text-align: left; color: var(--fg-dim); font-weight: 600; padding: 2px 5px;
+    border-bottom: 1px solid var(--border); font-size: 0.58rem;
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .port-table td { padding: 2px 5px; border-bottom: 1px solid rgba(26,34,54,0.5); }
+  .port-table .port-num { color: var(--neon-green); font-weight: 600; }
+  .port-table .svc-name { color: var(--neon-cyan); }
+  .port-table .banner-text { color: var(--fg-dim); max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .path-list { list-style: none; font-size: 0.7rem; max-height: 160px; overflow-y: auto; }
+  .path-list li { padding: 1px 0; display: flex; align-items: center; gap: 0.3rem; }
+  .path-list .dot-s { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+  .path-list .dot-s.s2xx { background: var(--neon-green); }
+  .path-list .dot-s.s3xx { background: var(--neon-cyan); }
+  .path-list .dot-s.s4xx { background: var(--high); }
+  .path-list .p-text { color: var(--fg); }
+  .path-list .p-status { color: var(--fg-dim); margin-left: auto; }
+
+  .chip { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 0.62rem; margin: 1px; }
+  .chip-tech { background: rgba(0,255,106,0.06); border: 1px solid rgba(0,255,106,0.15); color: var(--neon-green); }
+  .chip-warn { background: rgba(255,107,53,0.06); border: 1px solid rgba(255,107,53,0.15); color: var(--high); }
+  .chip-info { background: rgba(0,229,255,0.06); border: 1px solid rgba(0,229,255,0.15); color: var(--neon-cyan); }
+  .chip-method { background: rgba(77,124,255,0.06); border: 1px solid rgba(77,124,255,0.15); color: var(--neon-blue); }
+  .chip-method.risky { background: rgba(255,23,68,0.06); border: 1px solid rgba(255,23,68,0.15); color: var(--critical); }
+
+  .sub-grid {
+    font-size: 0.7rem; max-height: 180px; overflow-y: auto;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 1px;
+  }
+  .sub-item { color: var(--fg); padding: 1px 0; }
+  .sub-item::before { content: '> '; color: var(--fg-muted); }
+
+  /* --- Plugin Stats --- */
+  .plugin-table { width: 100%; border-collapse: collapse; font-size: 0.7rem; }
+  .plugin-table th {
+    text-align: left; color: var(--fg-dim); font-weight: 600; padding: 0.3rem 0.5rem;
+    border-bottom: 1px solid var(--border); font-size: 0.58rem;
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .plugin-table td { padding: 0.3rem 0.5rem; border-bottom: 1px solid rgba(26,34,54,0.5); }
+  .plugin-table tr:hover { background: var(--bg3); }
+  .plugin-table .pname { color: var(--neon-cyan); font-weight: 600; }
+  .plugin-table .pnum { text-align: center; }
+  .plugin-table .pdur { color: var(--fg-dim); text-align: right; }
+  .perf-bar { height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; min-width: 50px; }
+  .perf-bar-fill { height: 100%; background: var(--neon-green); border-radius: 2px; }
+
+  /* --- Filters --- */
+  .filters-row { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem; }
+  .filter-chip {
+    padding: 3px 9px; border-radius: 10px; font-size: 0.65rem; font-weight: 600;
+    cursor: pointer; border: 1px solid var(--border); background: transparent;
+    color: var(--fg-dim); transition: all 0.2s; font-family: inherit;
+  }
+  .filter-chip:hover { border-color: var(--neon-green); color: var(--neon-green); }
+  .filter-chip.active { color: var(--bg); }
+  .filter-chip.active.sev-critical { background: var(--critical); border-color: var(--critical); }
+  .filter-chip.active.sev-high { background: var(--high); border-color: var(--high); }
+  .filter-chip.active.sev-medium { background: var(--medium); border-color: var(--medium); }
+  .filter-chip.active.sev-low { background: var(--low); border-color: var(--low); }
+  .filter-chip.active.sev-info { background: var(--info); border-color: var(--info); }
+  .search-box {
+    background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 4px 8px; color: var(--fg); font-size: 0.72rem; font-family: inherit; width: 160px;
+  }
+  .search-box:focus { outline: none; border-color: var(--neon-green); }
+  .search-box::placeholder { color: var(--fg-muted); }
+  .tool-btn {
+    background: transparent; border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 4px 8px; color: var(--fg-dim); font-size: 0.65rem; cursor: pointer; font-family: inherit;
+  }
+  .tool-btn:hover { border-color: var(--neon-green); color: var(--neon-green); }
+  .noise-info { font-size: 0.62rem; color: var(--fg-muted); }
+
+  /* --- Findings --- */
+  .finding-group-title {
+    font-size: 0.8rem; font-weight: 700; color: var(--fg); margin-bottom: 0.4rem;
+    margin-top: 0.75rem; display: flex; align-items: center; gap: 0.4rem;
+  }
+  .finding-group-title .cnt { color: var(--fg-dim); font-weight: 400; font-size: 0.7rem; }
+
+  .finding {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+    margin-bottom: 0.35rem; border-left: 3px solid; overflow: hidden; transition: all 0.2s;
+  }
+  .finding:hover { box-shadow: 0 0 12px rgba(0,255,106,0.03); }
+  .finding.CRITICAL { border-left-color: var(--critical); }
+  .finding.HIGH { border-left-color: var(--high); }
+  .finding.MEDIUM { border-left-color: var(--medium); }
+  .finding.LOW { border-left-color: var(--low); }
+  .finding.INFO { border-left-color: var(--info); }
+  .finding summary {
+    padding: 0.5rem 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 0.4rem;
+    list-style: none; font-size: 0.75rem;
+  }
+  .finding summary::-webkit-details-marker { display: none; }
+  .finding summary::before {
+    content: '\25b6'; font-size: 0.45rem; color: var(--fg-muted); transition: transform 0.2s; flex-shrink: 0;
+  }
+  .finding[open] summary::before { transform: rotate(90deg); }
+  .badge {
+    padding: 2px 6px; border-radius: 3px; font-size: 0.58rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.04em; flex-shrink: 0;
+  }
+  .badge.CRITICAL { background: var(--critical-bg); color: var(--critical); }
+  .badge.HIGH { background: var(--high-bg); color: var(--high); }
+  .badge.MEDIUM { background: var(--medium-bg); color: var(--medium); }
+  .badge.LOW { background: var(--low-bg); color: var(--low); }
+  .badge.INFO { background: var(--info-bg); color: var(--info); }
+  .finding .f-title { font-weight: 600; flex: 1; }
+  .finding .f-target { color: var(--fg-dim); font-size: 0.65rem; margin-left: auto; flex-shrink: 0; }
+  .finding-body { padding: 0 0.85rem 0.6rem 1.8rem; font-size: 0.72rem; }
+  .finding-body .desc { color: var(--fg-dim); margin-bottom: 0.3rem; }
+  .evidence-block {
+    background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 0.4rem 0.6rem; margin: 0.3rem 0; font-size: 0.7rem;
+    color: var(--neon-green); white-space: pre-wrap; word-break: break-all;
+  }
+  .evidence-block::before { content: '$ '; color: var(--fg-muted); }
+  .remed-block {
+    color: var(--neon-cyan); margin-top: 0.3rem; font-size: 0.7rem;
+    padding-left: 0.6rem; border-left: 2px solid var(--neon-cyan);
+  }
+  .tags { display: flex; gap: 0.2rem; margin-top: 0.3rem; flex-wrap: wrap; }
+  .tag {
+    border: 1px solid var(--border); padding: 1px 5px; border-radius: 3px;
+    font-size: 0.55rem; color: var(--fg-muted);
+  }
+
+  /* --- Refresh flash --- */
+  .refresh-flash {
+    position: fixed; top: 8px; right: 8px; z-index: 200;
+    padding: 3px 10px; border-radius: 8px; font-size: 0.58rem;
+    background: rgba(0,255,106,0.1); color: var(--neon-green);
+    border: 1px solid rgba(0,255,106,0.2);
+    opacity: 0; transition: opacity 0.3s;
+  }
+  .refresh-flash.show { opacity: 1; }
+
+  /* --- Footer --- */
+  footer {
+    margin-top: 2rem; padding-top: 0.75rem; border-top: 1px solid var(--border);
+    color: var(--fg-muted); font-size: 0.65rem;
+    display: flex; justify-content: space-between;
+  }
+
+  /* Print */
+  @media print {
+    body { background: #fff; color: #222; }
+    body::after, body::before { display: none; }
+    .sidebar, .refresh-flash { display: none; }
+    .main { margin-left: 0; padding: 1rem; }
+    .header-card::before { display: none; }
+    .header-card, .finding, .atk-card, .kc-phase, .sev-card {
+      background: #fafafa; border-color: #ddd;
+    }
+    h1, h2 { color: #111; }
+    .finding { break-inside: avoid; }
+    .finding-body { display: block !important; }
+    .finding summary::before { display: none; }
+    .evidence-block { background: #f0f0f0; color: #111; border-color: #ddd; }
+    .remed-block { color: #0066cc; }
+    .filters-row { display: none; }
+    .badge { border: 1px solid; }
+    footer { color: #888; }
+  }
+
+  @media (max-width: 768px) {
+    .sidebar { display: none; }
+    .main { margin-left: 0; padding: 1rem; }
+    .kill-chain, .sev-cards { flex-direction: column; }
+    .kc-phase:not(:last-child)::after { display: none; }
+    .kc-phase { border-radius: var(--radius); }
+    .atk-grid { grid-template-columns: 1fr; }
+    .sub-grid { grid-template-columns: 1fr; }
+  }
 </style>
 </head>
 <body>
-<h1>{{ title }}</h1>
-<p class="meta">
-  {{ timestamp }} |
-  <span class="status-badge {{ status }}">{{ status | upper }}</span>
-  | Elapsed: {{ elapsed_total }}s
-  {% if is_running %} | Auto-refreshing every {{ refresh_interval }}s{% endif %}
-</p>
 
-<h2>Pipeline Progress</h2>
-<div class="phases">
-{% for phase in phases %}
-  <div class="phase">
-    <div class="name">{{ phase.name }}</div>
-    <div class="bar-bg">
-      <div class="bar-fill {{ phase.status }}" style="width: {{ phase.pct }}%"></div>
+<div class="refresh-flash" id="refreshFlash">syncing...</div>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="sidebar-brand">
+    <pre> ____            _ _ _     _
+| __ )  __ _ ___(_) (_)___| | __
+|  _ \ / _` / __| | | / __| |/ /
+| |_) | (_| \__ \ | | \__ \   &lt;
+|____/ \__,_|___/_|_|_|___/_|\_\</pre>
+    <div class="brand-sub">Live War Room</div>
+  </div>
+  <nav>
+    <a href="#summary">Dashboard<span class="cnt">{{ findings|length }}</span></a>
+    <a href="#pipeline">Kill Chain</a>
+    <div class="sep"></div>
+    <a href="#attack-surface">Attack Surface</a>
+    {% if plugin_stats %}<a href="#plugin-perf">Plugin Ops</a>{% endif %}
+    <div class="sep"></div>
+    <a href="#findings-sec">Findings</a>
+    {% if severity_counts.get('CRITICAL', 0) > 0 %}
+    <a href="#sev-CRITICAL" style="color:var(--critical)">Critical<span class="cnt">{{ severity_counts.get('CRITICAL', 0) }}</span></a>
+    {% endif %}
+    {% if severity_counts.get('HIGH', 0) > 0 %}
+    <a href="#sev-HIGH" style="color:var(--high)">High<span class="cnt">{{ severity_counts.get('HIGH', 0) }}</span></a>
+    {% endif %}
+    {% if severity_counts.get('MEDIUM', 0) > 0 %}
+    <a href="#sev-MEDIUM" style="color:var(--medium)">Medium<span class="cnt">{{ severity_counts.get('MEDIUM', 0) }}</span></a>
+    {% endif %}
+  </nav>
+</aside>
+
+<div class="main" id="live-content">
+
+  <!-- ===== HEADER ===== -->
+  <div class="header-card" id="summary">
+    <pre class="ascii-logo"> ____            _ _ _     _
+| __ )  __ _ ___(_) (_)___| | __
+|  _ \ / _` / __| | | / __| |/ /
+| |_) | (_| \__ \ | | \__ \   &lt;
+|____/ \__,_|___/_|_|_|___/_|\_\</pre>
+    <h1>
+      Live Audit Report
+      {% if is_running %}
+      <span class="live-badge running"><span class="dot"></span>LIVE</span>
+      {% else %}
+      <span class="live-badge {{ status }}">{{ status | upper }}</span>
+      {% endif %}
+    </h1>
+    <div class="meta-row">
+      <span><span class="label">Time:</span> <span class="value">{{ timestamp }}</span></span>
+      <span><span class="label">Elapsed:</span> <span class="value">{{ elapsed_total }}s</span></span>
+      {% if targets_scanned %}<span><span class="label">Targets:</span> <span class="value">{{ targets_scanned }}</span></span>{% endif %}
+      {% if plugins_run %}<span><span class="label">Plugins:</span> <span class="value">{{ plugins_run }}</span></span>{% endif %}
+      <span><span class="label">Findings:</span> <span class="value">{{ findings|length }}{% if noise_count %} <span style="color:var(--fg-dim)">(+{{ noise_count }} noise)</span>{% endif %}</span></span>
     </div>
-    <div class="detail">{{ phase.completed }}/{{ phase.total }} ({{ phase.pct }}%) — {{ phase.elapsed }}s</div>
+
+    {% set c = severity_counts.get('CRITICAL', 0) %}
+    {% set h = severity_counts.get('HIGH', 0) %}
+    {% set m = severity_counts.get('MEDIUM', 0) %}
+    {% set l = severity_counts.get('LOW', 0) %}
+    {% set i = severity_counts.get('INFO', 0) %}
+    {% set total = c + h + m + l + i %}
+    {% if total > 0 %}
+    <div class="sev-bar">
+      {% if c %}<div class="seg" style="width:{{ c/total*100 }}%;background:var(--critical)"></div>{% endif %}
+      {% if h %}<div class="seg" style="width:{{ h/total*100 }}%;background:var(--high)"></div>{% endif %}
+      {% if m %}<div class="seg" style="width:{{ m/total*100 }}%;background:var(--medium)"></div>{% endif %}
+      {% if l %}<div class="seg" style="width:{{ l/total*100 }}%;background:var(--low)"></div>{% endif %}
+      {% if i %}<div class="seg" style="width:{{ i/total*100 }}%;background:var(--info)"></div>{% endif %}
+    </div>
+    <div class="sev-legend">
+      {% if c %}<span><span class="dot" style="background:var(--critical)"></span>Critical {{ c }}</span>{% endif %}
+      {% if h %}<span><span class="dot" style="background:var(--high)"></span>High {{ h }}</span>{% endif %}
+      {% if m %}<span><span class="dot" style="background:var(--medium)"></span>Medium {{ m }}</span>{% endif %}
+      {% if l %}<span><span class="dot" style="background:var(--low)"></span>Low {{ l }}</span>{% endif %}
+      {% if i %}<span><span class="dot" style="background:var(--info)"></span>Info {{ i }}</span>{% endif %}
+    </div>
+    {% endif %}
   </div>
-{% endfor %}
-</div>
 
-<h2>Severity Summary</h2>
-<div class="stats">
-  <div class="stat critical"><div class="num">{{ severity_counts.get('CRITICAL', 0) }}</div><div class="label">Critical</div></div>
-  <div class="stat high"><div class="num">{{ severity_counts.get('HIGH', 0) }}</div><div class="label">High</div></div>
-  <div class="stat medium"><div class="num">{{ severity_counts.get('MEDIUM', 0) }}</div><div class="label">Medium</div></div>
-  <div class="stat low"><div class="num">{{ severity_counts.get('LOW', 0) }}</div><div class="label">Low</div></div>
-  <div class="stat info"><div class="num">{{ severity_counts.get('INFO', 0) }}</div><div class="label">Info</div></div>
-</div>
-
-<h2>Findings ({{ findings|length }})</h2>
-
-{% for f in findings %}
-<div class="finding {{ f.severity }}">
-  <div class="header">
-    <span class="badge {{ f.severity }}">{{ f.severity }}</span>
-    <span class="title">{{ f.title }}</span>
-    <span class="target">{{ f.target }} / {{ f.plugin }}</span>
+  <!-- ===== SEVERITY CARDS ===== -->
+  <div class="sev-cards">
+    <div class="sev-card critical"><div class="num">{{ c }}</div><div class="lbl">Critical</div></div>
+    <div class="sev-card high"><div class="num">{{ h }}</div><div class="lbl">High</div></div>
+    <div class="sev-card medium"><div class="num">{{ m }}</div><div class="lbl">Medium</div></div>
+    <div class="sev-card low"><div class="num">{{ l }}</div><div class="lbl">Low</div></div>
+    <div class="sev-card info"><div class="num">{{ i }}</div><div class="lbl">Info</div></div>
   </div>
-  {% if f.description %}<div class="details">{{ f.description }}</div>{% endif %}
-  {% if f.evidence %}<div class="evidence">{{ f.evidence }}</div>{% endif %}
-  {% if f.remediation %}<div class="details"><strong>Fix:</strong> {{ f.remediation }}</div>{% endif %}
-  {% if f.tags %}<div class="tags">{% for tag in f.tags %}<span class="tag">{{ tag }}</span>{% endfor %}</div>{% endif %}
-</div>
-{% endfor %}
 
-{% if not findings %}
-<div class="finding INFO">
-  <div class="header">
-    <span class="badge INFO">INFO</span>
-    <span class="title">{% if is_running %}Audit in progress...{% else %}No findings{% endif %}</span>
+  <!-- ===== KILL CHAIN / PIPELINE ===== -->
+  {% if phases %}
+  <div class="section" id="pipeline">
+    <div class="section-hdr">
+      <span class="icon">>_</span>
+      <h2>Kill Chain Progress</h2>
+    </div>
+    <div class="kill-chain">
+    {% for phase in phases %}
+      <div class="kc-phase {{ phase.status }}">
+        <div class="kc-name">{{ phase.name }}</div>
+        <div class="kc-count">{{ phase.completed }}/{{ phase.total }}</div>
+        <div class="kc-detail">{{ phase.elapsed }}s</div>
+        <div class="kc-bar">
+          <div class="kc-bar-fill {{ phase.status }}" style="width:{{ phase.pct }}%"></div>
+        </div>
+      </div>
+    {% endfor %}
+    </div>
   </div>
+  {% endif %}
+
+  <!-- ===== ATTACK SURFACE ===== -->
+  {% if attack_surface and (attack_surface.hosts or attack_surface.subdomains) %}
+  <div class="section" id="attack-surface">
+    <div class="section-hdr">
+      <span class="icon">[~]</span>
+      <h2>Attack Surface Map</h2>
+    </div>
+
+    {% if attack_surface.subdomains %}
+    <div class="atk-card" style="margin-bottom:0.6rem;">
+      <div class="atk-card-hdr">Discovered Hosts <span style="color:var(--fg-dim);font-size:0.7rem">({{ attack_surface.subdomains|length }})</span></div>
+      <div class="sub-grid">
+        {% for sub in attack_surface.subdomains[:100] %}
+        <div class="sub-item">{{ sub }}</div>
+        {% endfor %}
+        {% if attack_surface.subdomains|length > 100 %}<div class="sub-item" style="color:var(--fg-muted)">...+{{ attack_surface.subdomains|length - 100 }} more</div>{% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="atk-grid">
+    {% for host, info in attack_surface.hosts.items() %}
+      {% if info.ports or info.services or info.tech or info.paths or info.admin_panels or info.exposed_files or info.api_endpoints or info.backup_files %}
+      <div class="atk-card">
+        <div class="atk-card-hdr"><span class="host">{{ host }}</span></div>
+
+        {% if info.waf %}
+        <div style="margin-bottom:0.3rem;">
+          {% for w in info.waf %}<span class="chip chip-warn">WAF: {{ w }}</span>{% endfor %}
+        </div>
+        {% endif %}
+
+        {% if info.cloud %}
+        <div style="margin-bottom:0.3rem;">
+          {% for c in info.cloud %}<span class="chip chip-info">{{ c }}</span>{% endfor %}
+        </div>
+        {% endif %}
+
+        {% if info.tech or info.cms %}
+        <div style="margin-bottom:0.3rem;">
+          {% for c in info.cms %}<span class="chip chip-warn">{{ c.name }}{% if c.version %} {{ c.version }}{% endif %}</span>{% endfor %}
+          {% for t in info.tech %}<span class="chip chip-tech">{{ t }}</span>{% endfor %}
+        </div>
+        {% endif %}
+
+        {% if info.ports or info.services %}
+        <table class="port-table">
+          <tr><th>Port</th><th>Service</th><th>Banner</th></tr>
+          {% set ns_ports = namespace(shown=[]) %}
+          {% for s in info.services %}
+          <tr>
+            <td class="port-num">{{ s.port }}</td>
+            <td class="svc-name">{{ s.service }}</td>
+            <td class="banner-text" title="{{ s.banner|default('') }}">{{ s.banner|default('')|truncate(40) }}</td>
+          </tr>
+          {% set ns_ports.shown = ns_ports.shown + [s.port] %}
+          {% endfor %}
+          {% for p in info.ports %}
+          {% if p.port not in ns_ports.shown %}
+          <tr>
+            <td class="port-num">{{ p.port }}</td>
+            <td class="svc-name">{{ p.service|default('') }}</td>
+            <td class="banner-text"></td>
+          </tr>
+          {% endif %}
+          {% endfor %}
+        </table>
+        {% endif %}
+
+        {% if info.admin_panels %}
+        <div style="margin-top:0.3rem;font-size:0.62rem;color:var(--high);font-weight:600;text-transform:uppercase">Admin Panels</div>
+        <ul class="path-list">
+          {% for a in info.admin_panels[:10] %}
+          <li><span class="dot-s s2xx"></span><span class="p-text" style="color:var(--high)">{{ a.path }}</span><span class="p-status">{{ a.status }}</span></li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+
+        {% if info.exposed_files %}
+        <div style="margin-top:0.3rem;font-size:0.62rem;color:var(--critical);font-weight:600;text-transform:uppercase">Exposed Files</div>
+        <ul class="path-list">
+          {% for f in info.exposed_files[:10] %}
+          <li><span class="dot-s s2xx"></span><span class="p-text" style="color:var(--critical)">{{ f.path }}</span></li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+
+        {% if info.api_endpoints %}
+        <div style="margin-top:0.3rem;font-size:0.62rem;color:var(--neon-cyan);font-weight:600;text-transform:uppercase">API Endpoints</div>
+        <ul class="path-list">
+          {% for e in info.api_endpoints[:10] %}
+          <li><span class="dot-s s2xx"></span><span class="p-text">{{ e.path }}</span><span class="p-status">{{ e.status }}</span></li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+
+        {% if info.paths %}
+        <div style="margin-top:0.3rem;font-size:0.62rem;font-weight:600;text-transform:uppercase">Discovered Paths</div>
+        <ul class="path-list">
+          {% for p in info.paths[:20] %}
+          <li>
+            <span class="dot-s {% if p.status >= 200 and p.status < 300 %}s2xx{% elif p.status >= 300 and p.status < 400 %}s3xx{% else %}s4xx{% endif %}"></span>
+            <span class="p-text">{{ p.path }}</span>
+            <span class="p-status">{{ p.status }}</span>
+          </li>
+          {% endfor %}
+          {% if info.paths|length > 20 %}<li style="color:var(--fg-muted)">...+{{ info.paths|length - 20 }} more</li>{% endif %}
+        </ul>
+        {% endif %}
+
+        {% if info.methods %}
+        <div style="margin-top:0.3rem;">
+          {% for m in info.methods %}
+          <span class="chip chip-method {% if m in ['PUT','DELETE','TRACE','CONNECT'] %}risky{% endif %}">{{ m }}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+    {% endfor %}
+    </div>
+
+    {% if attack_surface.emails %}
+    <div class="atk-card">
+      <div class="atk-card-hdr">Emails <span style="color:var(--fg-dim);font-size:0.7rem">({{ attack_surface.emails|length }})</span></div>
+      <div style="font-size:0.7rem;">
+        {% for e in attack_surface.emails[:20] %}<span style="color:var(--neon-cyan)">{{ e }}</span>{% if not loop.last %}<span style="color:var(--fg-muted)">, </span>{% endif %}{% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- ===== PLUGIN PERFORMANCE ===== -->
+  {% if plugin_stats %}
+  <div class="section" id="plugin-perf">
+    <div class="section-hdr">
+      <span class="icon">[%]</span>
+      <h2>Plugin Operations</h2>
+      <span class="cnt">({{ plugin_stats|length }})</span>
+    </div>
+    {% set max_dur = plugin_stats|map(attribute='duration')|max if plugin_stats else 1 %}
+    {% set max_dur = max_dur if max_dur > 0 else 1 %}
+    <table class="plugin-table">
+      <tr>
+        <th>Plugin</th>
+        <th style="text-align:center">Targets</th>
+        <th style="text-align:center">Finds</th>
+        <th>Duration</th>
+        <th style="min-width:60px"></th>
+      </tr>
+      {% for p in plugin_stats %}
+      <tr>
+        <td class="pname">{{ p.name }}</td>
+        <td class="pnum">{{ p.targets }}</td>
+        <td class="pnum" style="{% if p.findings > 0 %}color:var(--neon-green);font-weight:700{% endif %}">{{ p.findings }}</td>
+        <td class="pdur">{{ p.duration|round(1) }}s</td>
+        <td>
+          <div class="perf-bar">
+            <div class="perf-bar-fill" style="width:{{ (p.duration / max_dur * 100)|round|int }}%"></div>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% endif %}
+
+  <!-- ===== FINDINGS ===== -->
+  <div class="section" id="findings-sec">
+    <div class="section-hdr">
+      <span class="icon">[#]</span>
+      <h2>Findings</h2>
+      <span class="cnt">({{ findings|length }})</span>
+    </div>
+
+    <div class="filters-row">
+      <button class="filter-chip active sev-critical" data-sev="CRITICAL" onclick="toggleFilter(this)">Critical</button>
+      <button class="filter-chip active sev-high" data-sev="HIGH" onclick="toggleFilter(this)">High</button>
+      <button class="filter-chip active sev-medium" data-sev="MEDIUM" onclick="toggleFilter(this)">Medium</button>
+      <button class="filter-chip active sev-low" data-sev="LOW" onclick="toggleFilter(this)">Low</button>
+      <button class="filter-chip sev-info" data-sev="INFO" onclick="toggleFilter(this)">Info</button>
+      <input class="search-box" type="text" placeholder="Search..." oninput="applyFilters()" id="searchBox">
+      <button class="tool-btn" onclick="toggleAll(true)">Expand</button>
+      <button class="tool-btn" onclick="toggleAll(false)">Collapse</button>
+      {% if noise_count %}<span class="noise-info">{{ noise_count }} noise hidden</span>{% endif %}
+    </div>
+
+    <div id="findings-container">
+    {% for sev in ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'] %}
+    {% set sev_findings = findings | selectattr('severity', 'equalto', sev) | list %}
+    {% if sev_findings %}
+    <div class="finding-group" data-group-key="{{ sev }}" id="sev-{{ sev }}">
+      <div class="finding-group-title">{{ sev }} <span class="cnt">({{ sev_findings|length }})</span></div>
+      {% for f in sev_findings %}
+      <details class="finding {{ f.severity }}" data-severity="{{ f.severity }}" data-target="{{ f.target }}" data-plugin="{{ f.plugin }}" data-search="{{ f.title|lower }} {{ f.description|lower }} {{ (f.evidence or '')|lower }}">
+        <summary>
+          <span class="badge {{ f.severity }}">{{ f.severity }}</span>
+          <span class="f-title">{{ f.title }}</span>
+          <span class="f-target">{{ f.target }}</span>
+        </summary>
+        <div class="finding-body">
+          {% if f.description %}<div class="desc">{{ f.description }}</div>{% endif %}
+          {% if f.evidence %}<div class="evidence-block">{{ f.evidence }}</div>{% endif %}
+          {% if f.remediation %}<div class="remed-block">{{ f.remediation }}</div>{% endif %}
+          {% if f.tags %}<div class="tags">{% for tag in f.tags %}<span class="tag">{{ tag }}</span>{% endfor %}</div>{% endif %}
+        </div>
+      </details>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% endfor %}
+    </div>
+
+    {% if not findings %}
+    <div class="finding INFO" style="border-left:3px solid var(--info);">
+      <div style="padding:0.5rem 0.85rem;font-size:0.75rem;display:flex;align-items:center;gap:0.4rem;">
+        <span class="badge INFO">INFO</span>
+        <span class="f-title">{% if is_running %}Scanning in progress...{% else %}No actionable findings{% endif %}</span>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <footer>
+    <span>Basilisk v2.0 — Live War Room</span>
+    <span id="footerTime">{{ timestamp }}</span>
+  </footer>
 </div>
+
+<script>
+/* --- Filters --- */
+function toggleFilter(btn) { btn.classList.toggle('active'); applyFilters(); }
+function applyFilters() {
+  const active = new Set([...document.querySelectorAll('.filter-chip.active')].map(b => b.dataset.sev));
+  const q = (document.getElementById('searchBox')?.value || '').toLowerCase();
+  document.querySelectorAll('.finding[data-severity]').forEach(f => {
+    f.style.display = (active.has(f.dataset.severity) && (!q || f.dataset.search.includes(q))) ? '' : 'none';
+  });
+  document.querySelectorAll('.finding-group').forEach(g => {
+    g.style.display = g.querySelectorAll('.finding[data-severity]:not([style*="display: none"])').length ? '' : 'none';
+  });
+}
+function toggleAll(open) { document.querySelectorAll('details.finding').forEach(d => d.open = open); }
+applyFilters();
+
+/* --- Live refresh --- */
+{% if refresh_interval %}
+(function() {
+  const INTERVAL = {{ refresh_interval }} * 1000;
+  const flash = document.getElementById('refreshFlash');
+
+  function saveState() {
+    const open = [];
+    document.querySelectorAll('details.finding[open]').forEach((d, i) => open.push(i));
+    return {
+      scrollY: window.scrollY,
+      openDetails: open,
+      search: document.getElementById('searchBox')?.value || '',
+      activeFilters: [...document.querySelectorAll('.filter-chip.active')].map(b => b.dataset.sev),
+    };
+  }
+
+  function restoreState(state) {
+    window.scrollTo(0, state.scrollY);
+    const box = document.getElementById('searchBox');
+    if (box) box.value = state.search;
+    document.querySelectorAll('.filter-chip').forEach(b => {
+      if (state.activeFilters.includes(b.dataset.sev)) b.classList.add('active');
+      else b.classList.remove('active');
+    });
+    state.openDetails.forEach(i => {
+      const all = document.querySelectorAll('details.finding');
+      if (all[i]) all[i].open = true;
+    });
+    applyFilters();
+  }
+
+  async function refresh() {
+    const state = saveState();
+    try {
+      const resp = await fetch(location.href, { cache: 'no-store' });
+      if (!resp.ok) return;
+      const html = await resp.text();
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+      const newContent = doc.getElementById('live-content');
+      if (!newContent) return;
+      const container = document.getElementById('live-content');
+      container.innerHTML = newContent.innerHTML;
+      restoreState(state);
+      flash.classList.add('show');
+      setTimeout(() => flash.classList.remove('show'), 800);
+    } catch(e) { /* retry next cycle */ }
+  }
+
+  setInterval(refresh, INTERVAL);
+})();
 {% endif %}
 
-<footer>Basilisk v2.0 Security Audit Framework — Live Report</footer>
+/* Sidebar scroll spy */
+const obs = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      document.querySelectorAll('.sidebar nav a').forEach(a => a.classList.remove('active'));
+      const link = document.querySelector('.sidebar nav a[href="#' + e.target.id + '"]');
+      if (link) link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-20% 0px -60% 0px' });
+document.querySelectorAll('[id^="sev-"], #summary, #pipeline, #attack-surface, #findings-sec, #plugin-perf').forEach(el => obs.observe(el));
+</script>
 </body>
 </html>

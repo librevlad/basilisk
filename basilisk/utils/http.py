@@ -91,6 +91,46 @@ class AsyncHttpClient:
             kw["timeout"] = aiohttp.ClientTimeout(total=timeout)
         return await session.head(url, **kw)
 
+    async def post(
+        self,
+        url: str,
+        data: Any = None,
+        headers: dict[str, str] | None = None,
+        timeout: float | None = None,
+        **kwargs: Any,
+    ) -> aiohttp.ClientResponse:
+        session = await self._ensure_session()
+        kw: dict[str, Any] = {
+            "allow_redirects": self.follow_redirects,
+            **kwargs,
+        }
+        if headers:
+            kw["headers"] = headers
+        if timeout:
+            kw["timeout"] = aiohttp.ClientTimeout(total=timeout)
+        if data is not None:
+            kw["data"] = data
+        return await session.post(url, **kw)
+
+    async def request(
+        self,
+        method: str,
+        url: str,
+        headers: dict[str, str] | None = None,
+        timeout: float | None = None,
+        **kwargs: Any,
+    ) -> aiohttp.ClientResponse:
+        session = await self._ensure_session()
+        kw: dict[str, Any] = {
+            "allow_redirects": self.follow_redirects,
+            **kwargs,
+        }
+        if headers:
+            kw["headers"] = headers
+        if timeout:
+            kw["timeout"] = aiohttp.ClientTimeout(total=timeout)
+        return await session.request(method, url, **kw)
+
     async def fetch_text(self, url: str, **kwargs: Any) -> str | None:
         """Convenience: GET and return response body as text, or None on error."""
         try:
@@ -133,3 +173,86 @@ class AsyncHttpClient:
 
     async def __aexit__(self, *_: Any) -> None:
         await self.close()
+
+
+# Ports that are typically HTTP/HTTPS services
+_TLS_PORTS = {443, 8443, 9443, 4443}
+_HTTP_PORTS = {80, 8080, 8000, 8888, 9090, 3000, 5000, 4200, 3001}
+_ALL_WEB_PORTS = _TLS_PORTS | _HTTP_PORTS
+
+
+async def resolve_base_urls(target: Any, ctx: Any) -> list[str]:
+    """Resolve all reachable HTTP(S) base URLs for a target.
+
+    Checks standard ports 443/80, then reads port_scan results
+    from the pipeline context to discover HTTP services on
+    non-standard ports (8080, 8443, 9090, etc.).
+
+    Returns a list of verified base URLs like:
+      ["https://example.com", "http://example.com:8080"]
+    """
+    if ctx.http is None:
+        return []
+
+    candidates: list[tuple[str, int]] = [
+        ("https", 443),
+        ("http", 80),
+    ]
+
+    # Read port_scan results for additional ports
+    port_key = f"port_scan:{target.host}"
+    port_result = ctx.pipeline.get(port_key) if ctx.pipeline else None
+    if port_result and port_result.ok:
+        open_ports = {p["port"] for p in port_result.data.get("open_ports", [])}
+        for port in sorted(open_ports):
+            if port in (80, 443):
+                continue
+            if port in _TLS_PORTS:
+                candidates.append(("https", port))
+            elif port in _HTTP_PORTS:
+                candidates.append(("http", port))
+            else:
+                # Check if service_detect identified it as HTTP
+                svc_key = f"service_detect:{target.host}"
+                svc_result = ctx.pipeline.get(svc_key)
+                if svc_result and svc_result.ok:
+                    for svc in svc_result.data.get("services", []):
+                        if svc.get("port") == port:
+                            sname = (svc.get("service") or "").lower()
+                            if "http" in sname:
+                                scheme = "https" if "https" in sname else "http"
+                                candidates.append((scheme, port))
+
+    # Verify each candidate is reachable
+    base_urls: list[str] = []
+    seen: set[str] = set()
+
+    for scheme, port in candidates:
+        if (scheme == "https" and port == 443) or (scheme == "http" and port == 80):
+            url = f"{scheme}://{target.host}"
+        else:
+            url = f"{scheme}://{target.host}:{port}"
+
+        if url in seen:
+            continue
+        seen.add(url)
+
+        try:
+            async with ctx.rate:
+                await ctx.http.head(f"{url}/", timeout=5.0)
+                base_urls.append(url)
+        except Exception:
+            # For non-standard ports, try the other scheme
+            if port not in (80, 443):
+                alt = "http" if scheme == "https" else "https"
+                alt_url = f"{alt}://{target.host}:{port}"
+                if alt_url not in seen:
+                    seen.add(alt_url)
+                    try:
+                        async with ctx.rate:
+                            await ctx.http.head(f"{alt_url}/", timeout=5.0)
+                            base_urls.append(alt_url)
+                    except Exception:
+                        pass
+
+    return base_urls

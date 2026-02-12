@@ -28,3 +28,23 @@ data/
 
 # uv
 uv.lock
+
+# Secrets / certificates
+.env
+.env.*
+*.key
+*.pem
+*.p12
+secrets.yaml
+
+# Coverage
+.coverage
+.coverage.*
+htmlcov/
+
+# Type checking
+.mypy_cache/
+.pyright/
+
+# Dev scripts
+audit_subdomains.py
