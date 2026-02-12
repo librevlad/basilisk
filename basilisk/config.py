@@ -79,6 +79,9 @@ class AuthSettings(BaseSettings):
     bearer_token: str = ""
     login_url: str = ""
     session_file: str = ""
+    victim_username: str = ""
+    victim_password: str = ""
+    victim_bearer_token: str = ""
 
 
 class BrowserSettings(BaseSettings):

@@ -11,7 +11,7 @@ from jinja2 import Environment, FileSystemLoader
 
 from basilisk.core.pipeline import PipelineState
 from basilisk.models.result import Severity
-from basilisk.reporting.live_html import _extract_attack_surface, _is_noise
+from basilisk.reporting.live_html import _build_site_tree, _extract_attack_surface, _is_noise
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 
@@ -365,6 +365,7 @@ class HtmlRenderer:
         total_duration = sum(r.duration for r in state.results)
 
         attack_surface = _extract_attack_surface(state.results)
+        site_tree = _build_site_tree(attack_surface)
 
         # New data for War Room template
         plugin_stats = _extract_plugin_stats(state.results)
@@ -415,6 +416,7 @@ class HtmlRenderer:
             vuln_categories=vuln_categories,
             radar_points=radar_points,
             exploit_chains=exploit_chains,
+            site_tree=site_tree,
         )
 
         output_path.write_text(html, encoding="utf-8")

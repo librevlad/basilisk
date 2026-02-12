@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import re
 import secrets
 from typing import ClassVar
 
@@ -155,7 +156,104 @@ class SubdomainBruteforcePlugin(BasePlugin):
                     target.host,
                 )
 
-        # --- Phase 6: Build results ---
+        # --- Phase 6: Gotator-style permutation bruteforce ---
+        if found and not ctx.should_stop:
+            discovered_subs = list(found.keys())
+            perms = self._gotator_permutations(discovered_subs, target.host)
+            if perms:
+                perm_total = len(perms)
+                for chunk_start in range(0, perm_total, CHUNK_SIZE):
+                    if ctx.should_stop:
+                        break
+                    chunk = perms[chunk_start : chunk_start + CHUNK_SIZE]
+                    # Resolve permutation candidates directly (they are FQDNs)
+                    perm_tasks = []
+                    for fqdn in chunk:
+                        async def check_perm(f: str = fqdn) -> tuple[str, list[str]] | None:
+                            async with sem, ctx.rate:
+                                ips = await ctx.dns.get_ips(f)
+                                if not ips:
+                                    return None
+                                if is_wildcard:
+                                    real_ips = [ip for ip in ips if ip not in wildcard_ips]
+                                    if not real_ips:
+                                        return None
+                                    return f, real_ips
+                                return f, ips
+                        perm_tasks.append(check_perm())
+                    results = await asyncio.gather(*perm_tasks, return_exceptions=True)
+                    for r in results:
+                        if isinstance(r, tuple):
+                            fqdn, ips = r
+                            if fqdn not in found:
+                                found[fqdn] = ips
+
+                with contextlib.suppress(Exception):
+                    ctx.emit(
+                        Finding.info(
+                            f"Permutation phase: tested {len(perms)} candidates, "
+                            f"total found: {len(found)}",
+                            tags=["recon", "subdomains", "permutation", "progress"],
+                        ),
+                        target.host,
+                    )
+
+        # --- Phase 7: Recursive bruteforce (max depth=2) ---
+        if found and not ctx.should_stop:
+            # Use top 50 words from original wordlist for recursive brute
+            recursive_words = words[:50]
+            new_found: dict[str, list[str]] = {}
+            for depth in range(2):
+                if ctx.should_stop:
+                    break
+                # Get subdomains to recurse into (from previous iteration or initial)
+                base_subs = list(new_found.keys()) if depth > 0 else list(found.keys())
+                if not base_subs:
+                    break
+                for sub_fqdn in base_subs[:20]:  # Limit recursive targets
+                    if ctx.should_stop:
+                        break
+                    rec_tasks = []
+                    for w in recursive_words:
+                        rec_fqdn = f"{w}.{sub_fqdn}"
+
+                        async def check_rec(
+                            f: str = rec_fqdn,
+                        ) -> tuple[str, list[str]] | None:
+                            async with sem, ctx.rate:
+                                ips = await ctx.dns.get_ips(f)
+                                if not ips:
+                                    return None
+                                if is_wildcard:
+                                    real_ips = [
+                                        ip for ip in ips if ip not in wildcard_ips
+                                    ]
+                                    if not real_ips:
+                                        return None
+                                    return f, real_ips
+                                return f, ips
+
+                        rec_tasks.append(check_rec())
+                    results = await asyncio.gather(*rec_tasks, return_exceptions=True)
+                    for r in results:
+                        if isinstance(r, tuple):
+                            fqdn, ips = r
+                            if fqdn not in found and fqdn not in new_found:
+                                new_found[fqdn] = ips
+                # Merge new_found into found
+                found.update(new_found)
+
+            if new_found:
+                with contextlib.suppress(Exception):
+                    ctx.emit(
+                        Finding.info(
+                            f"Recursive bruteforce: {len(new_found)} additional subdomains",
+                            tags=["recon", "subdomains", "recursive", "progress"],
+                        ),
+                        target.host,
+                    )
+
+        # --- Phase 8: Build results ---
         sorted_subs = sorted(found.keys())
 
         if is_wildcard:
@@ -199,3 +297,31 @@ class SubdomainBruteforcePlugin(BasePlugin):
                 "words_tested": total,
             },
         )
+
+    @staticmethod
+    def _gotator_permutations(
+        subdomains: list[str], domain: str, *, max_perms: int = 500,
+    ) -> list[str]:
+        """Generate gotator-style permutation candidates from discovered subdomains."""
+        words: set[str] = set()
+        for sub in subdomains:
+            prefix = sub.replace(f".{domain}", "").replace(domain, "")
+            parts = re.split(r"[.\-_]", prefix)
+            words.update(p for p in parts if p and len(p) > 1)
+
+        suffixes = [
+            "1", "2", "3", "01", "02",
+            "dev", "staging", "stage", "test", "qa",
+            "internal", "int", "admin", "mgmt", "api",
+            "new", "old", "legacy", "beta", "alpha",
+            "prod", "production", "backup", "bak", "temp",
+        ]
+        permutations: list[str] = []
+        for word in sorted(words):
+            for sfx in suffixes:
+                permutations.append(f"{word}-{sfx}.{domain}")
+                permutations.append(f"{sfx}-{word}.{domain}")
+                permutations.append(f"{word}{sfx}.{domain}")
+            if len(permutations) >= max_perms:
+                break
+        return permutations[:max_perms]

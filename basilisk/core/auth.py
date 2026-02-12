@@ -347,6 +347,7 @@ class AuthManager:
         self._sessions: dict[str, AuthSession] = {}
         self._strategies: list[LoginStrategy] = []
         self._credentials: dict[str, dict[str, str]] = {}
+        self._named_sessions: dict[str, dict[str, AuthSession]] = {}
 
     def add_strategy(self, strategy: LoginStrategy) -> None:
         """Register a login strategy."""
@@ -443,3 +444,35 @@ class AuthManager:
                 )
         except Exception:
             logger.warning("Failed to load auth sessions from %s", path)
+
+    def set_named_bearer(self, host: str, role: str, token: str) -> None:
+        """Set bearer token for a named role (e.g. 'attacker', 'victim')."""
+        named = self._named_sessions.setdefault(host, {})
+        named[role] = AuthSession(
+            host=host,
+            strategy="bearer",
+            headers={"Authorization": f"Bearer {token}"},
+            is_authenticated=True,
+            meta={"role": role},
+        )
+
+    def set_named_credentials(
+        self, host: str, role: str, username: str, password: str,
+    ) -> None:
+        """Set credentials for a named role."""
+        key = f"{host}:{role}"
+        self._credentials[key] = {"username": username, "password": password}
+
+    def get_named_session(self, host: str, role: str) -> AuthSession | None:
+        """Get existing named session for a role."""
+        return self._named_sessions.get(host, {}).get(role)
+
+    def has_dual_sessions(self, host: str) -> bool:
+        """True if both 'attacker' and 'victim' sessions exist."""
+        named = self._named_sessions.get(host, {})
+        return (
+            "attacker" in named
+            and "victim" in named
+            and named["attacker"].is_authenticated
+            and named["victim"].is_authenticated
+        )

@@ -111,6 +111,35 @@ class DnsEnumPlugin(BasePlugin):
         dkim_findings = await self._check_dkim(ctx, target.host)
         findings.extend(dkim_findings)
 
+        # Phase 5b: MTA-STS check
+        if not ctx.should_stop and ctx.http:
+            mta_sts_findings = await self._check_mta_sts(ctx, target.host)
+            findings.extend(mta_sts_findings)
+
+        # Phase 5c: BIMI check
+        if not ctx.should_stop:
+            bimi_findings = await self._check_bimi(ctx, target.host)
+            findings.extend(bimi_findings)
+
+        # Phase 5d: CAA check
+        if not ctx.should_stop:
+            caa_findings = await self._check_caa(ctx, target.host)
+            findings.extend(caa_findings)
+
+        # Phase 5e: NSEC zone walking
+        if not ctx.should_stop:
+            nsec_findings = await self._check_nsec_walk(
+                ctx, target.host,
+            )
+            findings.extend(nsec_findings)
+
+        # Phase 5f: DNS cache snooping
+        if not ctx.should_stop:
+            snoop_findings = await self._check_cache_snooping(
+                ctx, target.host,
+            )
+            findings.extend(snoop_findings)
+
         # Phase 6: MX analysis
         mx_records = [r for r in records if r.type.value == "MX"]
         mx_findings = self._analyze_mx(mx_records, target.host)
@@ -336,6 +365,16 @@ class DnsEnumPlugin(BasePlugin):
             "selector1", "selector2", "s1", "s2", "dkim", "smtp",
             "mandrill", "mailjet", "amazonses", "sendgrid", "postmark",
             "everlytickey1", "everlytickey2", "cm", "mg",
+            # Extended selectors
+            "s1024", "s2048", "protonmail", "zoho", "hubspot",
+            "brevo", "sparkpost", "mailchimp", "zendesk", "freshdesk",
+            "helpscout", "intercom", "klaviyo", "iterable", "customer.io",
+            "drip", "convertkit", "activecampaign", "aweber", "getresponse",
+            "sendinblue", "mailgun", "ses", "dkim1", "dkim2",
+            "mxvault", "turbo-smtp", "smtp2go", "pepipost", "socketlabs",
+            "mailtrap", "resend", "postmarkapp", "em1", "em2",
+            "20230101", "20240101", "20250101", "google2048",
+            "mselector1", "mselector2", "krs", "mta", "mx",
         ]
         found_selectors: list[str] = []
 
@@ -359,6 +398,294 @@ class DnsEnumPlugin(BasePlugin):
                 description="No DKIM records found for common selectors",
                 remediation="Configure DKIM signing for outbound email",
                 tags=["dns", "dkim", "email"],
+            ))
+
+        return findings
+
+    async def _check_mta_sts(self, ctx, domain: str) -> list[Finding]:
+        """Check MTA-STS policy for SMTP encryption enforcement."""
+        findings: list[Finding] = []
+        # Check _mta-sts TXT record
+        records = await ctx.dns.resolve(f"_mta-sts.{domain}", "TXT")
+        if not records:
+            findings.append(Finding.low(
+                "No MTA-STS record found",
+                description=(
+                    f"No MTA-STS TXT record at _mta-sts.{domain}. "
+                    "SMTP connections are not enforced to use TLS."
+                ),
+                remediation="Add MTA-STS record and policy to enforce SMTP TLS",
+                tags=["dns", "mta-sts", "email"],
+            ))
+            return findings
+
+        # Try to fetch the policy file
+        try:
+            async with ctx.rate:
+                resp = await ctx.http.get(
+                    f"https://mta-sts.{domain}/.well-known/mta-sts.txt",
+                    timeout=8.0,
+                )
+                if resp.status == 200:
+                    body = await resp.text(encoding="utf-8", errors="replace")
+                    if "mode: enforce" in body.lower():
+                        findings.append(Finding.info(
+                            "MTA-STS: enforce mode (strong)",
+                            evidence=body[:200],
+                            tags=["dns", "mta-sts", "email"],
+                        ))
+                    elif "mode: testing" in body.lower():
+                        findings.append(Finding.low(
+                            "MTA-STS: testing mode — not enforcing TLS",
+                            evidence=body[:200],
+                            remediation="Switch MTA-STS mode to 'enforce'",
+                            tags=["dns", "mta-sts", "email"],
+                        ))
+                    elif "mode: none" in body.lower():
+                        findings.append(Finding.medium(
+                            "MTA-STS: mode=none — disabled",
+                            evidence=body[:200],
+                            remediation="Enable MTA-STS with mode: enforce",
+                            tags=["dns", "mta-sts", "email"],
+                        ))
+                else:
+                    findings.append(Finding.low(
+                        "MTA-STS: policy file not accessible",
+                        evidence=f"HTTP {resp.status} from mta-sts.{domain}",
+                        tags=["dns", "mta-sts", "email"],
+                    ))
+        except Exception:
+            findings.append(Finding.info(
+                "MTA-STS: TXT record exists but policy file unreachable",
+                tags=["dns", "mta-sts", "email"],
+            ))
+        return findings
+
+    async def _check_bimi(self, ctx, domain: str) -> list[Finding]:
+        """Check BIMI (Brand Indicators for Message Identification) record."""
+        findings: list[Finding] = []
+        records = await ctx.dns.resolve(f"default._bimi.{domain}", "TXT")
+        if records:
+            val = records[0].value.strip('"')
+            findings.append(Finding.info(
+                "BIMI record found",
+                evidence=val[:200],
+                tags=["dns", "bimi", "email"],
+            ))
+        return findings
+
+    async def _check_caa(self, ctx, domain: str) -> list[Finding]:
+        """Check CAA (Certificate Authority Authorization) records."""
+        findings: list[Finding] = []
+        records = await ctx.dns.resolve(domain, "CAA")
+        if not records:
+            findings.append(Finding.medium(
+                "No CAA records — any CA can issue certificates",
+                description=(
+                    f"No CAA records for {domain}. Any Certificate Authority "
+                    "can issue TLS certificates for this domain."
+                ),
+                remediation=(
+                    "Add CAA records to restrict certificate issuance: "
+                    f'{domain} CAA 0 issue "letsencrypt.org"'
+                ),
+                tags=["dns", "caa", "ssl"],
+            ))
+        else:
+            issuers = [r.value for r in records]
+            findings.append(Finding.info(
+                f"CAA: {len(records)} records restrict certificate issuance",
+                evidence=", ".join(issuers[:10]),
+                tags=["dns", "caa", "ssl"],
+            ))
+        return findings
+
+    async def _check_nsec_walk(
+        self, ctx, domain: str,
+    ) -> list[Finding]:
+        """Attempt NSEC zone walking to enumerate records."""
+        findings: list[Finding] = []
+        walked_names: list[str] = []
+
+        try:
+            import dns.rdatatype as rdt
+        except ImportError:
+            return findings
+
+        current = domain
+        seen: set[str] = set()
+
+        for _ in range(200):  # max walk steps
+            if ctx.should_stop or current in seen:
+                break
+            seen.add(current)
+
+            try:
+                resolver = ctx.dns.resolver
+                answer = await resolver.resolve(current, rdt.NSEC)
+            except Exception:
+                break
+
+            if not answer:
+                break
+
+            for rdata in answer:
+                txt = str(rdata)
+                parts = txt.split()
+                if parts:
+                    next_name = parts[0].rstrip(".")
+                    if next_name and next_name != current:
+                        if (
+                            next_name.endswith(f".{domain}")
+                            or next_name == domain
+                        ):
+                            walked_names.append(next_name)
+                            current = next_name
+                        else:
+                            # Walked outside zone
+                            current = None
+                            break
+            if current is None:
+                break
+
+        if walked_names:
+            unique_names = sorted(set(walked_names))
+            evidence = "\n".join(unique_names[:50])
+            findings.append(Finding.medium(
+                f"NSEC zone walking: {len(unique_names)} names "
+                "discovered",
+                description=(
+                    "NSEC records allow sequential zone enumeration "
+                    "without a wordlist. An attacker can discover all "
+                    "zone entries."
+                ),
+                evidence=evidence,
+                remediation=(
+                    "Use NSEC3 with opt-out to prevent zone walking. "
+                    "Consider NSEC3 with a high iteration count."
+                ),
+                tags=["dns", "nsec", "zone-walk"],
+            ))
+
+        # Check for NSEC3 (just report if present)
+        try:
+            resolver = ctx.dns.resolver
+            nsec3_answer = await resolver.resolve(
+                domain, rdt.NSEC3PARAM,
+            )
+            if nsec3_answer:
+                for rdata in nsec3_answer:
+                    txt = str(rdata)
+                    findings.append(Finding.info(
+                        "NSEC3 in use (zone walking mitigated)",
+                        evidence=f"NSEC3PARAM: {txt}",
+                        tags=["dns", "nsec3", "dnssec"],
+                    ))
+        except Exception:
+            pass
+
+        return findings
+
+    async def _check_cache_snooping(
+        self, ctx, domain: str,
+    ) -> list[Finding]:
+        """Check if nameservers allow cache snooping."""
+        findings: list[Finding] = []
+
+        # Get NS records for the domain
+        try:
+            ns_answers = await ctx.dns.resolve(domain, "NS")
+        except Exception:
+            return findings
+
+        if not ns_answers:
+            return findings
+
+        # Popular domains to check for cached entries
+        snoop_domains = [
+            "google.com", "facebook.com", "microsoft.com",
+            "github.com", "stackoverflow.com",
+            "aws.amazon.com", "slack.com", "zoom.us",
+            "office365.com", "salesforce.com",
+            "stripe.com", "twilio.com",
+        ]
+
+        ns_hosts = [
+            str(r.value).rstrip(".") for r in ns_answers[:3]
+        ]
+        cached_domains: list[str] = []
+
+        try:
+            import dns.flags
+            import dns.message
+            import dns.query
+            import dns.rdatatype as rdt
+        except ImportError:
+            return findings
+
+        for ns_host in ns_hosts:
+            if ctx.should_stop:
+                break
+
+            # Resolve NS hostname to IP
+            try:
+                ns_ips = await ctx.dns.resolve(ns_host, "A")
+                if not ns_ips:
+                    continue
+                ns_ip = ns_ips[0].value
+            except Exception:
+                continue
+
+            for check_domain in snoop_domains:
+                if ctx.should_stop:
+                    break
+                try:
+                    # Build non-recursive query (RD=0)
+                    req = dns.message.make_query(
+                        check_domain, rdt.A,
+                    )
+                    req.flags &= ~dns.flags.RD  # clear RD
+
+                    loop = asyncio.get_event_loop()
+                    resp = await asyncio.wait_for(
+                        loop.run_in_executor(
+                            None,
+                            lambda _ip=ns_ip, _req=req: (
+                                dns.query.udp(
+                                    _req, _ip, timeout=3.0,
+                                )
+                            ),
+                        ),
+                        timeout=5.0,
+                    )
+                    if resp and resp.answer:
+                        cached_domains.append(
+                            f"{check_domain} (via {ns_host})"
+                        )
+                except Exception:
+                    continue
+
+        if cached_domains:
+            evidence = "\n".join(cached_domains[:20])
+            findings.append(Finding.low(
+                f"DNS cache snooping: {len(cached_domains)} "
+                "cached entries found",
+                description=(
+                    "Target nameservers respond to non-recursive "
+                    "queries, revealing which domains have been "
+                    "recently resolved. This leaks information "
+                    "about services used by the target."
+                ),
+                evidence=evidence,
+                remediation=(
+                    "Configure nameservers to refuse non-recursive "
+                    "queries from external sources "
+                    "(allow-recursion ACL)."
+                ),
+                tags=[
+                    "dns", "cache-snooping",
+                    "information-disclosure",
+                ],
             ))
 
         return findings

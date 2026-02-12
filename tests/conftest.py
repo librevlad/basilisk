@@ -61,6 +61,8 @@ def mock_ctx():
 
     http = AsyncMock()
     dns = AsyncMock()
+    dns.resolve = AsyncMock(return_value=[])
+    dns.resolver = AsyncMock()
     net = AsyncMock()
     wordlists = AsyncMock()
 

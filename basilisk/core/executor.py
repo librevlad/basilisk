@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from basilisk.utils.browser import BrowserManager
     from basilisk.utils.diff import ResponseDiffer
     from basilisk.utils.dynamic_wordlist import DynamicWordlistGenerator
+    from basilisk.utils.oob_verifier import NoopOobVerifier, OobVerifier
     from basilisk.utils.payloads import PayloadEngine
     from basilisk.utils.waf_bypass import WafBypassEngine
 
@@ -57,11 +58,13 @@ class PluginContext:
     waf_bypass: WafBypassEngine | None = None
     exploit_chain: ExploitChainEngine | None = None
     dynamic_wordlist: DynamicWordlistGenerator | None = None
+    oob: OobVerifier | NoopOobVerifier | None = None
     log: logging.Logger = field(default_factory=lambda: logging.getLogger("basilisk"))
     pipeline: dict[str, PluginResult] = field(default_factory=dict)
     state: dict[str, Any] = field(default_factory=dict)
     emit: Callable[[Finding, str], None] = _noop_emit
     _deadline: float = 0.0
+    _partial_result: PluginResult | None = None
 
     @property
     def time_remaining(self) -> float:
@@ -93,6 +96,7 @@ class AsyncExecutor:
         async with self.semaphore:
             start = time.monotonic()
             ctx._deadline = start + plugin.meta.timeout
+            ctx._partial_result = None
             try:
                 result = await asyncio.wait_for(
                     plugin.run(target, ctx),
@@ -101,6 +105,12 @@ class AsyncExecutor:
                 result.duration = time.monotonic() - start
                 return result
             except TimeoutError:
+                if ctx._partial_result is not None:
+                    result = ctx._partial_result
+                    result.status = "partial"
+                    result.duration = time.monotonic() - start
+                    result.error = f"Partial result (timed out after {plugin.meta.timeout}s)"
+                    return result
                 return PluginResult(
                     plugin=plugin.meta.name,
                     target=target.host,

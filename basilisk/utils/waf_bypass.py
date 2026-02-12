@@ -52,6 +52,7 @@ WAF_PROFILES: dict[str, WafProfile] = {
         effective_encodings=(
             "double_encode", "unicode_normalize", "multiline",
             "comment_split", "concat_function",
+            "json_unicode_keys", "chunked_randomized", "path_normalization",
         ),
         bypass_headers={},
         safe_content_types=("multipart/form-data",),
@@ -62,6 +63,7 @@ WAF_PROFILES: dict[str, WafProfile] = {
         effective_encodings=(
             "double_encode", "comment_split", "case_swap",
             "whitespace_variant", "null_byte",
+            "json_unicode_keys", "double_slash", "matrix_params",
         ),
         bypass_headers={"X-Forwarded-For": "127.0.0.1"},
         notes="Rule-based; comment insertion and case swapping effective",
@@ -71,6 +73,7 @@ WAF_PROFILES: dict[str, WafProfile] = {
         effective_encodings=(
             "double_encode", "unicode_normalize", "null_byte",
             "comment_split", "whitespace_variant", "multiline",
+            "chunked_randomized", "json_duplicate_keys", "path_normalization",
         ),
         bypass_headers={},
         notes="CRS rules are comprehensive; multi-layer encoding needed",
@@ -718,6 +721,10 @@ WAF_PROFILES: dict[str, WafProfile] = {
             "double_encode", "case_swap", "comment_split",
             "whitespace_variant", "null_byte", "unicode_normalize",
             "chunked_transfer", "multipart_form", "hpp",
+            "chunked_randomized", "matrix_params", "path_normalization",
+            "double_slash", "trailing_dot", "json_unicode_keys",
+            "json_scientific_numbers", "json_duplicate_keys",
+            "json_comment_injection", "header_case_variation",
         ),
         bypass_headers={"X-Forwarded-For": "127.0.0.1"},
         notes="Unknown WAF — try all techniques",
@@ -874,6 +881,101 @@ def _json_unicode_escape(payload: str) -> str:
     return "".join(f"\\u{ord(c):04x}" if not c.isalnum() else c for c in payload)
 
 
+def _chunked_randomized(payload: str) -> str:
+    """Chunked encoding with randomized chunk sizes (1-8 bytes)."""
+    import random
+    chunks = []
+    i = 0
+    while i < len(payload):
+        size = random.randint(1, min(8, len(payload) - i))
+        chunk = payload[i:i + size]
+        chunks.append(f"{len(chunk):x}\r\n{chunk}\r\n")
+        i += size
+    chunks.append("0\r\n\r\n")
+    return "".join(chunks)
+
+
+def _matrix_params(payload: str) -> str:
+    """Insert matrix parameters into URL paths: /api/v1/users -> /api/v1;bsk=1/users."""
+    if "/" in payload:
+        parts = payload.rsplit("/", 1)
+        if len(parts) == 2 and parts[0]:
+            return f"{parts[0]};bsk=1/{parts[1]}"
+    return f"{payload};bsk=1"
+
+
+def _path_normalization(payload: str) -> str:
+    """Path traversal normalization: /api/v1/users -> /api/v1/../v1/users."""
+    if "/" not in payload:
+        return payload
+    parts = payload.split("/")
+    if len(parts) >= 3:
+        insert_at = 2
+        seg = parts[insert_at - 1] if insert_at - 1 < len(parts) else ""
+        return "/".join(parts[:insert_at]) + "/../" + seg + "/" + "/".join(parts[insert_at:])
+    return payload
+
+
+def _double_slash(payload: str) -> str:
+    """Double slashes in path: /api/v1/users -> //api//v1//users."""
+    return payload.replace("/", "//")
+
+
+def _trailing_dot(payload: str) -> str:
+    """Dot insertion in path segments: /api/v1/ -> /./api/./v1/."""
+    return payload.replace("/", "/./")
+
+
+def _json_unicode_keys(payload: str) -> str:
+    """Unicode escape in JSON keys: {\"admin\":true} -> {\"\\u0061dmin\":true}."""
+    import re as _re
+    def _escape_key(m: _re.Match) -> str:
+        key = m.group(1)
+        if key:
+            escaped = f"\\u{ord(key[0]):04x}{key[1:]}"
+            return f'"{escaped}":'
+        return m.group(0)
+    return _re.sub(r'"(\w+)"\s*:', _escape_key, payload)
+
+
+def _json_scientific_numbers(payload: str) -> str:
+    """Scientific notation in JSON: {\"id\": 1} -> {\"id\": 1e0}."""
+    import re as _re
+    return _re.sub(
+        r':\s*(\d+)([,\s}])',
+        lambda m: f': {m.group(1)}e0{m.group(2)}',
+        payload,
+    )
+
+
+def _json_duplicate_keys(payload: str) -> str:
+    """Duplicate key (last-wins): {\"admin\":true} -> {\"admin\":false,\"admin\":true}."""
+    import re as _re
+    def _duplicate(m: _re.Match) -> str:
+        key = m.group(1)
+        value = m.group(2).strip()
+        return f'"{key}": null, "{key}": {value}'
+    return _re.sub(r'"(\w+)"\s*:\s*([^,}\]]+)', _duplicate, payload, count=1)
+
+
+def _json_comment_injection(payload: str) -> str:
+    """JSONC comment injection (parsed by JSON5/Node.js)."""
+    if payload.startswith("{"):
+        return payload[:1] + "/*bsk*/" + payload[1:]
+    return "/*bsk*/ " + payload
+
+
+def _header_case_variation(payload: str) -> str:
+    """Mixed case for header-injected payloads."""
+    result = []
+    for i, c in enumerate(payload):
+        if c.isalpha():
+            result.append(c.upper() if i % 2 == 0 else c.lower())
+        else:
+            result.append(c)
+    return "".join(result)
+
+
 # Map encoding names to functions
 ENCODING_FUNCTIONS: dict[str, callable] = {
     "double_encode": _double_encode,
@@ -892,6 +994,16 @@ ENCODING_FUNCTIONS: dict[str, callable] = {
     "js_unicode_encode": _js_unicode_encode,
     "overlong_utf8": _overlong_utf8,
     "json_unicode_escape": _json_unicode_escape,
+    "chunked_randomized": _chunked_randomized,
+    "matrix_params": _matrix_params,
+    "path_normalization": _path_normalization,
+    "double_slash": _double_slash,
+    "trailing_dot": _trailing_dot,
+    "json_unicode_keys": _json_unicode_keys,
+    "json_scientific_numbers": _json_scientific_numbers,
+    "json_duplicate_keys": _json_duplicate_keys,
+    "json_comment_injection": _json_comment_injection,
+    "header_case_variation": _header_case_variation,
 }
 
 
@@ -1121,6 +1233,98 @@ class WafBypassEngine:
                 continue
 
         return best
+
+    def encode_for_context(
+        self,
+        payload: str,
+        context: str = "query",
+    ) -> list[str]:
+        """Context-aware encoding — select techniques appropriate for injection point.
+
+        Args:
+            payload: Raw payload to encode.
+            context: One of "query", "json_body", "xml_body", "header", "path".
+        """
+        context_techniques: dict[str, list[str]] = {
+            "query": [
+                "double_encode", "case_swap", "comment_split",
+                "unicode_normalize", "null_byte", "hpp",
+            ],
+            "json_body": [
+                "json_unicode_keys", "json_unicode_escape",
+                "json_scientific_numbers", "json_duplicate_keys",
+                "json_comment_injection",
+            ],
+            "xml_body": [
+                "html_entity_encode", "hex_entity_encode",
+                "unicode_normalize",
+            ],
+            "header": [
+                "header_case_variation", "unicode_normalize",
+                "double_encode",
+            ],
+            "path": [
+                "double_slash", "matrix_params", "path_normalization",
+                "trailing_dot", "overlong_utf8", "double_encode",
+            ],
+        }
+
+        techniques = context_techniques.get(context, list(ENCODING_FUNCTIONS.keys()))
+
+        # If WAF profile is set, also include profile-effective techniques
+        if self._profile:
+            effective = set(self._profile.effective_encodings)
+            ctx_set = set(context_techniques.get(context, []))
+            techniques = [t for t in techniques if t in effective or t in ctx_set]
+
+        variants: list[str] = [payload]
+        seen: set[str] = {payload}
+        for technique in techniques:
+            fn = ENCODING_FUNCTIONS.get(technique)
+            if fn is None:
+                continue
+            try:
+                encoded = fn(payload)
+                if encoded and encoded not in seen:
+                    seen.add(encoded)
+                    variants.append(encoded)
+            except Exception:
+                continue
+        return variants
+
+    def get_te_bypass_headers(self) -> list[dict[str, str]]:
+        """Transfer-Encoding header variations for protocol-level WAF bypass."""
+        return [
+            {"Transfer-Encoding": "chunked"},
+            {"Transfer-Encoding": " chunked"},
+            {"Transfer-Encoding": "chunked\t"},
+            {"Transfer-Encoding": "identity, chunked"},
+            {"Transfer-Encoding": "chunked, identity"},
+            {"Transfer-encoding": "chunked"},
+            {"Transfer-Encoding": "CHUNKED"},
+            {"Transfer-Encoding": "\tchunked"},
+            {"Transfer-Encoding": "chunked;ext=value"},
+        ]
+
+    def get_content_type_bypasses(self, original_ct: str) -> list[str]:
+        """Content-Type variations to avoid WAF body inspection."""
+        if "json" in original_ct:
+            return [
+                "application/json",
+                "application/json; charset=utf-8",
+                "application/csp-report",
+                "application/x-json",
+                "text/json",
+                "text/x-json",
+                "application/vnd.api+json",
+            ]
+        if "form" in original_ct:
+            return [
+                "application/x-www-form-urlencoded",
+                "application/x-www-form-urlencoded; charset=utf-8",
+                "multipart/form-data; boundary=----basilisk",
+            ]
+        return [original_ct]
 
 
 # Type alias for type hints in other modules

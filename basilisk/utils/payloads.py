@@ -1878,6 +1878,54 @@ class PayloadEngine:
 
         return payloads[:limit]
 
+    def mutate(
+        self,
+        payload: str,
+        waf_engine: object = None,
+        *,
+        max_variants: int = 10,
+    ) -> list[str]:
+        """Generate WAF-bypass variants of a payload using WafBypassEngine.
+
+        Falls back to MutationEngine if no WAF engine provided.
+        """
+        if waf_engine and waf_engine.waf_detected:
+            variants = waf_engine.encode(payload)
+            # Also add MutationEngine variants
+            variants.extend(MutationEngine.mutate(payload, max_variants=max_variants // 2))
+        else:
+            variants = MutationEngine.mutate(payload, max_variants=max_variants)
+        # Deduplicate preserving order
+        seen: set[str] = {payload}
+        unique: list[str] = []
+        for v in variants:
+            if v not in seen:
+                seen.add(v)
+                unique.append(v)
+        return unique[:max_variants]
+
+    def get_with_bypass(
+        self,
+        category: PayloadCategory,
+        context: InjectionContext | None = None,
+        waf_engine: object = None,
+        *,
+        dbms: DbmsType | None = None,
+        max_variants: int = 5,
+        limit: int = 0,
+    ) -> list[tuple[Payload, list[str]]]:
+        """Get payloads with WAF-bypass mutations.
+
+        Combines base payloads with WafBypassEngine encoding for each payload.
+        This is the primary API for injection plugins.
+        """
+        payloads = self.get(category, dbms=dbms, context=context, limit=limit)
+        result: list[tuple[Payload, list[str]]] = []
+        for p in payloads:
+            variants = self.mutate(p.value, waf_engine, max_variants=max_variants)
+            result.append((p, variants))
+        return result
+
     def add(self, category: PayloadCategory, payloads: list[Payload]) -> None:
         """Add custom payloads to a category."""
         if category not in self._db:

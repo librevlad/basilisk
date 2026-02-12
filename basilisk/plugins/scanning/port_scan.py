@@ -198,7 +198,9 @@ class PortScanPlugin(BasePlugin):
         data: dict[str, Any] = {}
 
         # ---- Determine port list ----
-        ports = ctx.config.scan.default_ports
+        # Use TOP_1000 if available and config allows extended scanning
+        scan_mode = ctx.state.get("scan_mode", "default")
+        ports = _TOP_1000 if scan_mode == "full" else ctx.config.scan.default_ports
         data["scan_ports_count"] = len(ports)
 
         # ---- 1. Adaptive timing: measure RTT with a known open port ----
@@ -396,11 +398,18 @@ class PortScanPlugin(BasePlugin):
         """Grab banners from open ports using service-specific probes."""
         # Service-specific probes
         probes: dict[int, bytes] = {
-            6379: b"PING\r\n",          # Redis
-            11211: b"version\r\n",       # Memcached
+            80: b"HEAD / HTTP/1.0\r\nHost: target\r\n\r\n",    # HTTP
+            389: b"\x30\x0c\x02\x01\x01\x60\x07\x02\x01\x03\x04\x00\x80\x00",  # LDAP bind
+            2375: b"GET /version HTTP/1.0\r\nHost: localhost\r\n\r\n",  # Docker API
             3306: b"",                   # MySQL sends banner on connect
-            27017: b"",                  # MongoDB sends banner on connect
             5432: b"\x00\x00\x00\x08\x04\xd2\x16\x2f",  # PostgreSQL SSLRequest
+            5672: b"AMQP\x00\x00\x09\x01",  # AMQP
+            6379: b"PING\r\n",          # Redis
+            6443: b"GET /version HTTP/1.0\r\nHost: localhost\r\n\r\n",  # Kubernetes
+            8080: b"HEAD / HTTP/1.0\r\nHost: target\r\n\r\n",  # HTTP proxy
+            9200: b"GET / HTTP/1.0\r\nHost: localhost\r\n\r\n", # Elasticsearch
+            11211: b"version\r\n",       # Memcached
+            27017: b"",                  # MongoDB sends banner on connect
         }
 
         for p in open_ports:
@@ -534,30 +543,38 @@ class PortScanPlugin(BasePlugin):
         """Extract version string from service banner."""
         import re
 
-        # Common version patterns
         patterns = [
-            # SSH-2.0-OpenSSH_8.9p1
             r"(SSH-[\d.]+\S+)",
-            # Apache/2.4.52
             r"(Apache/[\d.]+)",
-            # nginx/1.22.1
             r"(nginx/[\d.]+)",
-            # Microsoft-IIS/10.0
             r"(Microsoft-IIS/[\d.]+)",
-            # 220 ProFTPD 1.3.7 Server
             r"(ProFTPD\s+[\d.]+)",
-            # 220 vsFTPd 3.0.5
             r"(vsFTPd\s+[\d.]+)",
-            # 5.7.38-0ubuntu0.20.04.1 (MySQL)
-            r"([\d.]+-\S+)",
-            # Redis server v=7.0.5
             r"redis[_ ]?(?:server[_ ]?)?v?=?([\d.]+)",
-            # PostgreSQL 15.1
             r"(PostgreSQL\s+[\d.]+)",
-            # OpenSSL/3.0.2
             r"(OpenSSL/[\d.]+\w*)",
-            # Generic: Service/Version
-            r"(\w+/[\d]+\.[\d]+[\w.]*)",
+            # New patterns
+            r"(Exim\s+[\d.]+)",
+            r"(Postfix)",
+            r"(Sendmail[\s/][\d.]+)",
+            r"(Dovecot\s*[\d.]*)",
+            r"(Courier[\s/][\d.]+)",
+            r"(MySQL\s+[\d.]+)",
+            r"(MariaDB[- ][\d.]+)",
+            r"(Elasticsearch[\s/][\d.]+)",
+            r'"version"\s*:\s*"([\d.]+)"',  # JSON version (ES, Docker)
+            r"(mongod?b?\s+v?[\d.]+)",
+            r"(Jetty[\s/(][\d.]+)",
+            r"(Express[\s/][\d.]+)",
+            r"(Tomcat/[\d.]+)",
+            r"(LiteSpeed[\s/][\d.]+)",
+            r"(Caddy[\s/][\d.]+)",
+            r"(Kestrel)",
+            r"(Cowboy)",
+            r"(Tengine/[\d.]+)",
+            r"(lighttpd/[\d.]+)",
+            r"(Envoy[\s/][\d.]+)",
+            r"(\w+/[\d]+\.[\d]+[\w.]*)",  # Generic: Service/Version
         ]
 
         for pattern in patterns:

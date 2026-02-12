@@ -1,836 +1,1222 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
 <title>{{ title }}</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap');
-  :root {
-    --bg: #06080d;
-    --bg2: #0b0f18;
-    --bg3: #0f1420;
-    --bg4: #131926;
-    --fg: #c8d0df;
-    --fg-dim: #5a6580;
-    --fg-muted: #384058;
-    --border: #1a2236;
-    --border-glow: #1e2d4a;
+/* ═══════════════════════════════════════════════════════════════
+   BASILISK v2.0 — Liquid Glass Security Report (Live)
+   ═══════════════════════════════════════════════════════════════ */
 
-    --neon-green: #00ff6a;
-    --neon-cyan: #00e5ff;
-    --neon-blue: #4d7cff;
-    --neon-purple: #b44dff;
-    --neon-pink: #ff2d7b;
-    --neon-orange: #ff8a00;
-    --neon-yellow: #ffe100;
-    --neon-red: #ff1744;
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap');
 
-    --critical: #ff1744;
-    --critical-bg: rgba(255,23,68,0.08);
-    --high: #ff6b35;
-    --high-bg: rgba(255,107,53,0.08);
-    --medium: #ffb800;
-    --medium-bg: rgba(255,184,0,0.08);
-    --low: #00ff6a;
-    --low-bg: rgba(0,255,106,0.08);
-    --info: #4d7cff;
-    --info-bg: rgba(77,124,255,0.08);
+:root {
+  --bg: #0a0e17;
+  --bg-panel: rgba(15,20,35,0.7);
+  --bg-card: rgba(15,25,45,0.6);
+  --bg-hover: rgba(0,255,106,0.04);
+  --border: rgba(255,255,255,0.06);
+  --border-glow: rgba(0,255,106,0.15);
+  --text: #c8d6e5;
+  --text-bright: #e8f0fe;
+  --text-muted: #5a6a7e;
+  --green: #00ff6a;
+  --cyan: #00e5ff;
+  --red: #ff2b5e;
+  --orange: #ff8c00;
+  --yellow: #ffd600;
+  --blue: #3b82f6;
+  --purple: #a855f7;
+  --glass-shine: linear-gradient(135deg, rgba(255,255,255,0.04) 0%, transparent 50%, rgba(255,255,255,0.01) 100%);
+  --glass-border: linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.02), rgba(0,255,106,0.08));
+  --tree-width: 35%;
+}
 
-    --sidebar-w: 220px;
-    --radius: 6px;
-  }
+* { box-sizing: border-box; margin: 0; padding: 0; }
 
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  html { scroll-behavior: smooth; }
+html { font-size: 13px; }
 
-  body {
-    font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
-    background: var(--bg); color: var(--fg); line-height: 1.6; font-size: 13px;
-  }
+body {
+  font-family: 'JetBrains Mono', monospace;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+  height: 100vh;
+}
 
-  /* CRT scanlines */
-  body::after {
-    content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 9999;
-    background: repeating-linear-gradient(0deg,
-      transparent, transparent 2px,
-      rgba(0,255,106,0.008) 2px, rgba(0,255,106,0.008) 4px);
-    mix-blend-mode: overlay;
-  }
+/* ── Grid Background ── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(0,229,255,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,229,255,0.02) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  z-index: 0;
+}
 
-  /* Grid background */
-  body::before {
-    content: ''; position: fixed; inset: 0; pointer-events: none; z-index: -1;
-    background-image:
-      linear-gradient(rgba(0,229,255,0.02) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(0,229,255,0.02) 1px, transparent 1px);
-    background-size: 60px 60px;
-  }
+/* ── CRT Scanlines ── */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.08) 2px,
+    rgba(0,0,0,0.08) 4px
+  );
+  pointer-events: none;
+  z-index: 9999;
+}
 
-  ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track { background: var(--bg); }
-  ::-webkit-scrollbar-thumb { background: var(--border-glow); border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: var(--neon-green); }
+/* ── Glass Panel ── */
+.glass {
+  background: var(--bg-panel);
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  border: 1px solid var(--border);
+  border-image: var(--glass-border) 1;
+  position: relative;
+}
+.glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--glass-shine);
+  pointer-events: none;
+  border-radius: inherit;
+}
 
-  /* --- Sidebar --- */
-  .sidebar {
-    position: fixed; top: 0; left: 0; width: var(--sidebar-w); height: 100vh;
-    background: var(--bg2); border-right: 1px solid var(--border);
-    padding: 0; overflow-y: auto; z-index: 100;
-  }
-  .sidebar-brand {
-    padding: 1rem; border-bottom: 1px solid var(--border);
-  }
-  .sidebar-brand pre {
-    color: var(--neon-green); font-size: 0.45rem; line-height: 1.15;
-    text-shadow: 0 0 10px rgba(0,255,106,0.3); margin-bottom: 0.3rem;
-  }
-  .sidebar-brand .brand-sub {
-    font-size: 0.58rem; color: var(--fg-dim); letter-spacing: 0.12em; text-transform: uppercase;
-  }
-  .sidebar nav { padding: 0.4rem 0; }
-  .sidebar nav a {
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 0.4rem 1rem; color: var(--fg-dim); text-decoration: none;
-    font-size: 0.7rem; font-weight: 500;
-    border-left: 2px solid transparent; transition: all 0.2s;
-  }
-  .sidebar nav a:hover, .sidebar nav a.active {
-    color: var(--neon-green); border-left-color: var(--neon-green);
-    background: rgba(0,255,106,0.04);
-  }
-  .sidebar nav a .cnt {
-    background: var(--bg4); padding: 1px 5px; border-radius: 8px;
-    font-size: 0.58rem; color: var(--fg-dim);
-  }
-  .sidebar .sep { height: 1px; background: var(--border); margin: 0.3rem 1rem; }
+/* ── Animations ── */
+@keyframes glitch {
+  0%, 90%, 100% { text-shadow: none; }
+  92% { text-shadow: -2px 0 var(--red), 2px 0 var(--cyan); }
+  94% { text-shadow: 2px 0 var(--red), -2px 0 var(--cyan); }
+  96% { text-shadow: -1px 0 var(--green), 1px 0 var(--red); }
+}
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
 
-  /* --- Main --- */
-  .main { margin-left: var(--sidebar-w); padding: 1.5rem 2.5rem; max-width: 1200px; }
+/* ══════════════════════════════════════
+   HEADER — Dashboard Strip
+   ══════════════════════════════════════ */
+.header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 20px;
+  background: rgba(10,14,23,0.95);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border);
+  z-index: 100;
+  position: relative;
+  min-height: 64px;
+}
 
-  /* Glitch */
-  @keyframes glitch {
-    0%, 90%, 100% { text-shadow: none; }
-    91% { text-shadow: -2px 0 var(--neon-pink), 2px 0 var(--neon-cyan); }
-    93% { text-shadow: 2px 0 var(--neon-pink), -2px 0 var(--neon-cyan); }
-    95% { text-shadow: -1px 0 var(--neon-cyan), 1px 0 var(--neon-pink); }
-  }
+.logo {
+  font-size: 10px;
+  line-height: 1.1;
+  color: var(--green);
+  white-space: pre;
+  flex-shrink: 0;
+  opacity: 0.8;
+}
 
-  @keyframes pulse-glow {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.3; }
-  }
+.header-info { flex-shrink: 0; min-width: 160px; }
+.header-info .target-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-bright);
+  animation: glitch 8s infinite;
+}
+.header-info .timestamp {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
 
-  @keyframes scan-line {
-    0% { top: -5%; }
-    100% { top: 105%; }
-  }
+.live-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--green);
+  animation: pulse-glow 1.2s ease-in-out infinite;
+  box-shadow: 0 0 8px rgba(0,255,106,0.5);
+}
+.live-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: 8px; font-size: 9px;
+  font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+}
+.live-badge.running { background: rgba(0,255,106,0.12); color: var(--green); }
+.live-badge.completed { background: rgba(0,229,255,0.12); color: var(--cyan); }
 
-  @keyframes shimmer {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
-  }
+.metrics {
+  display: flex;
+  gap: 10px;
+  flex: 1;
+  justify-content: center;
+  flex-wrap: wrap;
+}
 
-  /* --- Header --- */
-  .header-card {
-    border: 1px solid var(--border); border-radius: var(--radius);
-    background: var(--bg2); padding: 1.25rem; margin-bottom: 1.5rem;
-    position: relative; overflow: hidden;
-  }
-  .header-card::before {
-    content: ''; position: absolute; left: 0; right: 0; height: 1px;
-    background: linear-gradient(90deg, transparent, var(--neon-green), transparent);
-    animation: scan-line 4s linear infinite; opacity: 0.3;
-  }
-  .header-card .ascii-logo {
-    color: var(--neon-green); font-size: 0.5rem; line-height: 1.15;
-    text-shadow: 0 0 15px rgba(0,255,106,0.4); margin-bottom: 0.5rem;
-  }
-  .header-card h1 {
-    font-size: 1.3rem; color: var(--fg); font-weight: 700;
-    animation: glitch 8s ease-in-out infinite;
-    display: flex; align-items: center; gap: 0.75rem;
-  }
-  .live-badge {
-    display: inline-flex; align-items: center; gap: 0.3rem;
-    padding: 3px 10px; border-radius: 10px; font-size: 0.62rem;
-    font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
-  }
-  .live-badge.running { background: rgba(0,255,106,0.12); color: var(--neon-green); }
-  .live-badge.running .dot {
-    width: 6px; height: 6px; border-radius: 50%; background: var(--neon-green);
-    animation: pulse-glow 1.2s ease-in-out infinite;
-  }
-  .live-badge.completed { background: rgba(0,229,255,0.12); color: var(--neon-cyan); }
-  .live-badge.failed { background: var(--critical-bg); color: var(--critical); }
+.metric-card {
+  background: var(--bg-card);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 14px;
+  text-align: center;
+  min-width: 80px;
+  position: relative;
+  overflow: hidden;
+}
+.metric-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--glass-shine);
+  pointer-events: none;
+}
+.metric-card .val {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.metric-card .lbl {
+  font-size: 9px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.metric-card.critical .val { color: var(--red); text-shadow: 0 0 10px rgba(255,43,94,0.5); }
+.metric-card.high .val { color: var(--orange); text-shadow: 0 0 10px rgba(255,140,0,0.4); }
+.metric-card.medium .val { color: var(--yellow); }
+.metric-card.low .val { color: var(--green); }
+.metric-card.info .val { color: var(--blue); }
 
-  .meta-row {
-    display: flex; gap: 1.25rem; flex-wrap: wrap; margin-top: 0.75rem; font-size: 0.75rem;
-  }
-  .meta-row span { display: flex; align-items: center; gap: 0.3rem; }
-  .meta-row .label { color: var(--fg-dim); }
-  .meta-row .value { color: var(--neon-cyan); }
+/* Risk Score Gauge */
+.risk-gauge {
+  width: 44px; height: 44px; position: relative; margin: 0 auto 2px;
+}
+.risk-gauge svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.risk-gauge .bg { fill: none; stroke: rgba(255,255,255,0.06); stroke-width: 3; }
+.risk-gauge .fg { fill: none; stroke-width: 3; stroke-linecap: round; stroke-dasharray: 113; transition: stroke-dashoffset 1s; }
+.risk-gauge .rval {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700;
+}
 
-  /* Severity bar */
-  .sev-bar {
-    display: flex; height: 6px; border-radius: 3px; overflow: hidden;
-    background: var(--border); margin-top: 0.75rem;
-  }
-  .sev-bar .seg { height: 100%; transition: width 0.5s; }
-  .sev-legend {
-    display: flex; gap: 0.75rem; margin-top: 0.4rem; font-size: 0.62rem; color: var(--fg-dim); flex-wrap: wrap;
-  }
-  .sev-legend span { display: flex; align-items: center; gap: 0.25rem; }
-  .sev-legend .dot { width: 7px; height: 7px; border-radius: 50%; }
+/* Severity Distribution Bar */
+.sev-bar {
+  display: flex;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  min-width: 120px;
+  max-width: 200px;
+  align-self: center;
+}
+.sev-bar span { height: 100%; }
 
-  /* --- Section --- */
-  .section { margin-bottom: 1.5rem; }
-  .section-hdr {
-    display: flex; align-items: center; gap: 0.4rem;
-    margin-bottom: 0.75rem; padding-bottom: 0.4rem;
-    border-bottom: 1px solid var(--border);
-  }
-  .section-hdr .icon {
-    color: var(--neon-green); font-size: 0.72rem;
-    text-shadow: 0 0 8px rgba(0,255,106,0.3);
-  }
-  .section-hdr h2 { font-size: 0.9rem; font-weight: 700; color: var(--fg); }
-  .section-hdr .cnt { font-size: 0.7rem; color: var(--fg-dim); font-weight: 400; }
+/* Phase Progress */
+.phases {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex-shrink: 0;
+  min-width: 140px;
+}
+.phase-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9px;
+  color: var(--text-muted);
+}
+.phase-row .pn { width: 60px; text-align: right; }
+.phase-bar {
+  flex: 1;
+  height: 4px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 2px;
+  overflow: hidden;
+  max-width: 60px;
+}
+.phase-fill { height: 100%; border-radius: 2px; }
+.phase-fill.done { background: var(--green); }
+.phase-fill.running { background: var(--cyan); animation: pulse-glow 2s infinite; }
 
-  /* --- Pipeline / Kill Chain --- */
-  .kill-chain {
-    display: flex; gap: 0; margin-bottom: 1.5rem; overflow-x: auto;
-  }
-  .kc-phase {
-    flex: 1; min-width: 140px; background: var(--bg2); border: 1px solid var(--border);
-    padding: 0.75rem; text-align: center; position: relative;
-  }
-  .kc-phase:first-child { border-radius: var(--radius) 0 0 var(--radius); }
-  .kc-phase:last-child { border-radius: 0 var(--radius) var(--radius) 0; }
-  .kc-phase:not(:last-child)::after {
-    content: ''; position: absolute; right: -8px; top: 50%; transform: translateY(-50%);
-    width: 0; height: 0; border: 8px solid transparent;
-    border-left-color: var(--neon-green); z-index: 2; opacity: 0.5;
-  }
-  .kc-phase .kc-name {
-    font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 0.08em; color: var(--fg-dim); margin-bottom: 0.2rem;
-  }
-  .kc-phase .kc-count { font-size: 1.5rem; font-weight: 800; color: var(--neon-green); line-height: 1; }
-  .kc-phase .kc-detail { font-size: 0.58rem; color: var(--fg-dim); margin-top: 0.2rem; }
-  .kc-phase.done { border-color: rgba(0,255,106,0.2); }
-  .kc-phase.done .kc-name { color: var(--neon-green); }
-  .kc-phase.running { border-color: rgba(0,229,255,0.3); }
-  .kc-phase.running .kc-name { color: var(--neon-cyan); }
-  .kc-phase .kc-bar {
-    margin-top: 0.4rem; height: 3px; background: var(--border); border-radius: 2px; overflow: hidden;
-  }
-  .kc-phase .kc-bar-fill { height: 100%; border-radius: 2px; transition: width 0.5s; }
-  .kc-phase .kc-bar-fill.done { background: var(--neon-cyan); }
-  .kc-phase .kc-bar-fill.running {
-    background: linear-gradient(90deg, var(--neon-green) 0%, rgba(0,255,106,0.3) 50%, var(--neon-green) 100%);
-    background-size: 200% 100%; animation: shimmer 1.5s ease-in-out infinite;
-  }
-  .kc-phase .kc-bar-fill.waiting { background: var(--fg-muted); }
+/* ══════════════════════════════════════
+   MAIN LAYOUT — Split Panel
+   ══════════════════════════════════════ */
+.layout {
+  display: flex;
+  height: calc(100vh - 64px);
+  position: relative;
+  z-index: 1;
+}
 
-  /* --- Severity cards --- */
-  .sev-cards { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
-  .sev-card {
-    background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
-    padding: 0.5rem 0.7rem; min-width: 80px; text-align: center; transition: all 0.2s;
-  }
-  .sev-card:hover { box-shadow: 0 0 12px rgba(0,255,106,0.06); }
-  .sev-card .num { font-size: 1.5rem; font-weight: 800; }
-  .sev-card .lbl { font-size: 0.58rem; text-transform: uppercase; color: var(--fg-dim); letter-spacing: 0.06em; }
-  .sev-card.critical .num { color: var(--critical); }
-  .sev-card.high .num { color: var(--high); }
-  .sev-card.medium .num { color: var(--medium); }
-  .sev-card.low .num { color: var(--low); }
-  .sev-card.info .num { color: var(--info); }
+/* ── LEFT: Tree Panel ── */
+.tree-panel {
+  width: var(--tree-width);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  background: rgba(8,12,22,0.5);
+  overflow: hidden;
+}
 
-  /* --- Attack Surface --- */
-  .atk-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 0.6rem; margin-bottom: 1rem;
-  }
-  .atk-card {
-    background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
-    padding: 0.75rem 0.85rem; transition: all 0.2s;
-  }
-  .atk-card:hover { border-color: var(--border-glow); }
-  .atk-card-hdr {
-    display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.4rem;
-    font-size: 0.78rem; font-weight: 700;
-  }
-  .atk-card-hdr .host { color: var(--neon-green); }
+.tree-toolbar {
+  display: flex;
+  gap: 6px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  align-items: center;
+  flex-shrink: 0;
+}
 
-  .port-table { width: 100%; font-size: 0.7rem; border-collapse: collapse; }
-  .port-table th {
-    text-align: left; color: var(--fg-dim); font-weight: 600; padding: 2px 5px;
-    border-bottom: 1px solid var(--border); font-size: 0.58rem;
-    text-transform: uppercase; letter-spacing: 0.05em;
-  }
-  .port-table td { padding: 2px 5px; border-bottom: 1px solid rgba(26,34,54,0.5); }
-  .port-table .port-num { color: var(--neon-green); font-weight: 600; }
-  .port-table .svc-name { color: var(--neon-cyan); }
-  .port-table .banner-text { color: var(--fg-dim); max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-search {
+  flex: 1;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 5px 10px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 11px;
+  outline: none;
+}
+.tree-search:focus { border-color: var(--green); box-shadow: 0 0 8px rgba(0,255,106,0.1); }
+.tree-search::placeholder { color: var(--text-muted); }
 
-  .path-list { list-style: none; font-size: 0.7rem; max-height: 160px; overflow-y: auto; }
-  .path-list li { padding: 1px 0; display: flex; align-items: center; gap: 0.3rem; }
-  .path-list .dot-s { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
-  .path-list .dot-s.s2xx { background: var(--neon-green); }
-  .path-list .dot-s.s3xx { background: var(--neon-cyan); }
-  .path-list .dot-s.s4xx { background: var(--high); }
-  .path-list .p-text { color: var(--fg); }
-  .path-list .p-status { color: var(--fg-dim); margin-left: auto; }
+.tree-btn {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 8px;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tree-btn:hover { color: var(--green); border-color: rgba(0,255,106,0.3); }
 
-  .chip { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 0.62rem; margin: 1px; }
-  .chip-tech { background: rgba(0,255,106,0.06); border: 1px solid rgba(0,255,106,0.15); color: var(--neon-green); }
-  .chip-warn { background: rgba(255,107,53,0.06); border: 1px solid rgba(255,107,53,0.15); color: var(--high); }
-  .chip-info { background: rgba(0,229,255,0.06); border: 1px solid rgba(0,229,255,0.15); color: var(--neon-cyan); }
-  .chip-method { background: rgba(77,124,255,0.06); border: 1px solid rgba(77,124,255,0.15); color: var(--neon-blue); }
-  .chip-method.risky { background: rgba(255,23,68,0.06); border: 1px solid rgba(255,23,68,0.15); color: var(--critical); }
+.tree-scroll {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px 0 20px 0;
+}
 
-  .sub-grid {
-    font-size: 0.7rem; max-height: 180px; overflow-y: auto;
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 1px;
-  }
-  .sub-item { color: var(--fg); padding: 1px 0; }
-  .sub-item::before { content: '> '; color: var(--fg-muted); }
+/* ── Tree Structure ── */
+.tree-root { padding-left: 4px; }
 
-  /* --- Plugin Stats --- */
-  .plugin-table { width: 100%; border-collapse: collapse; font-size: 0.7rem; }
-  .plugin-table th {
-    text-align: left; color: var(--fg-dim); font-weight: 600; padding: 0.3rem 0.5rem;
-    border-bottom: 1px solid var(--border); font-size: 0.58rem;
-    text-transform: uppercase; letter-spacing: 0.05em;
-  }
-  .plugin-table td { padding: 0.3rem 0.5rem; border-bottom: 1px solid rgba(26,34,54,0.5); }
-  .plugin-table tr:hover { background: var(--bg3); }
-  .plugin-table .pname { color: var(--neon-cyan); font-weight: 600; }
-  .plugin-table .pnum { text-align: center; }
-  .plugin-table .pdur { color: var(--fg-dim); text-align: right; }
-  .perf-bar { height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; min-width: 50px; }
-  .perf-bar-fill { height: 100%; background: var(--neon-green); border-radius: 2px; }
+.tree-node { border: none; margin: 0; padding: 0; }
+.tree-node[open] > summary .arrow { transform: rotate(90deg); }
 
-  /* --- Filters --- */
-  .filters-row { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem; }
-  .filter-chip {
-    padding: 3px 9px; border-radius: 10px; font-size: 0.65rem; font-weight: 600;
-    cursor: pointer; border: 1px solid var(--border); background: transparent;
-    color: var(--fg-dim); transition: all 0.2s; font-family: inherit;
-  }
-  .filter-chip:hover { border-color: var(--neon-green); color: var(--neon-green); }
-  .filter-chip.active { color: var(--bg); }
-  .filter-chip.active.sev-critical { background: var(--critical); border-color: var(--critical); }
-  .filter-chip.active.sev-high { background: var(--high); border-color: var(--high); }
-  .filter-chip.active.sev-medium { background: var(--medium); border-color: var(--medium); }
-  .filter-chip.active.sev-low { background: var(--low); border-color: var(--low); }
-  .filter-chip.active.sev-info { background: var(--info); border-color: var(--info); }
-  .search-box {
-    background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius);
-    padding: 4px 8px; color: var(--fg); font-size: 0.72rem; font-family: inherit; width: 160px;
-  }
-  .search-box:focus { outline: none; border-color: var(--neon-green); }
-  .search-box::placeholder { color: var(--fg-muted); }
-  .tool-btn {
-    background: transparent; border: 1px solid var(--border); border-radius: var(--radius);
-    padding: 4px 8px; color: var(--fg-dim); font-size: 0.65rem; cursor: pointer; font-family: inherit;
-  }
-  .tool-btn:hover { border-color: var(--neon-green); color: var(--neon-green); }
-  .noise-info { font-size: 0.62rem; color: var(--fg-muted); }
+.tree-node > summary {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px 3px calc(var(--depth, 0) * 16px + 8px);
+  cursor: pointer;
+  list-style: none;
+  font-size: 12px;
+  color: var(--text);
+  border-left: 1px solid rgba(255,255,255,0.04);
+  margin-left: calc(var(--depth, 0) * 16px);
+  transition: background 0.15s;
+  position: relative;
+  user-select: none;
+}
+.tree-node > summary::-webkit-details-marker { display: none; }
+.tree-node > summary::marker { display: none; content: ''; }
+.tree-node > summary:hover { background: var(--bg-hover); }
+.tree-node > summary.active { background: rgba(0,255,106,0.08); border-left-color: var(--green); }
 
-  /* --- Findings --- */
-  .finding-group-title {
-    font-size: 0.8rem; font-weight: 700; color: var(--fg); margin-bottom: 0.4rem;
-    margin-top: 0.75rem; display: flex; align-items: center; gap: 0.4rem;
-  }
-  .finding-group-title .cnt { color: var(--fg-dim); font-weight: 400; font-size: 0.7rem; }
+.arrow {
+  display: inline-block;
+  width: 12px;
+  text-align: center;
+  font-size: 10px;
+  color: var(--text-muted);
+  transition: transform 0.15s;
+  flex-shrink: 0;
+}
 
-  .finding {
-    background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
-    margin-bottom: 0.35rem; border-left: 3px solid; overflow: hidden; transition: all 0.2s;
-  }
-  .finding:hover { box-shadow: 0 0 12px rgba(0,255,106,0.03); }
-  .finding.CRITICAL { border-left-color: var(--critical); }
-  .finding.HIGH { border-left-color: var(--high); }
-  .finding.MEDIUM { border-left-color: var(--medium); }
-  .finding.LOW { border-left-color: var(--low); }
-  .finding.INFO { border-left-color: var(--info); }
-  .finding summary {
-    padding: 0.5rem 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 0.4rem;
-    list-style: none; font-size: 0.75rem;
-  }
-  .finding summary::-webkit-details-marker { display: none; }
-  .finding summary::before {
-    content: '\25b6'; font-size: 0.45rem; color: var(--fg-muted); transition: transform 0.2s; flex-shrink: 0;
-  }
-  .finding[open] summary::before { transform: rotate(90deg); }
-  .badge {
-    padding: 2px 6px; border-radius: 3px; font-size: 0.58rem; font-weight: 700;
-    text-transform: uppercase; letter-spacing: 0.04em; flex-shrink: 0;
-  }
-  .badge.CRITICAL { background: var(--critical-bg); color: var(--critical); }
-  .badge.HIGH { background: var(--high-bg); color: var(--high); }
-  .badge.MEDIUM { background: var(--medium-bg); color: var(--medium); }
-  .badge.LOW { background: var(--low-bg); color: var(--low); }
-  .badge.INFO { background: var(--info-bg); color: var(--info); }
-  .finding .f-title { font-weight: 600; flex: 1; }
-  .finding .f-target { color: var(--fg-dim); font-size: 0.65rem; margin-left: auto; flex-shrink: 0; }
-  .finding-body { padding: 0 0.85rem 0.6rem 1.8rem; font-size: 0.72rem; }
-  .finding-body .desc { color: var(--fg-dim); margin-bottom: 0.3rem; }
-  .evidence-block {
-    background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
-    padding: 0.4rem 0.6rem; margin: 0.3rem 0; font-size: 0.7rem;
-    color: var(--neon-green); white-space: pre-wrap; word-break: break-all;
-  }
-  .evidence-block::before { content: '$ '; color: var(--fg-muted); }
-  .remed-block {
-    color: var(--neon-cyan); margin-top: 0.3rem; font-size: 0.7rem;
-    padding-left: 0.6rem; border-left: 2px solid var(--neon-cyan);
-  }
-  .tags { display: flex; gap: 0.2rem; margin-top: 0.3rem; flex-wrap: wrap; }
-  .tag {
-    border: 1px solid var(--border); padding: 1px 5px; border-radius: 3px;
-    font-size: 0.55rem; color: var(--fg-muted);
-  }
+.tree-leaf {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px 3px calc(var(--depth, 0) * 16px + 24px);
+  font-size: 12px;
+  color: var(--text);
+  cursor: default;
+  border-left: 1px solid rgba(255,255,255,0.04);
+  margin-left: calc(var(--depth, 0) * 16px);
+  transition: background 0.15s;
+}
+.tree-leaf:hover { background: var(--bg-hover); }
 
-  /* --- Refresh flash --- */
-  .refresh-flash {
-    position: fixed; top: 8px; right: 8px; z-index: 200;
-    padding: 3px 10px; border-radius: 8px; font-size: 0.58rem;
-    background: rgba(0,255,106,0.1); color: var(--neon-green);
-    border: 1px solid rgba(0,255,106,0.2);
-    opacity: 0; transition: opacity 0.3s;
-  }
-  .refresh-flash.show { opacity: 1; }
+/* Severity Dots */
+.sev-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; display: inline-block;
+}
+.sev-dot.critical { background: var(--red); box-shadow: 0 0 6px rgba(255,43,94,0.6); }
+.sev-dot.high { background: var(--orange); box-shadow: 0 0 6px rgba(255,140,0,0.5); }
+.sev-dot.medium { background: var(--yellow); box-shadow: 0 0 4px rgba(255,214,0,0.3); }
+.sev-dot.low { background: var(--green); box-shadow: 0 0 4px rgba(0,255,106,0.3); }
+.sev-dot.info { background: var(--blue); }
 
-  /* --- Footer --- */
-  footer {
-    margin-top: 2rem; padding-top: 0.75rem; border-top: 1px solid var(--border);
-    color: var(--fg-muted); font-size: 0.65rem;
-    display: flex; justify-content: space-between;
-  }
+/* Inline Badges */
+.badge {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+}
+.badge.critical { background: rgba(255,43,94,0.2); color: var(--red); border: 1px solid rgba(255,43,94,0.3); text-shadow: 0 0 8px rgba(255,43,94,0.5); }
+.badge.high { background: rgba(255,140,0,0.15); color: var(--orange); border: 1px solid rgba(255,140,0,0.25); text-shadow: 0 0 6px rgba(255,140,0,0.4); }
+.badge.medium { background: rgba(255,214,0,0.12); color: var(--yellow); border: 1px solid rgba(255,214,0,0.2); }
+.badge.low { background: rgba(0,255,106,0.1); color: var(--green); border: 1px solid rgba(0,255,106,0.15); }
+.badge.info { background: rgba(59,130,246,0.1); color: var(--blue); border: 1px solid rgba(59,130,246,0.15); }
 
-  /* Print */
-  @media print {
-    body { background: #fff; color: #222; }
-    body::after, body::before { display: none; }
-    .sidebar, .refresh-flash { display: none; }
-    .main { margin-left: 0; padding: 1rem; }
-    .header-card::before { display: none; }
-    .header-card, .finding, .atk-card, .kc-phase, .sev-card {
-      background: #fafafa; border-color: #ddd;
-    }
-    h1, h2 { color: #111; }
-    .finding { break-inside: avoid; }
-    .finding-body { display: block !important; }
-    .finding summary::before { display: none; }
-    .evidence-block { background: #f0f0f0; color: #111; border-color: #ddd; }
-    .remed-block { color: #0066cc; }
-    .filters-row { display: none; }
-    .badge { border: 1px solid; }
-    footer { color: #888; }
-  }
+.status-badge {
+  display: inline-block; padding: 0 4px; border-radius: 2px;
+  font-size: 9px; font-weight: 500;
+}
+.status-badge.s2xx { background: rgba(0,255,106,0.12); color: var(--green); }
+.status-badge.s3xx { background: rgba(0,229,255,0.12); color: var(--cyan); }
+.status-badge.s4xx { background: rgba(255,140,0,0.12); color: var(--orange); }
+.status-badge.s5xx { background: rgba(255,43,94,0.15); color: var(--red); }
+.status-badge.s403 { background: rgba(255,140,0,0.12); color: var(--orange); }
+.status-badge.s404 { background: rgba(255,255,255,0.06); color: var(--text-muted); }
+.status-badge.s500 { background: rgba(255,43,94,0.15); color: var(--red); }
+.status-badge.s0 { background: rgba(255,255,255,0.04); color: #444; }
 
-  @media (max-width: 768px) {
-    .sidebar { display: none; }
-    .main { margin-left: 0; padding: 1rem; }
-    .kill-chain, .sev-cards { flex-direction: column; }
-    .kc-phase:not(:last-child)::after { display: none; }
-    .kc-phase { border-radius: var(--radius); }
-    .atk-grid { grid-template-columns: 1fr; }
-    .sub-grid { grid-template-columns: 1fr; }
-  }
+.host-name { color: var(--cyan); text-decoration: none; }
+a.host-name:hover { color: var(--green); text-decoration: underline; }
+.port-label { color: var(--green); font-size: 11px; }
+.service-label { color: var(--text-muted); font-size: 11px; }
+.src-label { font-size: 8px; margin-left: auto; flex-shrink: 0; padding: 0 4px; border-radius: 2px; font-weight: 600; letter-spacing: 0.3px; text-transform: uppercase; }
+.src-label { background: rgba(255,255,255,0.04); color: #3a4555; }
+.src-brute { background: rgba(255,43,94,0.15); color: var(--red); border: 1px solid rgba(255,43,94,0.2); text-shadow: 0 0 6px rgba(255,43,94,0.3); }
+.src-api { background: rgba(168,85,247,0.15); color: var(--purple); border: 1px solid rgba(168,85,247,0.2); text-shadow: 0 0 6px rgba(168,85,247,0.3); }
+.src-admin { background: rgba(255,140,0,0.15); color: var(--orange); border: 1px solid rgba(255,140,0,0.2); text-shadow: 0 0 6px rgba(255,140,0,0.3); }
+.src-exposed { background: rgba(255,43,94,0.12); color: var(--red); border: 1px solid rgba(255,43,94,0.15); }
+.src-backup { background: rgba(255,214,0,0.12); color: var(--yellow); border: 1px solid rgba(255,214,0,0.2); }
+.tree-leaf.leaf-brute { border-left: 2px solid var(--red); padding-left: 4px; }
+.tree-leaf.leaf-api { border-left: 2px solid var(--purple); padding-left: 4px; }
+.tree-leaf.leaf-admin { border-left: 2px solid var(--orange); padding-left: 4px; }
+.tree-leaf.leaf-exposed { border-left: 2px solid var(--red); padding-left: 4px; background: rgba(255,43,94,0.03); }
+.tree-leaf.leaf-backup { border-left: 2px solid var(--yellow); padding-left: 4px; background: rgba(255,214,0,0.03); }
+.tree-leaf.sensitive { background: rgba(255,43,94,0.03); }
+.tree-leaf.sensitive .path-link { color: var(--red) !important; }
+.file-size { font-size: 9px; color: var(--text-muted); margin-left: 4px; flex-shrink: 0; }
+.secret-badge { font-size: 7px; font-weight: 700; padding: 0 3px; border-radius: 2px; background: rgba(255,43,94,0.2); color: var(--red); border: 1px solid rgba(255,43,94,0.3); text-shadow: 0 0 6px rgba(255,43,94,0.5); margin-left: 4px; }
+.finding-icon { color: var(--red); font-size: 10px; flex-shrink: 0; }
+.sev-counts { font-size: 9px; color: var(--text-muted); margin-left: auto; white-space: nowrap; }
+
+/* API section highlight */
+.api-section > summary { color: var(--purple) !important; }
+.api-section > summary .arrow { color: var(--purple); }
+.api-badge {
+  display: inline-block; padding: 0 4px; border-radius: 2px;
+  font-size: 8px; font-weight: 700;
+  background: rgba(168,85,247,0.15); color: var(--purple);
+  border: 1px solid rgba(168,85,247,0.25); letter-spacing: 0.5px;
+  text-shadow: 0 0 6px rgba(168,85,247,0.4);
+}
+
+/* HTTP method badges */
+.method-badge {
+  display: inline-block; padding: 0 3px; border-radius: 2px;
+  font-size: 8px; font-weight: 600; letter-spacing: 0.3px;
+}
+.method-get { background: rgba(0,255,106,0.1); color: var(--green); }
+.method-post { background: rgba(0,229,255,0.1); color: var(--cyan); }
+.method-put { background: rgba(255,214,0,0.1); color: var(--yellow); }
+.method-delete { background: rgba(255,43,94,0.1); color: var(--red); }
+
+/* Directory / file icons */
+.dir-icon { color: var(--cyan); font-size: 10px; flex-shrink: 0; opacity: 0.7; }
+.file-icon { color: var(--text-muted); font-size: 9px; flex-shrink: 0; }
+
+/* Sensitive file highlight */
+.tree-leaf.sensitive { background: rgba(255,43,94,0.03); }
+
+/* File size in tree */
+.file-size { font-size: 9px; color: var(--text-muted); margin-left: auto; flex-shrink: 0; }
+
+/* Clickable path links */
+.path-link { color: inherit; text-decoration: none; }
+.path-link:hover { color: var(--cyan); text-decoration: underline; }
+
+/* ── Tab Bar ── */
+.tab-bar {
+  display: flex; gap: 0;
+  border-bottom: 1px solid var(--border);
+  margin: 0 -24px 16px; padding: 0 24px;
+  position: sticky; top: 0;
+  background: rgba(10,14,23,0.95);
+  backdrop-filter: blur(8px); z-index: 10;
+}
+.tab-btn {
+  background: none; border: none; color: var(--text-muted);
+  font-family: inherit; font-size: 11px; font-weight: 500;
+  padding: 10px 16px; cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s; text-transform: uppercase; letter-spacing: 0.5px;
+}
+.tab-btn:hover { color: var(--text); background: rgba(255,255,255,0.02); }
+.tab-btn.active { color: var(--green); border-bottom-color: var(--green); text-shadow: 0 0 8px rgba(0,255,106,0.3); }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* ── RIGHT: Detail Panel ── */
+.detail-panel {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 20px 24px;
+  background: rgba(10,14,23,0.3);
+}
+
+/* Detail Header */
+.detail-header {
+  display: flex; align-items: flex-start; gap: 20px;
+  margin-bottom: 20px; padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.detail-host-info { flex: 1; }
+.detail-host-info h2 { font-size: 18px; color: var(--text-bright); font-weight: 600; margin-bottom: 4px; }
+.detail-host-info .ip { font-size: 11px; color: var(--text-muted); }
+.detail-sev-bar { display: flex; gap: 10px; margin-top: 10px; }
+.detail-sev-item { display: flex; align-items: center; gap: 4px; font-size: 11px; }
+.detail-sev-item .count { font-weight: 700; }
+
+/* Section Cards */
+.section-card {
+  background: var(--bg-card);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 16px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 0 30px rgba(0,255,106,0.03);
+}
+.section-card::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: var(--glass-shine);
+  pointer-events: none;
+}
+
+.section-card > summary,
+.section-title {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 16px; font-size: 12px; font-weight: 600;
+  color: var(--text-bright); cursor: pointer; list-style: none;
+  border-bottom: 1px solid var(--border); user-select: none;
+}
+.section-card > summary::-webkit-details-marker { display: none; }
+.section-card > summary::marker { content: ''; }
+.section-card > summary .arrow { font-size: 10px; }
+.section-card[open] > summary .arrow { transform: rotate(90deg); }
+.section-body { padding: 12px 16px; }
+
+/* Tech Chips */
+.tech-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 16px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 10px; border-radius: 12px; font-size: 10px; font-weight: 500;
+  background: rgba(0,229,255,0.08); color: var(--cyan);
+  border: 1px solid rgba(0,229,255,0.15);
+}
+
+/* Tables */
+table { width: 100%; border-collapse: collapse; font-size: 11px; }
+th {
+  text-align: left; padding: 8px 12px; color: var(--text-muted);
+  font-weight: 500; font-size: 10px; text-transform: uppercase;
+  letter-spacing: 0.5px; border-bottom: 1px solid var(--border);
+}
+td { padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,0.02); color: var(--text); }
+tr:hover td { background: var(--bg-hover); }
+
+/* Evidence Block */
+.evidence {
+  background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 4px; padding: 10px 14px; font-size: 11px; line-height: 1.6;
+  color: var(--green); margin: 8px 0; overflow-x: auto;
+  white-space: pre-wrap; word-break: break-all;
+}
+.evidence .prompt { color: var(--cyan); user-select: none; }
+
+/* Remediation Block */
+.remediation {
+  border-left: 3px solid var(--cyan); padding: 10px 14px; margin: 8px 0;
+  background: rgba(0,229,255,0.03); font-size: 11px;
+  color: var(--text); line-height: 1.5;
+}
+
+/* Finding Card */
+.finding-card {
+  border: 1px solid var(--border); border-radius: 6px;
+  margin-bottom: 8px; overflow: hidden; background: rgba(0,0,0,0.15);
+}
+.finding-card > summary {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px; cursor: pointer; list-style: none; font-size: 12px;
+}
+.finding-card > summary::-webkit-details-marker { display: none; }
+.finding-card > summary::marker { content: ''; }
+.finding-card > summary:hover { background: var(--bg-hover); }
+.finding-card .finding-body { padding: 12px 14px; border-top: 1px solid var(--border); }
+.finding-title { flex: 1; color: var(--text-bright); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.finding-target { color: var(--text-muted); font-size: 10px; margin-left: auto; flex-shrink: 0; }
+.finding-tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 8px; }
+.tag {
+  font-size: 9px; padding: 1px 6px; border-radius: 3px;
+  background: rgba(255,255,255,0.05); color: var(--text-muted);
+  border: 1px solid rgba(255,255,255,0.05);
+}
+
+/* Filter chips */
+.filters-row { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+.filter-chip {
+  padding: 2px 8px; border-radius: 8px; font-size: 9px; font-weight: 600;
+  cursor: pointer; border: 1px solid var(--border); background: transparent;
+  color: var(--text-muted); font-family: inherit;
+}
+.filter-chip:hover { border-color: var(--green); color: var(--green); }
+.filter-chip.active { color: var(--bg); }
+.filter-chip.active.sc { background: var(--red); border-color: var(--red); }
+.filter-chip.active.sh { background: var(--orange); border-color: var(--orange); }
+.filter-chip.active.sm { background: var(--yellow); border-color: var(--yellow); }
+.filter-chip.active.sl { background: var(--green); border-color: var(--green); }
+.filter-chip.active.si { background: var(--blue); border-color: var(--blue); }
+
+/* Plugin table */
+.plugin-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+.plugin-table th { font-size: 8px; }
+.plugin-table .pname { color: var(--cyan); font-weight: 600; }
+.perf-bar { height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; min-width: 40px; }
+.perf-bar-fill { height: 100%; background: var(--green); border-radius: 2px; }
+
+/* Links */
+a { color: var(--cyan); text-decoration: none; }
+a:hover { text-decoration: underline; text-underline-offset: 2px; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.14); }
+
+/* Refresh flash */
+.refresh-flash {
+  position: fixed; top: 8px; right: 8px; z-index: 200;
+  padding: 2px 8px; border-radius: 6px; font-size: 9px;
+  background: rgba(0,255,106,0.1); color: var(--green);
+  border: 1px solid rgba(0,255,106,0.2);
+  opacity: 0; transition: opacity 0.3s;
+}
+.refresh-flash.show { opacity: 1; }
+
+/* Search filter */
+.tree-node.hidden, .tree-leaf.hidden { display: none; }
+
+/* ── Print Styles ── */
+@media print {
+  body { overflow: visible; height: auto; background: #fff; color: #111; }
+  body::before, body::after { display: none; }
+  .layout { flex-direction: column; height: auto; }
+  .tree-panel { width: 100%; border-right: none; border-bottom: 1px solid #ccc; max-height: 50vh; }
+  .detail-panel { width: 100%; }
+  .glass, .section-card, .metric-card { background: #f8f8f8; backdrop-filter: none; border-color: #ddd; }
+  .badge { border-color: currentColor; }
+  .evidence { background: #f0f0f0; color: #222; }
+}
+
+/* ── Responsive ── */
+@media (max-width: 900px) {
+  .layout { flex-direction: column; }
+  .tree-panel { width: 100%; height: 40vh; border-right: none; border-bottom: 1px solid var(--border); }
+  .header { flex-wrap: wrap; gap: 8px; }
+  .metrics { order: 10; width: 100%; justify-content: flex-start; }
+  .phases { display: none; }
+}
 </style>
 </head>
 <body>
 
 <div class="refresh-flash" id="refreshFlash">syncing...</div>
 
-<!-- Sidebar -->
-<aside class="sidebar">
-  <div class="sidebar-brand">
-    <pre> ____            _ _ _     _
-| __ )  __ _ ___(_) (_)___| | __
-|  _ \ / _` / __| | | / __| |/ /
-| |_) | (_| \__ \ | | \__ \   &lt;
-|____/ \__,_|___/_|_|_|___/_|\_\</pre>
-    <div class="brand-sub">Live War Room</div>
+{% set c = severity_counts.get('CRITICAL', 0) %}
+{% set h = severity_counts.get('HIGH', 0) %}
+{% set m = severity_counts.get('MEDIUM', 0) %}
+{% set l = severity_counts.get('LOW', 0) %}
+{% set i = severity_counts.get('INFO', 0) %}
+{% set total = c + h + m + l + i %}
+{% set risk = [c * 25 + h * 10 + m * 3 + l * 0.5, 100]|min|round|int %}
+
+<!-- ══════════════════════════════════════
+     HEADER — Dashboard Metrics Strip
+     ══════════════════════════════════════ -->
+<div class="header" id="live-header">
+  <pre class="logo">  ___         _ _ _    _
+ | _ ) __ _ _(_) (_)__| |__
+ | _ \/ _` (_-< | (_-< / /
+ |___/\__,_/__/_|_/__/_\_\
+       v2.0</pre>
+
+  <div class="header-info">
+    <div class="target-name">{{ title }}</div>
+    <div class="timestamp">{{ timestamp }}{% if is_running %} &middot; {{ elapsed_total }}s{% endif %}</div>
   </div>
-  <nav>
-    <a href="#summary">Dashboard<span class="cnt">{{ findings|length }}</span></a>
-    <a href="#pipeline">Kill Chain</a>
-    <div class="sep"></div>
-    <a href="#attack-surface">Attack Surface</a>
-    {% if plugin_stats %}<a href="#plugin-perf">Plugin Ops</a>{% endif %}
-    <div class="sep"></div>
-    <a href="#findings-sec">Findings</a>
-    {% if severity_counts.get('CRITICAL', 0) > 0 %}
-    <a href="#sev-CRITICAL" style="color:var(--critical)">Critical<span class="cnt">{{ severity_counts.get('CRITICAL', 0) }}</span></a>
-    {% endif %}
-    {% if severity_counts.get('HIGH', 0) > 0 %}
-    <a href="#sev-HIGH" style="color:var(--high)">High<span class="cnt">{{ severity_counts.get('HIGH', 0) }}</span></a>
-    {% endif %}
-    {% if severity_counts.get('MEDIUM', 0) > 0 %}
-    <a href="#sev-MEDIUM" style="color:var(--medium)">Medium<span class="cnt">{{ severity_counts.get('MEDIUM', 0) }}</span></a>
-    {% endif %}
-  </nav>
-</aside>
 
-<div class="main" id="live-content">
+  {% if is_running %}
+  <span class="live-badge running"><span class="live-dot"></span>LIVE</span>
+  {% else %}
+  <span class="live-badge completed">{{ status | upper }}</span>
+  {% endif %}
 
-  <!-- ===== HEADER ===== -->
-  <div class="header-card" id="summary">
-    <pre class="ascii-logo"> ____            _ _ _     _
-| __ )  __ _ ___(_) (_)___| | __
-|  _ \ / _` / __| | | / __| |/ /
-| |_) | (_| \__ \ | | \__ \   &lt;
-|____/ \__,_|___/_|_|_|___/_|\_\</pre>
-    <h1>
-      Live Audit Report
-      {% if is_running %}
-      <span class="live-badge running"><span class="dot"></span>LIVE</span>
-      {% else %}
-      <span class="live-badge {{ status }}">{{ status | upper }}</span>
-      {% endif %}
-    </h1>
-    <div class="meta-row">
-      <span><span class="label">Time:</span> <span class="value">{{ timestamp }}</span></span>
-      <span><span class="label">Elapsed:</span> <span class="value">{{ elapsed_total }}s</span></span>
-      {% if targets_scanned %}<span><span class="label">Targets:</span> <span class="value">{{ targets_scanned }}</span></span>{% endif %}
-      {% if plugins_run %}<span><span class="label">Plugins:</span> <span class="value">{{ plugins_run }}</span></span>{% endif %}
-      <span><span class="label">Findings:</span> <span class="value">{{ findings|length }}{% if noise_count %} <span style="color:var(--fg-dim)">(+{{ noise_count }} noise)</span>{% endif %}</span></span>
+  <div class="metrics">
+    {% if risk > 0 %}
+    <div class="metric-card">
+      <div class="risk-gauge">
+        <svg viewBox="0 0 40 40">
+          <circle class="bg" cx="20" cy="20" r="18"/>
+          <circle class="fg" cx="20" cy="20" r="18" style="stroke:{% if risk >= 70 %}var(--red){% elif risk >= 40 %}var(--orange){% else %}var(--yellow){% endif %};stroke-dashoffset:{{ 113 - (risk * 113 / 100)|round|int }}"/>
+        </svg>
+        <div class="rval" style="color:{% if risk >= 70 %}var(--red){% elif risk >= 40 %}var(--orange){% else %}var(--yellow){% endif %}">{{ risk }}</div>
+      </div>
+      <div class="lbl">Risk</div>
     </div>
+    {% endif %}
+    <div class="metric-card critical"><div class="val">{{ c }}</div><div class="lbl">Critical</div></div>
+    <div class="metric-card high"><div class="val">{{ h }}</div><div class="lbl">High</div></div>
+    <div class="metric-card medium"><div class="val">{{ m }}</div><div class="lbl">Medium</div></div>
+    <div class="metric-card low"><div class="val">{{ l }}</div><div class="lbl">Low</div></div>
+    <div class="metric-card info"><div class="val">{{ i }}</div><div class="lbl">Info</div></div>
+  </div>
 
-    {% set c = severity_counts.get('CRITICAL', 0) %}
-    {% set h = severity_counts.get('HIGH', 0) %}
-    {% set m = severity_counts.get('MEDIUM', 0) %}
-    {% set l = severity_counts.get('LOW', 0) %}
-    {% set i = severity_counts.get('INFO', 0) %}
-    {% set total = c + h + m + l + i %}
+  <div style="display:flex;flex-direction:column;gap:6px;align-self:center;">
     {% if total > 0 %}
-    <div class="sev-bar">
-      {% if c %}<div class="seg" style="width:{{ c/total*100 }}%;background:var(--critical)"></div>{% endif %}
-      {% if h %}<div class="seg" style="width:{{ h/total*100 }}%;background:var(--high)"></div>{% endif %}
-      {% if m %}<div class="seg" style="width:{{ m/total*100 }}%;background:var(--medium)"></div>{% endif %}
-      {% if l %}<div class="seg" style="width:{{ l/total*100 }}%;background:var(--low)"></div>{% endif %}
-      {% if i %}<div class="seg" style="width:{{ i/total*100 }}%;background:var(--info)"></div>{% endif %}
-    </div>
-    <div class="sev-legend">
-      {% if c %}<span><span class="dot" style="background:var(--critical)"></span>Critical {{ c }}</span>{% endif %}
-      {% if h %}<span><span class="dot" style="background:var(--high)"></span>High {{ h }}</span>{% endif %}
-      {% if m %}<span><span class="dot" style="background:var(--medium)"></span>Medium {{ m }}</span>{% endif %}
-      {% if l %}<span><span class="dot" style="background:var(--low)"></span>Low {{ l }}</span>{% endif %}
-      {% if i %}<span><span class="dot" style="background:var(--info)"></span>Info {{ i }}</span>{% endif %}
-    </div>
-    {% endif %}
-  </div>
-
-  <!-- ===== SEVERITY CARDS ===== -->
-  <div class="sev-cards">
-    <div class="sev-card critical"><div class="num">{{ c }}</div><div class="lbl">Critical</div></div>
-    <div class="sev-card high"><div class="num">{{ h }}</div><div class="lbl">High</div></div>
-    <div class="sev-card medium"><div class="num">{{ m }}</div><div class="lbl">Medium</div></div>
-    <div class="sev-card low"><div class="num">{{ l }}</div><div class="lbl">Low</div></div>
-    <div class="sev-card info"><div class="num">{{ i }}</div><div class="lbl">Info</div></div>
-  </div>
-
-  <!-- ===== KILL CHAIN / PIPELINE ===== -->
-  {% if phases %}
-  <div class="section" id="pipeline">
-    <div class="section-hdr">
-      <span class="icon">>_</span>
-      <h2>Kill Chain Progress</h2>
-    </div>
-    <div class="kill-chain">
-    {% for phase in phases %}
-      <div class="kc-phase {{ phase.status }}">
-        <div class="kc-name">{{ phase.name }}</div>
-        <div class="kc-count">{{ phase.completed }}/{{ phase.total }}</div>
-        <div class="kc-detail">{{ phase.elapsed }}s</div>
-        <div class="kc-bar">
-          <div class="kc-bar-fill {{ phase.status }}" style="width:{{ phase.pct }}%"></div>
-        </div>
-      </div>
-    {% endfor %}
-    </div>
-  </div>
-  {% endif %}
-
-  <!-- ===== ATTACK SURFACE ===== -->
-  {% if attack_surface and (attack_surface.hosts or attack_surface.subdomains) %}
-  <div class="section" id="attack-surface">
-    <div class="section-hdr">
-      <span class="icon">[~]</span>
-      <h2>Attack Surface Map</h2>
-    </div>
-
-    {% if attack_surface.subdomains %}
-    <div class="atk-card" style="margin-bottom:0.6rem;">
-      <div class="atk-card-hdr">Discovered Hosts <span style="color:var(--fg-dim);font-size:0.7rem">({{ attack_surface.subdomains|length }})</span></div>
-      <div class="sub-grid">
-        {% for sub in attack_surface.subdomains[:100] %}
-        <div class="sub-item">{{ sub }}</div>
-        {% endfor %}
-        {% if attack_surface.subdomains|length > 100 %}<div class="sub-item" style="color:var(--fg-muted)">...+{{ attack_surface.subdomains|length - 100 }} more</div>{% endif %}
-      </div>
+    <div class="sev-bar" title="Severity Distribution">
+      {% if c %}<span style="flex:{{ c }};background:var(--red)"></span>{% endif %}
+      {% if h %}<span style="flex:{{ h }};background:var(--orange)"></span>{% endif %}
+      {% if m %}<span style="flex:{{ m }};background:var(--yellow)"></span>{% endif %}
+      {% if l %}<span style="flex:{{ l }};background:var(--green)"></span>{% endif %}
+      {% if i %}<span style="flex:{{ i }};background:var(--blue)"></span>{% endif %}
     </div>
     {% endif %}
 
-    <div class="atk-grid">
-    {% for host, info in attack_surface.hosts.items() %}
-      {% if info.ports or info.services or info.tech or info.paths or info.admin_panels or info.exposed_files or info.api_endpoints or info.backup_files %}
-      <div class="atk-card">
-        <div class="atk-card-hdr"><span class="host">{{ host }}</span></div>
-
-        {% if info.waf %}
-        <div style="margin-bottom:0.3rem;">
-          {% for w in info.waf %}<span class="chip chip-warn">WAF: {{ w }}</span>{% endfor %}
-        </div>
-        {% endif %}
-
-        {% if info.cloud %}
-        <div style="margin-bottom:0.3rem;">
-          {% for c in info.cloud %}<span class="chip chip-info">{{ c }}</span>{% endfor %}
-        </div>
-        {% endif %}
-
-        {% if info.tech or info.cms %}
-        <div style="margin-bottom:0.3rem;">
-          {% for c in info.cms %}<span class="chip chip-warn">{{ c.name }}{% if c.version %} {{ c.version }}{% endif %}</span>{% endfor %}
-          {% for t in info.tech %}<span class="chip chip-tech">{{ t }}</span>{% endfor %}
-        </div>
-        {% endif %}
-
-        {% if info.ports or info.services %}
-        <table class="port-table">
-          <tr><th>Port</th><th>Service</th><th>Banner</th></tr>
-          {% set ns_ports = namespace(shown=[]) %}
-          {% for s in info.services %}
-          <tr>
-            <td class="port-num">{{ s.port }}</td>
-            <td class="svc-name">{{ s.service }}</td>
-            <td class="banner-text" title="{{ s.banner|default('') }}">{{ s.banner|default('')|truncate(40) }}</td>
-          </tr>
-          {% set ns_ports.shown = ns_ports.shown + [s.port] %}
-          {% endfor %}
-          {% for p in info.ports %}
-          {% if p.port not in ns_ports.shown %}
-          <tr>
-            <td class="port-num">{{ p.port }}</td>
-            <td class="svc-name">{{ p.service|default('') }}</td>
-            <td class="banner-text"></td>
-          </tr>
-          {% endif %}
-          {% endfor %}
-        </table>
-        {% endif %}
-
-        {% if info.admin_panels %}
-        <div style="margin-top:0.3rem;font-size:0.62rem;color:var(--high);font-weight:600;text-transform:uppercase">Admin Panels</div>
-        <ul class="path-list">
-          {% for a in info.admin_panels[:10] %}
-          <li><span class="dot-s s2xx"></span><span class="p-text" style="color:var(--high)">{{ a.path }}</span><span class="p-status">{{ a.status }}</span></li>
-          {% endfor %}
-        </ul>
-        {% endif %}
-
-        {% if info.exposed_files %}
-        <div style="margin-top:0.3rem;font-size:0.62rem;color:var(--critical);font-weight:600;text-transform:uppercase">Exposed Files</div>
-        <ul class="path-list">
-          {% for f in info.exposed_files[:10] %}
-          <li><span class="dot-s s2xx"></span><span class="p-text" style="color:var(--critical)">{{ f.path }}</span></li>
-          {% endfor %}
-        </ul>
-        {% endif %}
-
-        {% if info.api_endpoints %}
-        <div style="margin-top:0.3rem;font-size:0.62rem;color:var(--neon-cyan);font-weight:600;text-transform:uppercase">API Endpoints</div>
-        <ul class="path-list">
-          {% for e in info.api_endpoints[:10] %}
-          <li><span class="dot-s s2xx"></span><span class="p-text">{{ e.path }}</span><span class="p-status">{{ e.status }}</span></li>
-          {% endfor %}
-        </ul>
-        {% endif %}
-
-        {% if info.paths %}
-        <div style="margin-top:0.3rem;font-size:0.62rem;font-weight:600;text-transform:uppercase">Discovered Paths</div>
-        <ul class="path-list">
-          {% for p in info.paths[:20] %}
-          <li>
-            <span class="dot-s {% if p.status >= 200 and p.status < 300 %}s2xx{% elif p.status >= 300 and p.status < 400 %}s3xx{% else %}s4xx{% endif %}"></span>
-            <span class="p-text">{{ p.path }}</span>
-            <span class="p-status">{{ p.status }}</span>
-          </li>
-          {% endfor %}
-          {% if info.paths|length > 20 %}<li style="color:var(--fg-muted)">...+{{ info.paths|length - 20 }} more</li>{% endif %}
-        </ul>
-        {% endif %}
-
-        {% if info.methods %}
-        <div style="margin-top:0.3rem;">
-          {% for m in info.methods %}
-          <span class="chip chip-method {% if m in ['PUT','DELETE','TRACE','CONNECT'] %}risky{% endif %}">{{ m }}</span>
-          {% endfor %}
-        </div>
-        {% endif %}
+    {% if phases %}
+    <div class="phases">
+      {% for phase in phases %}
+      <div class="phase-row">
+        <span class="pn">{{ phase.name }}</span>
+        <div class="phase-bar"><div class="phase-fill {{ phase.status }}" style="width:{% if phase.status == 'done' %}100{% else %}{{ [phase.pct, 100]|min }}{% endif %}%"></div></div>
+        <span>{% if phase.status == 'done' %}{{ phase.elapsed }}s{% else %}{{ [phase.pct, 100]|min }}%{% endif %}</span>
       </div>
-      {% endif %}
-    {% endfor %}
-    </div>
-
-    {% if attack_surface.emails %}
-    <div class="atk-card">
-      <div class="atk-card-hdr">Emails <span style="color:var(--fg-dim);font-size:0.7rem">({{ attack_surface.emails|length }})</span></div>
-      <div style="font-size:0.7rem;">
-        {% for e in attack_surface.emails[:20] %}<span style="color:var(--neon-cyan)">{{ e }}</span>{% if not loop.last %}<span style="color:var(--fg-muted)">, </span>{% endif %}{% endfor %}
-      </div>
-    </div>
-    {% endif %}
-  </div>
-  {% endif %}
-
-  <!-- ===== PLUGIN PERFORMANCE ===== -->
-  {% if plugin_stats %}
-  <div class="section" id="plugin-perf">
-    <div class="section-hdr">
-      <span class="icon">[%]</span>
-      <h2>Plugin Operations</h2>
-      <span class="cnt">({{ plugin_stats|length }})</span>
-    </div>
-    {% set max_dur = plugin_stats|map(attribute='duration')|max if plugin_stats else 1 %}
-    {% set max_dur = max_dur if max_dur > 0 else 1 %}
-    <table class="plugin-table">
-      <tr>
-        <th>Plugin</th>
-        <th style="text-align:center">Targets</th>
-        <th style="text-align:center">Finds</th>
-        <th>Duration</th>
-        <th style="min-width:60px"></th>
-      </tr>
-      {% for p in plugin_stats %}
-      <tr>
-        <td class="pname">{{ p.name }}</td>
-        <td class="pnum">{{ p.targets }}</td>
-        <td class="pnum" style="{% if p.findings > 0 %}color:var(--neon-green);font-weight:700{% endif %}">{{ p.findings }}</td>
-        <td class="pdur">{{ p.duration|round(1) }}s</td>
-        <td>
-          <div class="perf-bar">
-            <div class="perf-bar-fill" style="width:{{ (p.duration / max_dur * 100)|round|int }}%"></div>
-          </div>
-        </td>
-      </tr>
-      {% endfor %}
-    </table>
-  </div>
-  {% endif %}
-
-  <!-- ===== FINDINGS ===== -->
-  <div class="section" id="findings-sec">
-    <div class="section-hdr">
-      <span class="icon">[#]</span>
-      <h2>Findings</h2>
-      <span class="cnt">({{ findings|length }})</span>
-    </div>
-
-    <div class="filters-row">
-      <button class="filter-chip active sev-critical" data-sev="CRITICAL" onclick="toggleFilter(this)">Critical</button>
-      <button class="filter-chip active sev-high" data-sev="HIGH" onclick="toggleFilter(this)">High</button>
-      <button class="filter-chip active sev-medium" data-sev="MEDIUM" onclick="toggleFilter(this)">Medium</button>
-      <button class="filter-chip active sev-low" data-sev="LOW" onclick="toggleFilter(this)">Low</button>
-      <button class="filter-chip sev-info" data-sev="INFO" onclick="toggleFilter(this)">Info</button>
-      <input class="search-box" type="text" placeholder="Search..." oninput="applyFilters()" id="searchBox">
-      <button class="tool-btn" onclick="toggleAll(true)">Expand</button>
-      <button class="tool-btn" onclick="toggleAll(false)">Collapse</button>
-      {% if noise_count %}<span class="noise-info">{{ noise_count }} noise hidden</span>{% endif %}
-    </div>
-
-    <div id="findings-container">
-    {% for sev in ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'] %}
-    {% set sev_findings = findings | selectattr('severity', 'equalto', sev) | list %}
-    {% if sev_findings %}
-    <div class="finding-group" data-group-key="{{ sev }}" id="sev-{{ sev }}">
-      <div class="finding-group-title">{{ sev }} <span class="cnt">({{ sev_findings|length }})</span></div>
-      {% for f in sev_findings %}
-      <details class="finding {{ f.severity }}" data-severity="{{ f.severity }}" data-target="{{ f.target }}" data-plugin="{{ f.plugin }}" data-search="{{ f.title|lower }} {{ f.description|lower }} {{ (f.evidence or '')|lower }}">
-        <summary>
-          <span class="badge {{ f.severity }}">{{ f.severity }}</span>
-          <span class="f-title">{{ f.title }}</span>
-          <span class="f-target">{{ f.target }}</span>
-        </summary>
-        <div class="finding-body">
-          {% if f.description %}<div class="desc">{{ f.description }}</div>{% endif %}
-          {% if f.evidence %}<div class="evidence-block">{{ f.evidence }}</div>{% endif %}
-          {% if f.remediation %}<div class="remed-block">{{ f.remediation }}</div>{% endif %}
-          {% if f.tags %}<div class="tags">{% for tag in f.tags %}<span class="tag">{{ tag }}</span>{% endfor %}</div>{% endif %}
-        </div>
-      </details>
       {% endfor %}
     </div>
     {% endif %}
-    {% endfor %}
-    </div>
-
-    {% if not findings %}
-    <div class="finding INFO" style="border-left:3px solid var(--info);">
-      <div style="padding:0.5rem 0.85rem;font-size:0.75rem;display:flex;align-items:center;gap:0.4rem;">
-        <span class="badge INFO">INFO</span>
-        <span class="f-title">{% if is_running %}Scanning in progress...{% else %}No actionable findings{% endif %}</span>
-      </div>
-    </div>
-    {% endif %}
   </div>
-
-  <footer>
-    <span>Basilisk v2.0 — Live War Room</span>
-    <span id="footerTime">{{ timestamp }}</span>
-  </footer>
 </div>
 
+<!-- ══════════════════════════════════════
+     MAIN SPLIT LAYOUT
+     ══════════════════════════════════════ -->
+<div class="layout" id="live-content">
+
+  <!-- ── LEFT: Infrastructure Tree ── -->
+  <div class="tree-panel">
+    <div class="tree-toolbar">
+      <input type="text" class="tree-search" id="treeSearch" placeholder="Filter hosts, paths, findings...">
+      <button class="tree-btn" onclick="expandAll()">Expand</button>
+      <button class="tree-btn" onclick="collapseAll()">Collapse</button>
+    </div>
+
+    <div class="tree-scroll" id="treeScroll">
+      <div class="tree-root">
+
+        {# ── Macro: render tree node recursively ── #}
+        {% macro render_node(node, depth, host) %}
+          {% for name, child in node.children|dictsort %}
+            {% if child.children %}
+            {# Directory node #}
+            {% set is_api = name.startswith('api') or name.startswith('v1') or name.startswith('v2') or name.startswith('v3') %}
+            <details class="tree-node {% if is_api %}api-section{% endif %}" data-search="{{ name }}" {% if depth < 2 %}open{% endif %}>
+              <summary style="--depth:{{ depth }}">
+                <span class="arrow">&#9654;</span>
+                {% if is_api %}<span class="api-badge">API</span>{% else %}<span class="dir-icon">&#128193;</span>{% endif %}
+                <a class="path-link" href="https://{{ host }}/{{ name }}/" target="_blank">/{{ name }}/</a>
+                <span style="font-size:8px;color:var(--text-muted);margin-left:auto;">{{ child.entries|length + child.children|length }}</span>
+              </summary>
+              {% for entry in child.entries %}
+              {% set fname = entry.path.split('/')|last|lower %}
+              {% set is_sensitive = fname.endswith('.env') or fname.endswith('.bak') or fname.endswith('.sql') or fname.endswith('.map') or fname.endswith('.key') or fname.endswith('.pem') or fname.endswith('.log') or fname == '.git' or fname == '.htaccess' or fname == '.htpasswd' or fname == 'wp-config.php' or fname == 'web.config' %}
+              <div class="tree-leaf{% if entry.source in ('brute','api','admin','exposed','backup') %} leaf-{{ entry.source }}{% endif %}{% if is_sensitive %} sensitive{% endif %}" style="--depth:{{ depth + 1 }}">
+                <span class="file-icon">&#9702;</span>
+                {% if entry.method %}<span class="method-badge method-{{ entry.method|lower }}">{{ entry.method|upper }}</span>{% endif %}
+                {% if entry.status %}
+                <span class="status-badge s{{ entry.status }} {% if entry.status >= 200 and entry.status < 300 %}s2xx{% elif entry.status >= 300 and entry.status < 400 %}s3xx{% elif entry.status >= 400 and entry.status < 500 %}s4xx{% elif entry.status >= 500 %}s5xx{% else %}s0{% endif %}">{{ entry.status }}</span>
+                {% endif %}
+                <a class="path-link" href="https://{{ host }}{% if not entry.path.startswith('/') %}/{% endif %}{{ entry.path }}" target="_blank" title="{{ entry.path }}">{{ entry.path|truncate(50) }}</a>
+                {% if is_sensitive and entry.source == 'exposed' %}<span class="secret-badge">SENSITIVE</span>{% endif %}
+                {% if entry.size %}<span class="file-size">{{ entry.size|filesize }}</span>{% endif %}
+                {% if entry.source %}<span class="src-label{% if entry.source in ('brute','api','admin','exposed','backup') %} src-{{ entry.source }}{% endif %}">{{ entry.source }}</span>{% endif %}
+              </div>
+              {% endfor %}
+              {{ render_node(child, depth + 1, host) }}
+            </details>
+            {% else %}
+            {# Leaf node #}
+            {% for entry in child.entries %}
+            {% set is_sensitive = name.endswith('.env') or name.endswith('.bak') or name.endswith('.sql') or name.endswith('.map') or name.endswith('.key') or name.endswith('.pem') or name.endswith('.log') or name == '.git' or name == '.htaccess' or name == '.htpasswd' or name == 'wp-config.php' or name == 'web.config' %}
+            <div class="tree-leaf{% if entry.source in ('brute','api','admin','exposed','backup') %} leaf-{{ entry.source }}{% endif %}{% if is_sensitive %} sensitive{% endif %}" style="--depth:{{ depth }}" data-search="{{ name }}">
+              <span class="file-icon">&#9702;</span>
+              {% if entry.method %}<span class="method-badge method-{{ entry.method|lower }}">{{ entry.method|upper }}</span>{% endif %}
+              {% if entry.status %}
+              <span class="status-badge s{{ entry.status }} {% if entry.status >= 200 and entry.status < 300 %}s2xx{% elif entry.status >= 300 and entry.status < 400 %}s3xx{% elif entry.status >= 400 and entry.status < 500 %}s4xx{% elif entry.status >= 500 %}s5xx{% else %}s0{% endif %}">{{ entry.status }}</span>
+              {% endif %}
+              <a class="path-link" href="https://{{ host }}{% if not entry.path.startswith('/') %}/{% endif %}{{ entry.path }}" target="_blank" title="{{ entry.path }}">{{ name }}</a>
+              {% if is_sensitive and entry.source == 'exposed' %}<span class="secret-badge">SENSITIVE</span>{% endif %}
+              {% if entry.size %}<span class="file-size">{{ entry.size|filesize }}</span>{% endif %}
+              {% if entry.source %}<span class="src-label{% if entry.source in ('brute','api','admin','exposed','backup') %} src-{{ entry.source }}{% endif %}">{{ entry.source }}</span>{% endif %}
+            </div>
+            {% endfor %}
+            {% if not child.entries %}
+            <div class="tree-leaf" style="--depth:{{ depth }}" data-search="{{ name }}">
+              <span class="file-icon">&#9702;</span>
+              <span>/{{ name }}</span>
+            </div>
+            {% endif %}
+            {% endif %}
+          {% endfor %}
+        {% endmacro %}
+
+        {# ── Main tree: hosts ── #}
+        {% if site_tree %}
+          {% for host, data in site_tree.items() %}
+          <details class="tree-node" open data-search="{{ host }}">
+            <summary style="--depth:0">
+              <span class="arrow">&#9654;</span>
+              <span class="sev-dot info"></span>
+              <a href="https://{{ host }}" target="_blank" class="host-name">{{ host }}</a>
+              <span class="sev-counts">{{ data.total }} path{{ 's' if data.total != 1 }}</span>
+            </summary>
+            {{ render_node(data.root, 1, host) }}
+          </details>
+          {% endfor %}
+        {% elif attack_surface and attack_surface.hosts %}
+          {# Fallback: flat host list #}
+          {% for host, info in attack_surface.hosts.items() %}
+          <details class="tree-node" data-search="{{ host }}" {% if loop.index <= 5 %}open{% endif %}>
+            <summary style="--depth:0">
+              <span class="arrow">&#9654;</span>
+              <span class="sev-dot info"></span>
+              <a href="https://{{ host }}" target="_blank" class="host-name">{{ host }}</a>
+            </summary>
+            {% for s in info.services %}
+            <div class="tree-leaf" style="--depth:1">
+              <span class="port-label">:{{ s.port }}</span>
+              <span class="service-label">&mdash; {{ s.service }}{% if s.banner %} {{ s.banner|truncate(30) }}{% endif %}</span>
+            </div>
+            {% endfor %}
+            {% for p in info.paths[:15] %}
+            <div class="tree-leaf{% if p.source in ('brute','api','admin','exposed','backup') %} leaf-{{ p.source }}{% endif %}" style="--depth:1">
+              <span class="file-icon">&#9702;</span>
+              {% if p.status %}<span class="status-badge s{{ p.status }} {% if p.status >= 200 and p.status < 300 %}s2xx{% elif p.status >= 300 and p.status < 400 %}s3xx{% elif p.status >= 400 and p.status < 500 %}s4xx{% elif p.status >= 500 %}s5xx{% else %}s0{% endif %}">{{ p.status }}</span>{% endif %}
+              <a class="path-link" href="https://{{ host }}{% if not p.path.startswith('/') %}/{% endif %}{{ p.path }}" target="_blank">{{ p.path }}</a>
+              {% if p.source %}<span class="src-label{% if p.source in ('brute','api','admin','exposed','backup') %} src-{{ p.source }}{% endif %}">{{ p.source }}</span>{% endif %}
+            </div>
+            {% endfor %}
+            {% if info.paths|length > 15 %}
+            <div class="tree-leaf" style="--depth:1;color:var(--text-muted);font-style:italic">+{{ info.paths|length - 15 }} more</div>
+            {% endif %}
+          </details>
+          {% endfor %}
+        {% else %}
+          <div style="padding:20px;text-align:center;color:var(--text-muted);font-size:11px;">
+            {% if is_running %}Discovering hosts...{% else %}No hosts found{% endif %}
+          </div>
+        {% endif %}
+
+        {# Subdomains #}
+        {% if attack_surface and attack_surface.subdomains %}
+        <details class="tree-node" data-search="subdomains">
+          <summary style="--depth:0">
+            <span class="arrow">&#9654;</span>
+            <span class="sev-dot info"></span>
+            <span class="host-name" style="color:var(--text-muted)">Subdomains ({{ attack_surface.subdomains|length }})</span>
+          </summary>
+          {% for sub in attack_surface.subdomains[:50] %}
+          <div class="tree-leaf" style="--depth:1" data-search="{{ sub }}">
+            <span class="sev-dot info"></span>
+            <a href="https://{{ sub }}" target="_blank" class="path-link">{{ sub }}</a>
+          </div>
+          {% endfor %}
+          {% if attack_surface.subdomains|length > 50 %}
+          <div class="tree-leaf" style="--depth:1;color:var(--text-muted);font-style:italic">+{{ attack_surface.subdomains|length - 50 }} more</div>
+          {% endif %}
+        </details>
+        {% endif %}
+
+        {# Emails #}
+        {% if attack_surface and attack_surface.emails %}
+        <details class="tree-node" data-search="emails">
+          <summary style="--depth:0">
+            <span class="arrow">&#9654;</span>
+            <span class="sev-dot info"></span>
+            <span class="host-name" style="color:var(--text-muted)">Emails ({{ attack_surface.emails|length }})</span>
+          </summary>
+          {% for e in attack_surface.emails[:20] %}
+          <div class="tree-leaf" style="--depth:1"><span style="color:var(--cyan)">{{ e }}</span></div>
+          {% endfor %}
+        </details>
+        {% endif %}
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ── RIGHT: Detail Panel ── -->
+  <div class="detail-panel" id="detailPanel">
+
+    {# Detail Header #}
+    <div class="detail-header">
+      <div class="detail-host-info">
+        <h2>{{ title }}</h2>
+        <div class="ip">{{ targets_scanned }} targets &middot; {{ plugins_run }} plugins &middot; {{ elapsed_total }}s</div>
+        <div class="detail-sev-bar">
+          <div class="detail-sev-item"><span class="sev-dot critical"></span><span class="count" style="color:var(--red)">{{ c }}</span> Critical</div>
+          <div class="detail-sev-item"><span class="sev-dot high"></span><span class="count" style="color:var(--orange)">{{ h }}</span> High</div>
+          <div class="detail-sev-item"><span class="sev-dot medium"></span><span class="count" style="color:var(--yellow)">{{ m }}</span> Medium</div>
+          <div class="detail-sev-item"><span class="sev-dot low"></span><span class="count" style="color:var(--green)">{{ l }}</span> Low</div>
+          <div class="detail-sev-item"><span class="sev-dot info"></span><span class="count" style="color:var(--blue)">{{ i }}</span> Info</div>
+        </div>
+      </div>
+      {% if risk > 0 %}
+      <div style="flex-shrink:0;">
+        <div class="risk-gauge" style="width:60px;height:60px;">
+          <svg viewBox="0 0 40 40">
+            <circle class="bg" cx="20" cy="20" r="18"/>
+            <circle class="fg" cx="20" cy="20" r="18" style="stroke:{% if risk >= 70 %}var(--red){% elif risk >= 40 %}var(--orange){% else %}var(--yellow){% endif %};stroke-dashoffset:{{ 113 - (risk * 113 / 100)|round|int }}"/>
+          </svg>
+          <div class="rval" style="font-size:17px;color:{% if risk >= 70 %}var(--red){% elif risk >= 40 %}var(--orange){% else %}var(--yellow){% endif %}">{{ risk }}</div>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Tab Bar -->
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="findings">Findings</button>
+      <button class="tab-btn" data-tab="surface">Attack Surface</button>
+      <button class="tab-btn" data-tab="plugins">Plugins</button>
+    </div>
+
+    <!-- ═══ Tab: Findings ═══ -->
+    <div class="tab-content active" id="tab-findings">
+      <div class="filters-row">
+        <button class="filter-chip active sc" data-sev="CRITICAL" onclick="toggleFilter(this)">Critical {{ c }}</button>
+        <button class="filter-chip active sh" data-sev="HIGH" onclick="toggleFilter(this)">High {{ h }}</button>
+        <button class="filter-chip active sm" data-sev="MEDIUM" onclick="toggleFilter(this)">Medium {{ m }}</button>
+        <button class="filter-chip active sl" data-sev="LOW" onclick="toggleFilter(this)">Low {{ l }}</button>
+        <button class="filter-chip si" data-sev="INFO" onclick="toggleFilter(this)">Info {{ i }}</button>
+        <input class="tree-search" type="text" placeholder="Filter..." oninput="applyFilters()" id="findingSearch" style="width:120px;">
+        {% if noise_count %}<span style="font-size:8px;color:var(--text-muted);">{{ noise_count }} noise hidden</span>{% endif %}
+      </div>
+
+      <div id="findings-container">
+      {% for sev in ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'] %}
+      {% set sev_findings = findings | selectattr('severity', 'equalto', sev) | list %}
+      {% if sev_findings %}
+      <div class="finding-group" data-group-key="{{ sev }}" id="sev-{{ sev }}">
+        <div style="font-size:12px;font-weight:700;color:{% if sev == 'CRITICAL' %}var(--red){% elif sev == 'HIGH' %}var(--orange){% elif sev == 'MEDIUM' %}var(--yellow){% elif sev == 'LOW' %}var(--green){% else %}var(--blue){% endif %};margin:10px 0 6px;display:flex;align-items:center;gap:4px;">
+          {{ sev }} <span style="color:var(--text-muted);font-weight:400;font-size:10px;">({{ sev_findings|length }})</span>
+        </div>
+        {% for f in sev_findings %}
+        <details class="finding-card" data-severity="{{ f.severity }}" data-search="{{ f.title|lower }} {{ f.description|lower }} {{ (f.evidence or '')|lower }} {{ f.target|lower }} {{ f.plugin|lower }}">
+          <summary>
+            <span class="badge {{ f.severity|lower }}">{{ f.severity[:4] }}</span>
+            <span class="finding-title" title="{{ f.title }}">{{ f.title }}</span>
+            <span class="finding-target">{{ f.target }}</span>
+          </summary>
+          <div class="finding-body">
+            {% if f.description %}<div style="color:var(--text-muted);margin-bottom:6px;">{{ f.description }}</div>{% endif %}
+            {% if f.evidence %}<div class="evidence"><span class="prompt">$ </span>{{ f.evidence }}</div>{% endif %}
+            {% if f.remediation %}<div class="remediation">{{ f.remediation }}</div>{% endif %}
+            {% if f.tags %}<div class="finding-tags">{% for tag in f.tags %}<span class="tag">{{ tag }}</span>{% endfor %}</div>{% endif %}
+          </div>
+        </details>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% endfor %}
+      </div>
+
+      {% if not findings %}
+      <div style="padding:30px;text-align:center;color:var(--text-muted);font-size:12px;">
+        {% if is_running %}Scanning in progress... findings will appear here{% else %}No actionable findings{% endif %}
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- ═══ Tab: Attack Surface ═══ -->
+    <div class="tab-content" id="tab-surface">
+      {% if attack_surface and attack_surface.hosts %}
+      {% for host, info in attack_surface.hosts.items() %}
+      {% if info.ports or info.services or info.tech or info.paths or info.admin_panels or info.exposed_files or info.api_endpoints %}
+      <details class="section-card" open>
+        <summary>
+          <span class="arrow">&#9654;</span>
+          <span style="color:var(--green);font-weight:600;">{{ host }}</span>
+          {% if info.ports %}<span style="font-size:9px;color:var(--text-muted);">{{ info.ports|length }} ports</span>{% endif %}
+          {% if info.paths %}<span style="font-size:9px;color:var(--text-muted);">{{ info.paths|length }} paths</span>{% endif %}
+        </summary>
+        <div class="section-body">
+          {% if info.tech or info.cms %}
+          <div class="tech-chips" style="padding:6px 0;">
+            {% for cm in info.cms %}<span class="chip" style="border-color:var(--orange);color:var(--orange);">{{ cm.name }}{% if cm.version %} {{ cm.version }}{% endif %}</span>{% endfor %}
+            {% for t in info.tech %}<span class="chip">{{ t }}</span>{% endfor %}
+          </div>
+          {% endif %}
+
+          {% if info.waf %}
+          <div style="margin-bottom:4px;">{% for w in info.waf %}<span class="chip" style="border-color:var(--orange);color:var(--orange);">WAF: {{ w }}</span>{% endfor %}</div>
+          {% endif %}
+
+          {% if info.ports or info.services %}
+          <table>
+            <tr><th>Port</th><th>Service</th><th>Banner</th></tr>
+            {% for s in info.services %}
+            <tr>
+              <td style="color:var(--green);font-weight:600;">{{ s.port }}</td>
+              <td style="color:var(--cyan);">{{ s.service }}</td>
+              <td style="color:var(--text-muted);">{{ s.banner|default('')|truncate(50) }}</td>
+            </tr>
+            {% endfor %}
+            {% set shown_ports = info.services|map(attribute='port')|list %}
+            {% for p in info.ports %}
+            {% if p.port not in shown_ports %}
+            <tr>
+              <td style="color:var(--green);font-weight:600;">{{ p.port }}</td>
+              <td style="color:var(--cyan);">{{ p.service|default('') }}</td>
+              <td></td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+          </table>
+          {% endif %}
+
+          {% if info.exposed_files %}
+          <div style="margin-top:8px;font-size:9px;color:var(--red);font-weight:600;text-transform:uppercase;">Exposed Files</div>
+          {% for f in info.exposed_files[:10] %}
+          <div style="font-size:10px;padding:2px 0;color:var(--red);">{{ f.path }}</div>
+          {% endfor %}
+          {% endif %}
+
+          {% if info.admin_panels %}
+          <div style="margin-top:8px;font-size:9px;color:var(--orange);font-weight:600;text-transform:uppercase;">Admin Panels</div>
+          {% for a in info.admin_panels[:10] %}
+          <div style="font-size:10px;padding:2px 0;color:var(--orange);">{{ a.path }} <span style="color:var(--text-muted);">{{ a.status }}</span></div>
+          {% endfor %}
+          {% endif %}
+
+          {% if info.api_endpoints %}
+          <div style="margin-top:8px;font-size:9px;color:var(--purple);font-weight:600;text-transform:uppercase;">API Endpoints</div>
+          {% for e in info.api_endpoints[:10] %}
+          <div style="font-size:10px;padding:2px 0;"><span class="api-badge" style="font-size:7px;">API</span> {{ e.path }} <span style="color:var(--text-muted);">{{ e.status }}</span></div>
+          {% endfor %}
+          {% endif %}
+
+          {% if info.dns_records %}
+          <div style="margin-top:8px;font-size:9px;color:var(--cyan);font-weight:600;text-transform:uppercase;">DNS Records</div>
+          <table>
+            <tr><th>Type</th><th>Value</th></tr>
+            {% for r in info.dns_records[:10] %}
+            <tr><td style="color:var(--cyan);">{{ r.type }}</td><td>{{ r.value }}</td></tr>
+            {% endfor %}
+          </table>
+          {% endif %}
+        </div>
+      </details>
+      {% endif %}
+      {% endfor %}
+      {% else %}
+      <div style="padding:30px;text-align:center;color:var(--text-muted);">
+        {% if is_running %}Mapping attack surface...{% else %}No attack surface data{% endif %}
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- ═══ Tab: Plugins ═══ -->
+    <div class="tab-content" id="tab-plugins">
+      {% if plugin_stats %}
+      {% set max_dur = plugin_stats|map(attribute='duration')|max if plugin_stats else 1 %}
+      {% set max_dur = max_dur if max_dur > 0 else 1 %}
+      <table class="plugin-table">
+        <tr><th>Plugin</th><th style="text-align:center">Targets</th><th style="text-align:center">Finds</th><th>Duration</th><th style="min-width:50px"></th></tr>
+        {% for p in plugin_stats %}
+        <tr>
+          <td class="pname">{{ p.name }}</td>
+          <td style="text-align:center">{{ p.targets }}</td>
+          <td style="text-align:center;{% if p.findings > 0 %}color:var(--green);font-weight:700{% endif %}">{{ p.findings }}</td>
+          <td style="color:var(--text-muted);text-align:right;">{{ p.duration|round(1) }}s</td>
+          <td><div class="perf-bar"><div class="perf-bar-fill" style="width:{{ (p.duration / max_dur * 100)|round|int }}%"></div></div></td>
+        </tr>
+        {% endfor %}
+      </table>
+
+      <div style="margin-top:12px;padding:10px 14px;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;">
+        <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">Summary</div>
+        <div style="font-size:11px;display:flex;gap:16px;flex-wrap:wrap;">
+          <span><span style="color:var(--text-muted);">Targets:</span> <span style="color:var(--cyan);">{{ targets_scanned }}</span></span>
+          <span><span style="color:var(--text-muted);">Plugins:</span> <span style="color:var(--cyan);">{{ plugins_run }}</span></span>
+          <span><span style="color:var(--text-muted);">Findings:</span> <span style="color:var(--green);">{{ findings|length }}</span></span>
+          <span><span style="color:var(--text-muted);">Elapsed:</span> <span style="color:var(--cyan);">{{ elapsed_total }}s</span></span>
+        </div>
+      </div>
+      {% else %}
+      <div style="padding:30px;text-align:center;color:var(--text-muted);">
+        {% if is_running %}Plugins starting...{% else %}No plugin data{% endif %}
+      </div>
+      {% endif %}
+    </div>
+
+    <div style="text-align:center;padding:16px 0 6px;font-size:9px;color:var(--text-muted);border-top:1px solid var(--border);margin-top:12px;">
+      Generated by <span style="color:var(--green);">Basilisk v2.0.0</span> &middot; {{ timestamp }}
+    </div>
+  </div>
+
+</div><!-- end layout -->
+
 <script>
-/* --- Filters --- */
+/* ── Tab switching ── */
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    this.classList.add('active');
+    document.getElementById('tab-' + this.dataset.tab).classList.add('active');
+  });
+});
+
+/* ── Tree search ── */
+const treeSearch = document.getElementById('treeSearch');
+if (treeSearch) {
+  treeSearch.addEventListener('input', function() {
+    const q = this.value.toLowerCase().trim();
+    const nodes = document.querySelectorAll('.tree-root .tree-node, .tree-root .tree-leaf');
+    if (!q) { nodes.forEach(n => n.classList.remove('hidden')); return; }
+    nodes.forEach(n => n.classList.add('hidden'));
+    nodes.forEach(n => {
+      const text = (n.getAttribute('data-search') || n.textContent || '').toLowerCase();
+      if (text.includes(q)) {
+        n.classList.remove('hidden');
+        let parent = n.parentElement;
+        while (parent) {
+          if (parent.classList && parent.classList.contains('tree-node')) {
+            parent.classList.remove('hidden');
+            parent.open = true;
+          }
+          parent = parent.parentElement;
+        }
+      }
+    });
+  });
+}
+
+function expandAll() { document.querySelectorAll('.tree-root .tree-node').forEach(d => d.open = true); }
+function collapseAll() {
+  document.querySelectorAll('.tree-root .tree-node').forEach(d => {
+    if (d.parentElement && d.parentElement.classList.contains('tree-root')) return;
+    d.open = false;
+  });
+}
+
+/* ── Finding filters ── */
 function toggleFilter(btn) { btn.classList.toggle('active'); applyFilters(); }
 function applyFilters() {
   const active = new Set([...document.querySelectorAll('.filter-chip.active')].map(b => b.dataset.sev));
-  const q = (document.getElementById('searchBox')?.value || '').toLowerCase();
-  document.querySelectorAll('.finding[data-severity]').forEach(f => {
+  const q = (document.getElementById('findingSearch')?.value || '').toLowerCase();
+  document.querySelectorAll('.finding-card[data-severity]').forEach(f => {
     f.style.display = (active.has(f.dataset.severity) && (!q || f.dataset.search.includes(q))) ? '' : 'none';
   });
   document.querySelectorAll('.finding-group').forEach(g => {
-    g.style.display = g.querySelectorAll('.finding[data-severity]:not([style*="display: none"])').length ? '' : 'none';
+    g.style.display = g.querySelectorAll('.finding-card:not([style*="display: none"])').length ? '' : 'none';
   });
 }
-function toggleAll(open) { document.querySelectorAll('details.finding').forEach(d => d.open = open); }
 applyFilters();
 
-/* --- Live refresh --- */
+/* ── Active tree node ── */
+document.querySelectorAll('.tree-node > summary').forEach(el => {
+  el.addEventListener('click', function() {
+    document.querySelectorAll('.tree-node > summary.active').forEach(s => s.classList.remove('active'));
+    this.classList.add('active');
+  });
+});
+
+/* ── Live refresh ── */
 {% if refresh_interval %}
 (function() {
   const INTERVAL = {{ refresh_interval }} * 1000;
   const flash = document.getElementById('refreshFlash');
 
   function saveState() {
-    const open = [];
-    document.querySelectorAll('details.finding[open]').forEach((d, i) => open.push(i));
+    const openFindings = [];
+    document.querySelectorAll('details.finding-card[open]').forEach((d, i) => openFindings.push(i));
+    const openTree = [];
+    document.querySelectorAll('.tree-root details.tree-node[open]').forEach((d, i) => openTree.push(i));
     return {
-      scrollY: window.scrollY,
-      openDetails: open,
-      search: document.getElementById('searchBox')?.value || '',
+      scrollTree: document.querySelector('.tree-scroll')?.scrollTop || 0,
+      scrollDetail: document.querySelector('.detail-panel')?.scrollTop || 0,
+      openFindings,
+      openTree,
+      search: document.getElementById('findingSearch')?.value || '',
+      treeSearch: document.getElementById('treeSearch')?.value || '',
       activeFilters: [...document.querySelectorAll('.filter-chip.active')].map(b => b.dataset.sev),
+      activeTab: document.querySelector('.tab-btn.active')?.dataset.tab || 'findings',
     };
   }
 
   function restoreState(state) {
-    window.scrollTo(0, state.scrollY);
-    const box = document.getElementById('searchBox');
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === state.activeTab));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-' + state.activeTab));
+    state.openTree.forEach(i => {
+      const all = document.querySelectorAll('.tree-root details.tree-node');
+      if (all[i]) all[i].open = true;
+    });
+    const treeScroll = document.querySelector('.tree-scroll');
+    if (treeScroll) treeScroll.scrollTop = state.scrollTree;
+    const detail = document.querySelector('.detail-panel');
+    if (detail) detail.scrollTop = state.scrollDetail;
+    const box = document.getElementById('findingSearch');
     if (box) box.value = state.search;
+    const tbox = document.getElementById('treeSearch');
+    if (tbox) tbox.value = state.treeSearch;
     document.querySelectorAll('.filter-chip').forEach(b => {
       if (state.activeFilters.includes(b.dataset.sev)) b.classList.add('active');
       else b.classList.remove('active');
     });
-    state.openDetails.forEach(i => {
-      const all = document.querySelectorAll('details.finding');
+    state.openFindings.forEach(i => {
+      const all = document.querySelectorAll('details.finding-card');
       if (all[i]) all[i].open = true;
     });
     applyFilters();
@@ -844,10 +1230,49 @@ applyFilters();
       const html = await resp.text();
       const parser = new DOMParser();
       const doc = parser.parseFromString(html, 'text/html');
+      const newHeader = doc.getElementById('live-header');
+      const curHeader = document.getElementById('live-header');
+      if (newHeader && curHeader) curHeader.innerHTML = newHeader.innerHTML;
       const newContent = doc.getElementById('live-content');
-      if (!newContent) return;
-      const container = document.getElementById('live-content');
-      container.innerHTML = newContent.innerHTML;
+      const curContent = document.getElementById('live-content');
+      if (newContent && curContent) curContent.innerHTML = newContent.innerHTML;
+      /* Re-bind tabs */
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+          document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+          document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+          this.classList.add('active');
+          document.getElementById('tab-' + this.dataset.tab).classList.add('active');
+        });
+      });
+      /* Re-bind tree search */
+      const newTS = document.getElementById('treeSearch');
+      if (newTS) {
+        newTS.addEventListener('input', function() {
+          const q = this.value.toLowerCase().trim();
+          const nodes = document.querySelectorAll('.tree-root .tree-node, .tree-root .tree-leaf');
+          if (!q) { nodes.forEach(n => n.classList.remove('hidden')); return; }
+          nodes.forEach(n => n.classList.add('hidden'));
+          nodes.forEach(n => {
+            const text = (n.getAttribute('data-search') || n.textContent || '').toLowerCase();
+            if (text.includes(q)) {
+              n.classList.remove('hidden');
+              let parent = n.parentElement;
+              while (parent) {
+                if (parent.classList && parent.classList.contains('tree-node')) { parent.classList.remove('hidden'); parent.open = true; }
+                parent = parent.parentElement;
+              }
+            }
+          });
+        });
+      }
+      /* Re-bind active node */
+      document.querySelectorAll('.tree-node > summary').forEach(el => {
+        el.addEventListener('click', function() {
+          document.querySelectorAll('.tree-node > summary.active').forEach(s => s.classList.remove('active'));
+          this.classList.add('active');
+        });
+      });
       restoreState(state);
       flash.classList.add('show');
       setTimeout(() => flash.classList.remove('show'), 800);
@@ -857,18 +1282,6 @@ applyFilters();
   setInterval(refresh, INTERVAL);
 })();
 {% endif %}
-
-/* Sidebar scroll spy */
-const obs = new IntersectionObserver(entries => {
-  entries.forEach(e => {
-    if (e.isIntersecting) {
-      document.querySelectorAll('.sidebar nav a').forEach(a => a.classList.remove('active'));
-      const link = document.querySelector('.sidebar nav a[href="#' + e.target.id + '"]');
-      if (link) link.classList.add('active');
-    }
-  });
-}, { rootMargin: '-20% 0px -60% 0px' });
-document.querySelectorAll('[id^="sev-"], #summary, #pipeline, #attack-surface, #findings-sec, #plugin-perf').forEach(el => obs.observe(el));
 </script>
 </body>
 </html>

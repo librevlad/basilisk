@@ -380,6 +380,54 @@
   .chip-method { background: rgba(77,124,255,0.06); border: 1px solid rgba(77,124,255,0.15); color: var(--neon-blue); }
   .chip-method.risky { background: rgba(255,23,68,0.06); border: 1px solid rgba(255,23,68,0.15); color: var(--critical); }
 
+  /* --- Site Tree --- */
+  .site-tree { margin-bottom: 1.5rem; }
+  .tree-host {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+    margin-bottom: 0.75rem; overflow: hidden;
+  }
+  .tree-host > summary {
+    padding: 0.6rem 1rem; cursor: pointer; display: flex; align-items: center; gap: 0.5rem;
+    list-style: none; font-size: 0.8rem; font-weight: 700; color: var(--neon-green);
+  }
+  .tree-host > summary::-webkit-details-marker { display: none; }
+  .tree-host > summary::before {
+    content: '\25b6'; font-size: 0.5rem; color: var(--fg-muted); transition: transform 0.2s; flex-shrink: 0;
+  }
+  .tree-host[open] > summary::before { transform: rotate(90deg); }
+  .tree-host > summary .tree-cnt {
+    font-size: 0.65rem; color: var(--fg-dim); font-weight: 400;
+  }
+  .tree-body { padding: 0 0 0.5rem 0; }
+  .tree-node { padding-left: 1.2rem; }
+  .tree-dir > summary {
+    padding: 2px 0.5rem; display: flex; align-items: center; gap: 0.3rem;
+    font-size: 0.72rem; color: var(--neon-cyan); cursor: pointer; list-style: none;
+  }
+  .tree-dir > summary::-webkit-details-marker { display: none; }
+  .tree-dir > summary::before {
+    content: '\25b6'; font-size: 0.4rem; color: var(--fg-muted); transition: transform 0.15s;
+    flex-shrink: 0; width: 8px;
+  }
+  .tree-dir[open] > summary::before { transform: rotate(90deg); }
+  .tree-dir > summary .dir-name { font-weight: 600; }
+  .tree-file {
+    padding: 1px 0.5rem 1px 1.6rem; display: flex; align-items: center; gap: 0.4rem;
+    font-size: 0.7rem;
+  }
+  .tree-file .file-icon { color: var(--fg-muted); font-size: 0.6rem; flex-shrink: 0; }
+  .tree-file .file-name { color: var(--fg); }
+  .tree-file .file-status {
+    margin-left: auto; font-size: 0.62rem; font-weight: 600; flex-shrink: 0;
+  }
+  .tree-file .file-status.s2xx { color: var(--neon-green); }
+  .tree-file .file-status.s3xx { color: var(--neon-cyan); }
+  .tree-file .file-status.s4xx { color: var(--high); }
+  .tree-file .file-status.s0 { color: var(--fg-muted); }
+  .tree-file .file-source {
+    font-size: 0.58rem; color: var(--fg-muted); font-style: italic; flex-shrink: 0;
+  }
+
   .sub-grid {
     font-size: 0.72rem; max-height: 200px; overflow-y: auto;
     display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 2px;
@@ -624,6 +672,7 @@
     {% if exploit_chains %}<a href="#exploit-chains">Exploit Chains<span class="cnt">{{ exploit_chains|length }}</span></a>{% endif %}
     <div class="sep"></div>
     <a href="#attack-surface">Attack Surface</a>
+    {% if site_tree %}<a href="#site-tree">Site Tree<span class="cnt">{{ site_tree|length }}</span></a>{% endif %}
     <a href="#war-board">War Board<span class="cnt">{{ total_aggregated_count }}</span></a>
     <div class="sep"></div>
     {% if ssl_details or dns_details %}<a href="#intelligence">Intelligence</a>{% endif %}
@@ -980,6 +1029,71 @@
       </div>
     </div>
     {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- ===== SITE TREE ===== -->
+  {% if site_tree %}
+  <div class="section" id="site-tree">
+    <div class="section-hdr">
+      <span class="icon">[/]</span>
+      <h2>Site Tree</h2>
+      <span class="cnt">({{ site_tree.values()|map(attribute='total')|sum }} paths)</span>
+    </div>
+    <div class="site-tree">
+      {% for host, tree_data in site_tree.items() %}
+      <details class="tree-host" open>
+        <summary>
+          {{ host }}
+          <span class="tree-cnt">({{ tree_data.total }} paths)</span>
+        </summary>
+        <div class="tree-body">
+          {# Recursive tree rendering via macro #}
+          {% macro render_node(node, depth) %}
+            {% for name, child in node.children|dictsort %}
+              {% if child.children %}
+              <div class="tree-node">
+                <details class="tree-dir"{% if depth < 2 %} open{% endif %}>
+                  <summary><span class="dir-name">{{ name }}/</span></summary>
+                  {% for entry in child.entries %}
+                  <div class="tree-file">
+                    <span class="file-icon">-</span>
+                    <span class="file-name">{{ entry.path.split('/')|last }}</span>
+                    {% if entry.get('status', 0) > 0 %}
+                    <span class="file-status {% if entry.status >= 200 and entry.status < 300 %}s2xx{% elif entry.status >= 300 and entry.status < 400 %}s3xx{% elif entry.status >= 400 %}s4xx{% else %}s0{% endif %}">{{ entry.status }}</span>
+                    {% endif %}
+                    {% if entry.get('source') %}<span class="file-source">{{ entry.source }}</span>{% endif %}
+                  </div>
+                  {% endfor %}
+                  {{ render_node(child, depth + 1) }}
+                </details>
+              </div>
+              {% else %}
+              {# Leaf node (file) #}
+              {% for entry in child.entries %}
+              <div class="tree-file">
+                <span class="file-icon">-</span>
+                <span class="file-name">{{ name }}</span>
+                {% if entry.get('status', 0) > 0 %}
+                <span class="file-status {% if entry.status >= 200 and entry.status < 300 %}s2xx{% elif entry.status >= 300 and entry.status < 400 %}s3xx{% elif entry.status >= 400 %}s4xx{% else %}s0{% endif %}">{{ entry.status }}</span>
+                {% endif %}
+                {% if entry.get('source') %}<span class="file-source">{{ entry.source }}</span>{% endif %}
+              </div>
+              {% endfor %}
+              {% if not child.entries %}
+              <div class="tree-file">
+                <span class="file-icon">-</span>
+                <span class="file-name">{{ name }}</span>
+              </div>
+              {% endif %}
+              {% endif %}
+            {% endfor %}
+          {% endmacro %}
+          {{ render_node(tree_data.root, 0) }}
+        </div>
+      </details>
+      {% endfor %}
+    </div>
   </div>
   {% endif %}
 

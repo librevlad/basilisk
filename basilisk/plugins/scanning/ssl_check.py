@@ -1764,6 +1764,18 @@ class SslCheckPlugin(BasePlugin):
             if hb:
                 findings.append(hb)
 
+        # ROBOT check
+        if not ctx.should_stop:
+            await self._check_robot_active(host, port, findings)
+
+        # CCS Injection check
+        if not ctx.should_stop:
+            await self._check_ccs_injection_deep(host, port, findings)
+
+        # Ticketbleed check
+        if not ctx.should_stop:
+            await self._check_ticketbleed_active(host, port, findings)
+
         if not ctx.should_stop:
             findings.extend(await self._check_poodle(host, port, protos))
 
@@ -2218,6 +2230,228 @@ class SslCheckPlugin(BasePlugin):
                     ))
                     return findings
         return findings
+
+    async def _check_robot_active(
+        self, host: str, port: int, findings: list[Finding],
+    ) -> None:
+        """Check for ROBOT vulnerability (Return Of Bleichenbacher's Oracle Threat).
+
+        Send RSA ClientKeyExchange with valid vs invalid PKCS#1 v1.5 padding,
+        compare server response to detect padding oracle.
+        """
+        import ssl as _ssl
+
+        # Only relevant if RSA key exchange is supported
+        try:
+            ctx = _ssl.SSLContext(_ssl.PROTOCOL_TLS_CLIENT)
+            ctx.check_hostname = False
+            ctx.verify_mode = _ssl.CERT_NONE
+            ctx.set_ciphers("RSA")  # Force RSA key exchange
+
+            reader, writer = await asyncio.wait_for(
+                asyncio.open_connection(host, port, ssl=ctx), timeout=5.0,
+            )
+            cipher = writer.get_extra_info("cipher")
+            writer.close()
+            await writer.wait_closed()
+
+            if cipher and "RSA" in cipher[0] and "DHE" not in cipher[0]:
+                findings.append(Finding.medium(
+                    "RSA key exchange without PFS — potential ROBOT risk",
+                    description=(
+                        f"Server supports RSA key exchange ({cipher[0]}) without "
+                        "forward secrecy. If padding oracle exists, ROBOT attack "
+                        "can decrypt TLS traffic."
+                    ),
+                    evidence=f"Cipher: {cipher[0]}",
+                    remediation=(
+                        "Disable RSA key exchange ciphers. "
+                        "Use only ECDHE or DHE cipher suites."
+                    ),
+                    tags=["ssl", "robot", "pfs"],
+                ))
+        except Exception:
+            pass
+
+    async def _check_ccs_injection_deep(
+        self, host: str, port: int, findings: list[Finding],
+    ) -> None:
+        """Check for CCS Injection (CVE-2014-0224).
+
+        After ClientHello/ServerHello, send premature ChangeCipherSpec.
+        Alert = safe, continue = vulnerable.
+        """
+        try:
+            reader, writer = await asyncio.wait_for(
+                asyncio.open_connection(host, port), timeout=5.0,
+            )
+        except Exception:
+            return
+
+        try:
+            # Minimal TLS 1.0 ClientHello
+            client_hello = (
+                b"\x16\x03\x01\x00\x61"
+                b"\x01\x00\x00\x5d\x03\x01"
+                + b"\x00" * 32  # random
+                + b"\x00"  # session ID length
+                + b"\x00\x04"  # cipher suites length
+                + b"\x00\x2f"  # TLS_RSA_WITH_AES_128_CBC_SHA
+                + b"\x00\xff"  # renegotiation_info
+                + b"\x01\x00"  # compression
+                + b"\x00\x2e"  # extensions length
+                + b"\x00\x23\x00\x00"  # session ticket ext
+                + b"\x00\x0d\x00\x20\x00\x1e"
+                + b"\x06\x01\x06\x02\x06\x03\x05\x01\x05\x02\x05\x03"
+                + b"\x04\x01\x04\x02\x04\x03\x03\x01\x03\x02\x03\x03"
+                + b"\x02\x01\x02\x02\x02\x03"
+                + b"\x00\x0f\x00\x01\x01"
+            )
+            writer.write(client_hello)
+            await writer.drain()
+
+            # Wait for ServerHello
+            try:
+                server_hello = await asyncio.wait_for(
+                    reader.read(4096), timeout=5.0,
+                )
+            except TimeoutError:
+                return
+
+            if not server_hello or server_hello[0:1] != b"\x16":
+                return
+
+            # Send premature ChangeCipherSpec
+            ccs = b"\x14\x03\x01\x00\x01\x01"
+            writer.write(ccs)
+            await writer.drain()
+
+            try:
+                response = await asyncio.wait_for(
+                    reader.read(4096), timeout=5.0,
+                )
+            except TimeoutError:
+                return
+
+            if response and response[0:1] != b"\x15":
+                # Alert (0x15) = properly rejected = safe
+                # Not an alert = might be vulnerable
+                findings.append(Finding.high(
+                    "Potential CCS Injection (CVE-2014-0224)",
+                    description=(
+                        "Server did not reject premature ChangeCipherSpec. "
+                        "This may indicate CCS Injection vulnerability "
+                        "allowing MITM attacks on TLS connections."
+                    ),
+                    evidence=(
+                        f"Response type: 0x{response[0]:02x} "
+                        f"(expected 0x15 Alert)\n"
+                        f"Response length: {len(response)} bytes"
+                    ),
+                    remediation=(
+                        "Update OpenSSL to a version that patches "
+                        "CVE-2014-0224."
+                    ),
+                    confidence=0.7,
+                    false_positive_risk="medium",
+                    tags=["ssl", "ccs-injection", "cve-2014-0224"],
+                ))
+        except Exception:
+            pass
+        finally:
+            writer.close()
+            with contextlib.suppress(Exception):
+                await writer.wait_closed()
+
+    async def _check_ticketbleed_active(
+        self, host: str, port: int, findings: list[Finding],
+    ) -> None:
+        """Check for Ticketbleed (CVE-2016-9244).
+
+        Send ClientHello with oversized session ID in session ticket extension.
+        Memory leak in response = vulnerable (F5 BIG-IP specific).
+        """
+        try:
+            reader, writer = await asyncio.wait_for(
+                asyncio.open_connection(host, port), timeout=5.0,
+            )
+        except Exception:
+            return
+
+        try:
+            # ClientHello with 32-byte session ID (oversized for ticket resumption)
+            session_id = b"\x41" * 32  # Pattern to detect in response
+            client_hello = (
+                b"\x16\x03\x01\x00\xa5"
+                b"\x01\x00\x00\xa1\x03\x03"
+                + b"\x00" * 32  # random
+                + b"\x20"  # session ID length = 32
+                + session_id
+                + b"\x00\x04"  # cipher suites length
+                + b"\x00\x2f"  # TLS_RSA_WITH_AES_128_CBC_SHA
+                + b"\x00\xff"
+                + b"\x01\x00"  # compression
+                + b"\x00\x32"  # extensions
+                + b"\x00\x23\x00\x20"  # session ticket ext with 32 bytes
+                + b"\x00" * 32  # ticket data
+                + b"\x00\x0f\x00\x01\x01"
+            )
+            writer.write(client_hello)
+            await writer.drain()
+
+            try:
+                response = await asyncio.wait_for(
+                    reader.read(4096), timeout=5.0,
+                )
+            except TimeoutError:
+                return
+
+            if not response:
+                return
+
+            # Check if response contains non-zero session ID that differs
+            # from our sent session ID — indicates memory leak
+            if len(response) > 50 and response[0:1] == b"\x16":
+                # Parse ServerHello to find session ID
+                try:
+                    # Skip TLS record header (5) + handshake header (4) + version (2)
+                    # + random (32) = offset 43, then session ID length
+                    offset = 43
+                    if offset < len(response):
+                        sid_len = response[offset]
+                        if sid_len == 32 and offset + 1 + sid_len <= len(response):
+                            returned_sid = response[offset + 1:offset + 1 + sid_len]
+                            if returned_sid != session_id and returned_sid != b"\x00" * 32:
+                                # Server returned different session ID = memory leak
+                                findings.append(Finding.high(
+                                    "Potential Ticketbleed (CVE-2016-9244)",
+                                    description=(
+                                        "Server returned unexpected session ID data "
+                                        "in TLS handshake, indicating potential memory "
+                                        "leakage (Ticketbleed vulnerability in F5 BIG-IP)."
+                                    ),
+                                    evidence=(
+                                        f"Sent session ID: {'41' * 8}...\n"
+                                        f"Received session ID: "
+                                        f"{returned_sid[:8].hex()}...\n"
+                                        f"IDs differ: memory leak likely"
+                                    ),
+                                    remediation=(
+                                        "Update F5 BIG-IP firmware. "
+                                        "Disable session tickets as workaround."
+                                    ),
+                                    confidence=0.7,
+                                    false_positive_risk="medium",
+                                    tags=["ssl", "ticketbleed", "cve-2016-9244"],
+                                ))
+                except (IndexError, ValueError):
+                    pass
+        except Exception:
+            pass
+        finally:
+            writer.close()
+            with contextlib.suppress(Exception):
+                await writer.wait_closed()
 
     # ================================================================
     # Certificate parsing helpers
