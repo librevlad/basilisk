@@ -15,192 +15,7 @@ from typing import ClassVar
 from basilisk.core.plugin import BasePlugin, PluginCategory, PluginMeta
 from basilisk.models.result import Finding, PluginResult
 from basilisk.models.target import Target
-
-# ---------------------------------------------------------------------------
-# Secret detection patterns
-# Each tuple: (name, compiled regex, severity, description)
-# ---------------------------------------------------------------------------
-_SECRET_PATTERNS: list[tuple[str, re.Pattern, str, str]] = [
-    (
-        "AWS Access Key",
-        re.compile(r"(?:^|['\"`\s,;:=])(?:AKIA[0-9A-Z]{16})(?:['\"`\s,;:]|$)"),
-        "high",
-        "AWS access key ID found in JavaScript source",
-    ),
-    (
-        "AWS Secret Key",
-        re.compile(
-            r"""(?:aws.?secret|secret.?access.?key)\s*[:=]\s*['"`]"""
-            r"""([A-Za-z0-9/+=]{40})['"`]""",
-            re.I,
-        ),
-        "critical",
-        "AWS secret access key found in JavaScript source",
-    ),
-    (
-        "Google API Key",
-        re.compile(r"AIza[0-9A-Za-z_-]{35}"),
-        "high",
-        "Google API key found in JavaScript source",
-    ),
-    (
-        "Google OAuth Client ID",
-        re.compile(r"[0-9]+-[a-z0-9_]{32}\.apps\.googleusercontent\.com"),
-        "medium",
-        "Google OAuth client ID exposed in JavaScript",
-    ),
-    (
-        "Stripe Publishable Key",
-        re.compile(r"pk_(?:live|test)_[0-9a-zA-Z]{24,}"),
-        "medium",
-        "Stripe publishable key found (check for secret key nearby)",
-    ),
-    (
-        "Stripe Secret Key",
-        re.compile(r"sk_(?:live|test)_[0-9a-zA-Z]{24,}"),
-        "critical",
-        "Stripe secret key found in JavaScript source",
-    ),
-    (
-        "JWT Token",
-        re.compile(
-            r"eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}"
-        ),
-        "high",
-        "JWT token hardcoded in JavaScript source",
-    ),
-    (
-        "Private Key",
-        re.compile(
-            r"-----BEGIN\s(?:RSA\s)?PRIVATE\sKEY-----",
-        ),
-        "critical",
-        "Private key material found in JavaScript source",
-    ),
-    (
-        "Generic Password",
-        re.compile(
-            r"""(?:password|passwd|pwd|secret)\s*[:=]\s*['"`]"""
-            r"""([^'"`\s]{6,})['"`]""",
-            re.I,
-        ),
-        "high",
-        "Hardcoded password/secret found in JavaScript source",
-    ),
-    (
-        "Database Connection String",
-        re.compile(
-            r"""(?:mongodb|postgres|mysql|redis|amqp)://"""
-            r"""[^\s'"`]{10,}""",
-            re.I,
-        ),
-        "critical",
-        "Database connection string found in JavaScript source",
-    ),
-    (
-        "S3 Bucket URL",
-        re.compile(
-            r"""(?:https?://)?[a-z0-9.-]+\.s3[.-]"""
-            r"""(?:us|eu|ap|sa|ca|me|af)-"""
-            r"""[a-z]+-\d\.amazonaws\.com""",
-            re.I,
-        ),
-        "medium",
-        "AWS S3 bucket URL found in JavaScript source",
-    ),
-    (
-        "S3 Bucket (path style)",
-        re.compile(
-            r"""s3://[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]""",
-            re.I,
-        ),
-        "medium",
-        "S3 bucket reference found in JavaScript source",
-    ),
-    (
-        "Firebase URL",
-        re.compile(
-            r"""https?://[a-z0-9-]+\.firebaseio\.com""",
-            re.I,
-        ),
-        "medium",
-        "Firebase database URL found in JavaScript source",
-    ),
-    (
-        "Firebase API Key",
-        re.compile(
-            r"""(?:apiKey|firebase.?api.?key)\s*[:=]\s*['"`]"""
-            r"""(AIza[0-9A-Za-z_-]{35})['"`]""",
-            re.I,
-        ),
-        "high",
-        "Firebase API key found in JavaScript source",
-    ),
-    (
-        "Slack Token",
-        re.compile(r"xox[bpoas]-[0-9a-zA-Z-]{10,}"),
-        "high",
-        "Slack API token found in JavaScript source",
-    ),
-    (
-        "GitHub Token",
-        re.compile(r"(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{36,}"),
-        "high",
-        "GitHub personal access token found in JavaScript source",
-    ),
-    (
-        "Generic API Key",
-        re.compile(
-            r"""(?:api[_-]?key|apikey|api[_-]?secret|api[_-]?token)"""
-            r"""\s*[:=]\s*['"`]([a-zA-Z0-9_-]{20,})['"`]""",
-            re.I,
-        ),
-        "medium",
-        "Generic API key/token found in JavaScript source",
-    ),
-    (
-        "Internal IP Address",
-        re.compile(
-            r"""(?:^|['"` ,;:=(])"""
-            r"""((?:10\.\d{1,3}\.\d{1,3}\.\d{1,3})|"""
-            r"""(?:172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})|"""
-            r"""(?:192\.168\.\d{1,3}\.\d{1,3}))"""
-            r"""(?:['"` ,;:)]|$)""",
-        ),
-        "low",
-        "Internal/private IP address found in JavaScript source",
-    ),
-    (
-        "Internal Hostname",
-        re.compile(
-            r"""['"`]https?://"""
-            r"""(?:[a-z0-9-]+\.(?:internal|local|corp|intranet|lan|"""
-            r"""private|staging|dev|test)(?:\.[a-z]+)?)"""
-            r"""[/'"` ]""",
-            re.I,
-        ),
-        "medium",
-        "Internal hostname found in JavaScript source",
-    ),
-    (
-        "SendGrid API Key",
-        re.compile(r"SG\.[a-zA-Z0-9_-]{22}\.[a-zA-Z0-9_-]{43}"),
-        "high",
-        "SendGrid API key found in JavaScript source",
-    ),
-    (
-        "Twilio Account SID",
-        re.compile(r"AC[a-f0-9]{32}"),
-        "medium",
-        "Twilio Account SID found in JavaScript source",
-    ),
-    (
-        "Mailgun API Key",
-        re.compile(r"key-[a-zA-Z0-9]{32}"),
-        "high",
-        "Mailgun API key found in JavaScript source",
-    ),
-]
+from basilisk.utils.secrets import SECRET_REGISTRY
 
 # ---------------------------------------------------------------------------
 # API endpoint extraction patterns
@@ -631,16 +446,16 @@ class JsApiExtractPlugin(BasePlugin):
         source: str,
     ) -> None:
         """Scan content for hardcoded secrets using regex patterns."""
-        for name, pattern, severity, description in _SECRET_PATTERNS:
-            for m in pattern.finditer(content):
+        for sp in SECRET_REGISTRY:
+            for m in sp.pattern.finditer(content):
                 match_text = m.group(0).strip()
                 # Skip very short matches (likely false positives)
                 if len(match_text) < 8:
                     continue
                 all_secrets.append({
-                    "name": name,
-                    "severity": severity,
-                    "description": description,
+                    "name": sp.name,
+                    "severity": sp.severity.name.lower(),
+                    "description": sp.description,
                     "match": match_text,
                     "source": (
                         source if len(source) <= 60

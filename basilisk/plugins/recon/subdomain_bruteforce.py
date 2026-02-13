@@ -39,6 +39,7 @@ class SubdomainBruteforcePlugin(BasePlugin):
         provides="subdomains",
         default_enabled=False,
         timeout=120.0,
+        requires_http=False,
     )
 
     async def run(self, target: Target, ctx) -> PluginResult:

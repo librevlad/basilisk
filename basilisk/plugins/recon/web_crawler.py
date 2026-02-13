@@ -13,19 +13,7 @@ from urllib.parse import urljoin, urlparse
 from basilisk.core.plugin import BasePlugin, PluginCategory, PluginMeta
 from basilisk.models.result import Finding, PluginResult
 from basilisk.models.target import Target
-
-# Secret patterns for scanning source code
-_SECRET_PATTERNS: list[tuple[str, re.Pattern]] = [
-    ("AWS Access Key", re.compile(r"AKIA[0-9A-Z]{16}")),
-    ("GitHub Token", re.compile(r"ghp_[a-zA-Z0-9]{36}")),
-    ("GitLab Token", re.compile(r"glpat-[a-zA-Z0-9\-]{20,}")),
-    ("Slack Token", re.compile(r"xox[bpors]-[a-zA-Z0-9\-]+")),
-    ("Google API Key", re.compile(r"AIza[0-9A-Za-z\-_]{35}")),
-    ("Stripe Key", re.compile(r"sk_live_[0-9a-zA-Z]{24,}")),
-    ("Private Key", re.compile(r"-----BEGIN (?:RSA |EC )?PRIVATE KEY-----")),
-    ("Heroku API Key", re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")),  # noqa: E501
-    ("Generic Secret", re.compile(r"(?:api[_-]?key|secret[_-]?key|access[_-]?token)\s*[:=]\s*['\"][a-zA-Z0-9+/=]{20,}['\"]", re.IGNORECASE)),  # noqa: E501
-]
+from basilisk.utils.secrets import redact, scan_text
 
 # Webpack/build manifest paths
 _MANIFEST_PATHS = [
@@ -292,11 +280,12 @@ class WebCrawlerPlugin(BasePlugin):
                 body = await resp.text(encoding="utf-8", errors="replace")
 
                 # Scan for secrets in sourcesContent
-                for name, pattern in _SECRET_PATTERNS:
-                    matches = pattern.findall(body)
-                    for match in matches[:3]:
-                        redacted = match[:8] + "..." + match[-4:] if len(match) > 16 else match
-                        secrets.append({"type": name, "redacted": redacted, "source": sm_url})
+                for sm in scan_text(body):
+                    secrets.append({
+                        "type": sm.pattern_name,
+                        "redacted": redact(sm.match),
+                        "source": sm_url,
+                    })
 
                 if secrets:
                     findings.append(Finding.critical(
@@ -317,5 +306,5 @@ class WebCrawlerPlugin(BasePlugin):
                         tags=["recon", "sourcemap", "secret-leak"],
                     ))
         except Exception:
-            pass
+            pass  # keep any partial results found before the error
         return secrets

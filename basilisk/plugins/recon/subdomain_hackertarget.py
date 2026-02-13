@@ -18,6 +18,7 @@ class SubdomainHackerTargetPlugin(BasePlugin):
         produces=["subdomains"],
         provides="subdomains",
         timeout=20.0,
+        requires_http=False,
     )
 
     async def run(self, target: Target, ctx) -> PluginResult:
@@ -35,10 +36,14 @@ class SubdomainHackerTargetPlugin(BasePlugin):
                 self.meta.name, target.host, error=f"HackerTarget request failed: {e}"
             )
 
-        if not text or "error" in text.lower()[:50]:
+        if not text or "error" in text.lower()[:100] or "api count exceeded" in text.lower():
+            msg = text.strip()[:80] if text else "empty response"
             return PluginResult.success(
                 self.meta.name, target.host,
-                findings=[Finding.info("HackerTarget returned no data")],
+                findings=[Finding.info(
+                    f"HackerTarget returned no data: {msg}",
+                    tags=["recon", "subdomains", "hackertarget"],
+                )],
                 data={"subdomains": []},
             )
 

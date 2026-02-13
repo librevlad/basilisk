@@ -135,17 +135,30 @@ class Audit:
     async def run(self) -> PipelineState:
         """Execute the configured audit pipeline."""
         settings = self._resolve_config()
+        scope = self._build_scope(settings)
+        registry, ctx = self._build_context(settings)
 
-        # Build scope
+        if self._project:
+            db, run_id, completed_pairs = await self._setup_project_db(ctx, scope)
+        else:
+            db, run_id, completed_pairs = None, None, set()
+
+        pipeline = self._build_pipeline(registry, ctx, settings, completed_pairs)
+        return await self._execute(pipeline, scope, ctx, db, run_id, settings)
+
+    def _build_scope(self, settings: Settings) -> TargetScope:
+        """Build target scope from configured targets."""
         scope = TargetScope()
         for t in self._targets:
             scope.add(Target.domain(t))
-
-        # Override ports if specified
         if self._ports:
             settings.scan.default_ports = self._ports
+        return scope
 
-        # Setup context
+    def _build_context(
+        self, settings: Settings,
+    ) -> tuple[PluginRegistry, PluginContext]:
+        """Initialize all services and build the DI container."""
         registry = PluginRegistry()
         registry.discover()
 
@@ -168,7 +181,7 @@ class Audit:
         wordlists_mgr = WordlistManager()
         provider_pool = ProviderPool(registry)
 
-        # Initialize new engines
+        # Initialize engines (lazy imports to avoid circular deps)
         from basilisk.core.exploit_chain import ExploitChainEngine
         from basilisk.utils.diff import ResponseDiffer
         from basilisk.utils.dynamic_wordlist import DynamicWordlistGenerator
@@ -180,47 +193,9 @@ class Audit:
         exploit_chain_engine = ExploitChainEngine()
         dynamic_wordlist_gen = DynamicWordlistGenerator()
 
-        auth_manager = None
-        if settings.auth.enabled or self._credentials or self._bearer_tokens:
-            from basilisk.core.auth import AuthManager, FormLoginStrategy
-            auth_manager = AuthManager()
-            # Add form login strategy with global or per-host credentials
-            if settings.auth.username:
-                auth_manager.add_strategy(FormLoginStrategy(
-                    username=settings.auth.username,
-                    password=settings.auth.password,
-                    login_url=settings.auth.login_url,
-                ))
-            if settings.auth.bearer_token:
-                for t in self._targets:
-                    auth_manager.set_bearer(t, settings.auth.bearer_token)
-            for _host, (user, pwd) in self._credentials.items():
-                auth_manager.add_strategy(FormLoginStrategy(
-                    username=user, password=pwd,
-                ))
-            for host, token in self._bearer_tokens.items():
-                auth_manager.set_bearer(host, token)
-            # Load persisted sessions if available
-            if settings.auth.session_file:
-                auth_manager.load(Path(settings.auth.session_file))
-
-        callback_server = None
-        if settings.callback.enabled:
-            from basilisk.core.callback import CallbackServer
-            callback_server = CallbackServer(
-                http_port=settings.callback.http_port,
-                dns_port=settings.callback.dns_port,
-                callback_domain=settings.callback.domain,
-            )
-
-        browser_manager = None
-        if settings.browser.enabled:
-            from basilisk.utils.browser import BrowserManager
-            browser_manager = BrowserManager(
-                max_pages=settings.browser.max_pages,
-                timeout=settings.browser.timeout,
-                user_agent=settings.http.user_agent,
-            )
+        auth_manager = self._build_auth(settings)
+        callback_server = self._build_callback(settings)
+        browser_manager = self._build_browser(settings)
 
         ctx = PluginContext(
             config=settings,
@@ -244,20 +219,69 @@ class Audit:
         if self._wordlists:
             ctx.state["wordlists"] = self._wordlists
 
-        # Project DB setup (with resume support)
-        db = None
-        run_id = None
-        completed_pairs: set[tuple[str, str]] = set()
+        return registry, ctx
 
-        if self._project:
-            db, run_id, completed_pairs = await self._setup_project_db(
-                ctx, scope
-            )
+    def _build_auth(self, settings: Settings):
+        """Initialize auth manager if credentials are configured."""
+        if not (settings.auth.enabled or self._credentials or self._bearer_tokens):
+            return None
 
+        from basilisk.core.auth import AuthManager, FormLoginStrategy
+        auth_manager = AuthManager()
+        if settings.auth.username:
+            auth_manager.add_strategy(FormLoginStrategy(
+                username=settings.auth.username,
+                password=settings.auth.password,
+                login_url=settings.auth.login_url,
+            ))
+        if settings.auth.bearer_token:
+            for t in self._targets:
+                auth_manager.set_bearer(t, settings.auth.bearer_token)
+        for _host, (user, pwd) in self._credentials.items():
+            auth_manager.add_strategy(FormLoginStrategy(
+                username=user, password=pwd,
+            ))
+        for host, token in self._bearer_tokens.items():
+            auth_manager.set_bearer(host, token)
+        if settings.auth.session_file:
+            auth_manager.load(Path(settings.auth.session_file))
+        return auth_manager
+
+    @staticmethod
+    def _build_callback(settings: Settings):
+        """Initialize callback server if enabled."""
+        if not settings.callback.enabled:
+            return None
+        from basilisk.core.callback import CallbackServer
+        return CallbackServer(
+            http_port=settings.callback.http_port,
+            dns_port=settings.callback.dns_port,
+            callback_domain=settings.callback.domain,
+        )
+
+    @staticmethod
+    def _build_browser(settings: Settings):
+        """Initialize headless browser if enabled."""
+        if not settings.browser.enabled:
+            return None
+        from basilisk.utils.browser import BrowserManager
+        return BrowserManager(
+            max_pages=settings.browser.max_pages,
+            timeout=settings.browser.timeout,
+            user_agent=settings.http.user_agent,
+        )
+
+    def _build_pipeline(
+        self,
+        registry: PluginRegistry,
+        ctx: PluginContext,
+        settings: Settings,
+        completed_pairs: set[tuple[str, str]],
+    ) -> Pipeline:
+        """Build the execution pipeline with progress tracking."""
         executor = AsyncExecutor(max_concurrency=settings.scan.max_concurrency)
         progress_cb = self._on_progress or _noop_progress
 
-        # Wrap progress callback with live report if configured
         if self._live_report_path:
             from basilisk.reporting.live_html import LiveHtmlRenderer
             live = LiveHtmlRenderer(self._live_report_path)
@@ -266,36 +290,45 @@ class Audit:
                 original_cb(state)
                 live.update(state)
 
-        pipeline = Pipeline(
+        return Pipeline(
             registry, executor, ctx,
             on_progress=progress_cb,
             completed_pairs=completed_pairs,
         )
 
+    async def _execute(
+        self,
+        pipeline: Pipeline,
+        scope: TargetScope,
+        ctx: PluginContext,
+        db: Any,
+        run_id: int | None,
+        settings: Settings,
+    ) -> PipelineState:
+        """Run the pipeline with proper startup/shutdown of engines."""
         phases = self._phases or ["recon", "scanning", "analysis", "pentesting"]
 
         try:
-            # Start optional engines
-            if callback_server:
-                await callback_server.start()
-            if browser_manager:
-                await browser_manager.start()
+            if ctx.callback:
+                await ctx.callback.start()
+            if ctx.browser:
+                await ctx.browser.start()
 
             state = await pipeline.run(scope, self._plugins, phases)
             if ctx.db and run_id:
                 await ctx.db.finish_run(run_id)
 
-            # Save auth sessions for future runs
-            if auth_manager and settings.auth.session_file:
-                auth_manager.save(Path(settings.auth.session_file))
+            if ctx.auth and settings.auth.session_file:
+                ctx.auth.save(Path(settings.auth.session_file))
 
             return state
         finally:
-            await http.close()
-            if callback_server:
-                await callback_server.stop()
-            if browser_manager:
-                await browser_manager.stop()
+            if ctx.http:
+                await ctx.http.close()
+            if ctx.callback:
+                await ctx.callback.stop()
+            if ctx.browser:
+                await ctx.browser.stop()
             if db:
                 from basilisk.storage.db import close_db
                 await close_db(db)
@@ -379,12 +412,19 @@ class Audit:
         )
         dns = DnsClient(nameservers=settings.dns.nameservers)
         net = NetUtils(timeout=settings.scan.port_timeout)
+        rate = RateLimiter(
+            rate=settings.rate_limit.requests_per_second,
+            burst=settings.rate_limit.burst,
+        )
+        wordlists_mgr = WordlistManager()
 
         ctx = PluginContext(
             config=settings,
             http=http,
             dns=dns,
             net=net,
+            rate=rate,
+            wordlists=wordlists_mgr,
         )
 
         plugin = plugin_cls()

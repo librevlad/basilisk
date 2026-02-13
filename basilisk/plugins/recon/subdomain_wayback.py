@@ -20,6 +20,7 @@ class SubdomainWaybackPlugin(BasePlugin):
         provides="subdomains",
         produces=["subdomains", "wayback_urls"],
         timeout=30.0,
+        requires_http=False,
     )
 
     async def run(self, target: Target, ctx) -> PluginResult:

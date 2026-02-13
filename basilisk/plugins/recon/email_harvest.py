@@ -131,10 +131,7 @@ class EmailHarvestPlugin(BasePlugin):
                     headers={"Accept": "application/vnd.github.v3+json"},
                 )
                 if resp.status == 200:
-                    import json
-                    data = json.loads(
-                        await resp.text(encoding="utf-8", errors="replace")
-                    )
+                    data = await resp.json(content_type=None)
                     for user in data.get("items", []):
                         email = user.get("email")
                         if email:

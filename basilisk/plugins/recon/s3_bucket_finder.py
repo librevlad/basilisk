@@ -16,7 +16,8 @@ class S3BucketFinderPlugin(BasePlugin):
         category=PluginCategory.RECON,
         description="Discovers misconfigured S3 buckets related to the target",
         produces=["s3_buckets"],
-        timeout=30.0,
+        default_enabled=False,  # cloud_bucket_enum covers AWS+Azure+GCP
+        timeout=45.0,
     )
 
     def _generate_bucket_names(self, host: str) -> list[str]:
@@ -82,7 +83,9 @@ class S3BucketFinderPlugin(BasePlugin):
                         found_buckets.append({
                             "name": bucket, "url": url, "access": "exists-denied",
                         })
-            except Exception:
+            except Exception as e:
+                if "timeout" in str(e).lower() or "TimeoutError" in type(e).__name__:
+                    continue
                 continue
 
         if not findings:

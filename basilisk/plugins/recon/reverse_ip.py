@@ -35,6 +35,7 @@ class ReverseIpPlugin(BasePlugin):
         depends_on=["dns_enum"],
         produces=["shared_hosts"],
         timeout=20.0,
+        requires_http=False,
     )
 
     def accepts(self, target: Target) -> bool:
@@ -135,7 +136,7 @@ class ReverseIpPlugin(BasePlugin):
         try:
             async with ctx.rate:
                 text = await ctx.http.fetch_text(url, timeout=10.0)
-            if not text or "error" in text.lower()[:50]:
+            if not text or "error" in text.lower()[:100] or "api count exceeded" in text.lower():
                 return hosts
             for line in text.strip().splitlines():
                 host = line.strip().lower()

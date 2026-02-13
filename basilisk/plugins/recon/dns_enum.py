@@ -62,6 +62,7 @@ class DnsEnumPlugin(BasePlugin):
         ),
         produces=["dns_records", "ips"],
         timeout=30.0,
+        requires_http=False,
     )
 
     async def run(self, target: Target, ctx) -> PluginResult:
@@ -278,6 +279,7 @@ class DnsEnumPlugin(BasePlugin):
             findings.append(Finding.medium(
                 "No SPF record found",
                 description="Domain has no SPF TXT record — vulnerable to email spoofing",
+                evidence="No TXT record containing v=spf1 found",
                 remediation="Add a TXT record with v=spf1 policy",
                 tags=["dns", "spf", "email"],
             ))
@@ -297,6 +299,7 @@ class DnsEnumPlugin(BasePlugin):
                     f"No DMARC TXT record at {dmarc_domain}. "
                     "Email authentication is incomplete."
                 ),
+                evidence=f"DNS query for {dmarc_domain} TXT returned 0 records",
                 remediation=(
                     "Add a DMARC record: "
                     f"_dmarc.{domain} TXT \"v=DMARC1; p=reject; rua=mailto:dmarc@{domain}\""
@@ -485,6 +488,7 @@ class DnsEnumPlugin(BasePlugin):
                     f"No CAA records for {domain}. Any Certificate Authority "
                     "can issue TLS certificates for this domain."
                 ),
+                evidence=f"DNS query for {domain} CAA returned 0 records",
                 remediation=(
                     "Add CAA records to restrict certificate issuance: "
                     f'{domain} CAA 0 issue "letsencrypt.org"'
@@ -709,6 +713,7 @@ class DnsEnumPlugin(BasePlugin):
                 findings.append(Finding.medium(
                     f"MX points to localhost: {val}",
                     description="MX record points to localhost — possible misconfiguration",
+                    evidence=f"MX record value: {val}",
                     tags=["dns", "mx"],
                 ))
 

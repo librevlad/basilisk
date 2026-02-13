@@ -31,6 +31,7 @@ class SubdomainCrtshPlugin(BasePlugin):
         produces=["subdomains"],
         provides="subdomains",
         timeout=45.0,
+        requires_http=False,
     )
 
     async def run(self, target: Target, ctx) -> PluginResult:

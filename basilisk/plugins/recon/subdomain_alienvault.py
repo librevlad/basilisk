@@ -18,6 +18,7 @@ class SubdomainAlienVaultPlugin(BasePlugin):
         provides="subdomains",
         produces=["subdomains"],
         timeout=20.0,
+        requires_http=False,
     )
 
     async def run(self, target: Target, ctx) -> PluginResult:
@@ -45,6 +46,16 @@ class SubdomainAlienVaultPlugin(BasePlugin):
                             and hostname.endswith(f".{target.host}")
                         ):
                             subdomains.add(hostname)
+                elif resp.status in (429, 403):
+                    return PluginResult.success(
+                        self.meta.name, target.host,
+                        findings=[Finding.info(
+                            f"AlienVault OTX: HTTP {resp.status} — API rate limited or"
+                            " requires authentication",
+                            tags=["recon", "subdomains"],
+                        )],
+                        data={"subdomains": []},
+                    )
         except Exception:
             pass
 

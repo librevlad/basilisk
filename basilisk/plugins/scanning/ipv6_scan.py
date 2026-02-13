@@ -54,6 +54,7 @@ class Ipv6ScanPlugin(BasePlugin):
         depends_on=["dns_enum"],
         produces=["ipv6_info"],
         timeout=30.0,
+        requires_http=False,
     )
 
     async def run(self, target: Target, ctx) -> PluginResult:

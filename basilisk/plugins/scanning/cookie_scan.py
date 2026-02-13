@@ -358,9 +358,8 @@ class CookieScanPlugin(BasePlugin):
         return {
             "name": name,
             "value": value,
-            "secure": "secure" in flags_lower.split(";")[1:].__repr__()
-            if False else any(
-                p.strip() == "secure" or p.strip().startswith("secure")
+            "secure": any(
+                p.strip().lower() == "secure"
                 for p in parts[1:]
             ),
             "httponly": any(

@@ -199,6 +199,7 @@ class ServiceDetectPlugin(BasePlugin):
         depends_on=["port_scan"],
         produces=["services"],
         timeout=45.0,
+        requires_http=False,
     )
 
     def accepts(self, target: Target) -> bool:

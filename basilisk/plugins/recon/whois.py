@@ -29,6 +29,7 @@ class WhoisPlugin(BasePlugin):
         ),
         produces=["whois_info"],
         timeout=20.0,
+        requires_http=False,
     )
 
     async def run(self, target: Target, ctx) -> PluginResult:

@@ -19,6 +19,7 @@ class DnsZoneTransferPlugin(BasePlugin):
         depends_on=["dns_enum"],
         produces=["zone_records"],
         timeout=30.0,
+        requires_http=False,
     )
 
     async def run(self, target: Target, ctx) -> PluginResult:
@@ -92,5 +93,9 @@ class DnsZoneTransferPlugin(BasePlugin):
                 dns.zone.from_xfr, dns.query.xfr(nameserver, domain, timeout=10)
             )
             return [zone[name].to_text(name) for name in zone.nodes]
+        except dns.exception.FormError:
+            return []  # Transfer refused (expected)
+        except (TimeoutError, OSError):
+            return []  # Network issues
         except Exception:
-            return []
+            return []  # Other DNS errors

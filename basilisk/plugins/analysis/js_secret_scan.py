@@ -8,27 +8,7 @@ from typing import ClassVar
 from basilisk.core.plugin import BasePlugin, PluginCategory, PluginMeta
 from basilisk.models.result import Finding, PluginResult
 from basilisk.models.target import Target
-
-SECRET_PATTERNS = [
-    ("AWS Access Key", r"AKIA[0-9A-Z]{16}"),
-    ("AWS Secret Key", r"(?i)aws_secret_access_key\s*[:=]\s*['\"]?[\w/+=]{40}"),
-    ("Google API Key", r"AIza[0-9A-Za-z_-]{35}"),
-    ("Google OAuth", r"[0-9]+-[0-9A-Za-z_]{32}\.apps\.googleusercontent\.com"),
-    ("Stripe Secret Key", r"sk_live_[0-9a-zA-Z]{24,}"),
-    ("Stripe Publishable Key", r"pk_live_[0-9a-zA-Z]{24,}"),
-    ("Slack Token", r"xox[bpors]-[0-9a-zA-Z-]{10,}"),
-    ("GitHub Token", r"gh[pousr]_[0-9a-zA-Z]{36,}"),
-    ("Firebase", r"(?i)firebase[a-zA-Z]*\s*[:=]\s*['\"][A-Za-z0-9_-]+['\"]"),
-    ("Private Key", r"-----BEGIN (?:RSA |EC )?PRIVATE KEY-----"),
-    ("JWT Token", r"eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+"),
-    ("Bearer Token", r"(?i)bearer\s+[a-zA-Z0-9_\-.~+/]+=*"),
-    ("Basic Auth", r"(?i)basic\s+[a-zA-Z0-9+/]+=+"),
-    ("Mailgun API Key", r"key-[0-9a-zA-Z]{32}"),
-    ("Twilio API Key", r"SK[0-9a-fA-F]{32}"),
-    ("SendGrid API Key", r"SG\.[0-9A-Za-z_-]{22}\.[0-9A-Za-z_-]{43}"),
-    ("Hardcoded Password", r"(?i)(password|passwd|pwd)\s*[:=]\s*['\"][^'\"]{6,}['\"]"),
-    ("API Key Generic", r"(?i)(api[_-]?key|apikey)\s*[:=]\s*['\"][a-zA-Z0-9]{16,}['\"]"),
-]
+from basilisk.utils.secrets import SECRET_REGISTRY
 
 
 class JsSecretScanPlugin(BasePlugin):
@@ -119,11 +99,11 @@ class JsSecretScanPlugin(BasePlugin):
     def _scan_content(
         self, content: str, source: str, results: list[dict],
     ) -> None:
-        for name, pattern in SECRET_PATTERNS:
-            matches = re.findall(pattern, content)
+        for sp in SECRET_REGISTRY:
+            matches = sp.pattern.findall(content)
             for match in matches[:3]:
                 results.append({
-                    "type": name,
+                    "type": sp.name,
                     "match": match if isinstance(match, str) else str(match),
                     "source": source,
                 })

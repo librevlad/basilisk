@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True, slots=True)
-class DiffResult:
+class InjectionDiff:
     """Result of comparing a baseline response with an injected response."""
 
     new_content: list[str] = field(default_factory=list)
@@ -49,7 +49,7 @@ async def compare_with_baseline(
     url: str,
     payload_url: str,
     ctx,
-) -> DiffResult:
+) -> InjectionDiff:
     """Fetch baseline and injected URLs, return their diff.
 
     Args:
@@ -66,7 +66,7 @@ async def compare_with_baseline(
             baseline_headers = set(baseline_resp.headers.keys())
             baseline_status = baseline_resp.status
     except Exception:
-        return DiffResult()
+        return InjectionDiff()
 
     try:
         async with ctx.rate:
@@ -77,9 +77,9 @@ async def compare_with_baseline(
             injected_headers = set(injected_resp.headers.keys())
             injected_status = injected_resp.status
     except Exception:
-        return DiffResult()
+        return InjectionDiff()
 
-    return DiffResult(
+    return InjectionDiff(
         new_content=diff_texts(baseline_text, injected_text),
         status_changed=baseline_status != injected_status,
         size_delta=len(injected_text) - len(baseline_text),

@@ -19,6 +19,7 @@ class SubdomainDnsDumpsterPlugin(BasePlugin):
         provides="subdomains",
         produces=["subdomains"],
         timeout=20.0,
+        requires_http=False,
     )
 
     async def run(self, target: Target, ctx) -> PluginResult:
@@ -29,7 +30,7 @@ class SubdomainDnsDumpsterPlugin(BasePlugin):
 
         subdomains: set[str] = set()
 
-        # Try the API endpoint first (JSON)
+        # Try the API endpoint first (JSON) — requires API key since 2025
         try:
             async with ctx.rate:
                 resp = await ctx.http.get(
@@ -49,21 +50,23 @@ class SubdomainDnsDumpsterPlugin(BasePlugin):
         except Exception:
             pass
 
-        # Fallback: scrape the HTML page
+        # Fallback: scrape the HTML search results page
         if not subdomains:
             try:
                 async with ctx.rate:
+                    # GET the page first (to work with the public search form)
                     resp = await ctx.http.get(
                         f"https://dnsdumpster.com/?q={target.host}",
                         timeout=15.0,
                     )
-                    body = await resp.text(encoding="utf-8", errors="replace")
-                    pattern = rf"([\w.-]+\.{re.escape(target.host)})"
-                    matches = re.findall(pattern, body, re.IGNORECASE)
-                    for m in matches:
-                        sub = m.strip().lower().rstrip(".")
-                        if sub != target.host and sub.endswith(f".{target.host}"):
-                            subdomains.add(sub)
+                    if resp.status == 200:
+                        body = await resp.text(encoding="utf-8", errors="replace")
+                        pattern = rf"([\w.-]+\.{re.escape(target.host)})"
+                        matches = re.findall(pattern, body, re.IGNORECASE)
+                        for m in matches:
+                            sub = m.strip().lower().rstrip(".")
+                            if sub != target.host and sub.endswith(f".{target.host}"):
+                                subdomains.add(sub)
             except Exception:
                 pass
 

@@ -63,6 +63,7 @@ class DnssecCheckPlugin(BasePlugin):
         depends_on=["dns_enum"],
         produces=["dnssec_info"],
         timeout=20.0,
+        requires_http=False,
     )
 
     async def run(self, target: Target, ctx) -> PluginResult:

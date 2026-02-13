@@ -18,6 +18,7 @@ class AsnLookupPlugin(BasePlugin):
         depends_on=["dns_enum"],
         produces=["asn_info"],
         timeout=15.0,
+        requires_http=False,
     )
 
     async def run(self, target: Target, ctx) -> PluginResult:
@@ -41,7 +42,8 @@ class AsnLookupPlugin(BasePlugin):
 
         asn_data: dict = {}
 
-        # Use ip-api.com (free, no key required)
+        # Use ip-api.com (free, no key required, ~45 req/min limit)
+        error_msg = ""
         try:
             async with ctx.rate:
                 resp = await ctx.http.get(
@@ -50,13 +52,20 @@ class AsnLookupPlugin(BasePlugin):
                 )
                 if resp.status == 200:
                     asn_data = await resp.json(content_type=None)
-        except Exception:
-            pass
+                elif resp.status == 429:
+                    error_msg = "ip-api.com rate limited"
+                else:
+                    error_msg = f"ip-api.com returned HTTP {resp.status}"
+        except Exception as e:
+            error_msg = f"ip-api.com request failed: {type(e).__name__}"
 
         if not asn_data:
+            msg = f"ASN lookup failed for {ip}"
+            if error_msg:
+                msg += f" ({error_msg})"
             return PluginResult.success(
                 self.meta.name, target.host,
-                findings=[Finding.info(f"ASN lookup failed for {ip}")],
+                findings=[Finding.info(msg, tags=["recon", "asn"])],
                 data={"ip": ip},
             )
 

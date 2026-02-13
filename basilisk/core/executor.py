@@ -22,10 +22,15 @@ if TYPE_CHECKING:
     from basilisk.storage.repo import ResultRepository
     from basilisk.utils.browser import BrowserManager
     from basilisk.utils.diff import ResponseDiffer
+    from basilisk.utils.dns import DnsClient
     from basilisk.utils.dynamic_wordlist import DynamicWordlistGenerator
+    from basilisk.utils.http import AsyncHttpClient
+    from basilisk.utils.net import NetUtils
     from basilisk.utils.oob_verifier import NoopOobVerifier, OobVerifier
     from basilisk.utils.payloads import PayloadEngine
+    from basilisk.utils.rate_limiter import RateLimiter
     from basilisk.utils.waf_bypass import WafBypassEngine
+    from basilisk.utils.wordlists import WordlistManager
 
 
 logger = logging.getLogger(__name__)
@@ -43,12 +48,12 @@ class PluginContext:
     """
 
     config: Settings
-    http: Any = None         # AsyncHttpClient (set after utils phase)
-    dns: Any = None          # DnsClient
-    net: Any = None          # NetUtils
-    rate: Any = None         # RateLimiter
+    http: AsyncHttpClient | None = None
+    dns: DnsClient | None = None
+    net: NetUtils | None = None
+    rate: RateLimiter | None = None
     db: ResultRepository | None = None
-    wordlists: Any = None    # WordlistManager
+    wordlists: WordlistManager | None = None
     providers: ProviderPool | None = None
     auth: AuthManager | None = None
     browser: BrowserManager | None = None
@@ -78,6 +83,20 @@ class PluginContext:
         """True when less than 2 s remain — plugins should return partial results."""
         return self._deadline > 0 and time.monotonic() >= self._deadline - 2.0
 
+    def scoped(self, timeout: float) -> PluginContext:
+        """Create a scoped shallow copy with per-plugin deadline.
+
+        Shares all services (http, dns, rate, etc.) but isolates
+        _deadline and _partial_result to avoid race conditions
+        when running plugins concurrently via asyncio.gather.
+        """
+        import copy
+
+        scoped_ctx = copy.copy(self)
+        scoped_ctx._deadline = time.monotonic() + timeout
+        scoped_ctx._partial_result = None
+        return scoped_ctx
+
 
 class AsyncExecutor:
     """Runs plugins concurrently across targets with controlled parallelism."""
@@ -95,18 +114,17 @@ class AsyncExecutor:
         """Run a single plugin against a single target, with timeout."""
         async with self.semaphore:
             start = time.monotonic()
-            ctx._deadline = start + plugin.meta.timeout
-            ctx._partial_result = None
+            scoped_ctx = ctx.scoped(plugin.meta.timeout)
             try:
                 result = await asyncio.wait_for(
-                    plugin.run(target, ctx),
+                    plugin.run(target, scoped_ctx),
                     timeout=plugin.meta.timeout,
                 )
                 result.duration = time.monotonic() - start
                 return result
             except TimeoutError:
-                if ctx._partial_result is not None:
-                    result = ctx._partial_result
+                if scoped_ctx._partial_result is not None:
+                    result = scoped_ctx._partial_result
                     result.status = "partial"
                     result.duration = time.monotonic() - start
                     result.error = f"Partial result (timed out after {plugin.meta.timeout}s)"
@@ -128,16 +146,6 @@ class AsyncExecutor:
                     error=str(e),
                 )
 
-    # Plugins that don't need HTTP — never skip for reachability
-    _NON_HTTP_PLUGINS = frozenset({
-        "dns_enum", "dns_zone_transfer", "whois", "port_scan", "ftp_anon",
-        "dnssec_check", "email_spoofing", "asn_lookup", "service_detect",
-        "service_brute", "ipv6_scan", "subdomain_bruteforce",
-        "subdomain_crtsh", "subdomain_hackertarget", "subdomain_rapiddns",
-        "subdomain_dnsdumpster", "subdomain_virustotal", "subdomain_alienvault",
-        "subdomain_wayback", "reverse_ip",
-    })
-
     async def run_batch(
         self,
         plugin: BasePlugin,
@@ -152,7 +160,7 @@ class AsyncExecutor:
         # Skip unreachable HTTP hosts for HTTP-dependent plugins
         skipped_results: list[PluginResult] = []
         scheme_map = ctx.state.get("http_scheme", {})
-        if scheme_map and plugin.meta.name not in self._NON_HTTP_PLUGINS:
+        if scheme_map and plugin.meta.requires_http:
             reachable = []
             for t in eligible:
                 if t.host in scheme_map and scheme_map[t.host] is None:

@@ -19,6 +19,7 @@ class SubdomainRapidDnsPlugin(BasePlugin):
         produces=["subdomains"],
         provides="subdomains",
         timeout=20.0,
+        requires_http=False,
     )
 
     async def run(self, target: Target, ctx) -> PluginResult:

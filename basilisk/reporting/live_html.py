@@ -11,6 +11,7 @@ from jinja2 import Environment, FileSystemLoader
 
 from basilisk.core.pipeline import PipelineState
 from basilisk.models.result import Severity
+from basilisk.reporting.utils import extract_plugin_stats
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 
@@ -289,36 +290,6 @@ def _build_site_tree(attack_surface: dict) -> dict:
     return tree
 
 
-def _extract_plugin_stats(results: list) -> list[dict]:
-    """Extract per-plugin performance stats."""
-    stats: dict[str, dict] = {}
-    for r in results:
-        if r.plugin not in stats:
-            stats[r.plugin] = {
-                "name": r.plugin,
-                "targets": 0,
-                "findings": 0,
-                "duration": 0.0,
-                "critical": 0,
-                "high": 0,
-                "medium": 0,
-                "low": 0,
-                "info": 0,
-                "errors": 0,
-            }
-        s = stats[r.plugin]
-        s["targets"] += 1
-        s["duration"] += r.duration
-        s["findings"] += len(r.findings)
-        if r.status == "error":
-            s["errors"] += 1
-        for finding in r.findings:
-            sev = finding.severity.label.lower()
-            if sev in s:
-                s[sev] += 1
-    return sorted(stats.values(), key=lambda x: x["findings"], reverse=True)
-
-
 def _filesize(value: int | float | None) -> str:
     """Format bytes as human-readable file size."""
     if not value:
@@ -391,7 +362,7 @@ class LiveHtmlRenderer:
         plugins = {r.plugin for r in state.results}
 
         attack_surface = _extract_attack_surface(state.results)
-        plugin_stats = _extract_plugin_stats(state.results)
+        plugin_stats = extract_plugin_stats(state.results)
         site_tree = _build_site_tree(attack_surface)
 
         html = template.render(

@@ -149,7 +149,7 @@ class Pipeline:
                     ]
 
                 if not targets:
-                    phase.completed += phase.total
+                    phase.completed += len(list(scope))
                     self.on_progress(self.state)
                     await plugin.teardown()
                     continue

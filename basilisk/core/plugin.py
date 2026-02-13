@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 from pydantic import BaseModel, Field
 
@@ -33,6 +33,7 @@ class PluginMeta(BaseModel):
     provides: str | None = None  # e.g. "subdomains" — for ProviderPool
     default_enabled: bool = True
     timeout: float = 30.0
+    requires_http: bool = True      # False for DNS/port/subdomain-only plugins
     requires_auth: bool = False     # Skip if no auth session available
     requires_browser: bool = False  # Skip if headless browser unavailable
     requires_callback: bool = False  # Skip if OOB callback server unavailable
@@ -95,16 +96,6 @@ class BasePlugin(ABC):
             false_positive_risk=false_positive_risk,
             tags=tags or [],
         )
-
-    @staticmethod
-    async def baseline_request(url: str, ctx: Any) -> str | None:
-        """Fetch a 'clean' baseline response for comparison."""
-        try:
-            async with ctx.rate:
-                resp = await ctx.http.get(url, timeout=8.0)
-                return await resp.text(encoding="utf-8", errors="replace")
-        except Exception:
-            return None
 
     def __repr__(self) -> str:
         return f"<Plugin {self.meta.name}>"

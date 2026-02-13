@@ -185,6 +185,7 @@ class PortScanPlugin(BasePlugin):
         depends_on=["dns_enum"],
         produces=["open_ports"],
         timeout=90.0,
+        requires_http=False,
     )
 
     async def run(self, target: Target, ctx) -> PluginResult:

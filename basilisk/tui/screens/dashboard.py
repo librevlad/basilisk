@@ -125,11 +125,11 @@ class DashboardScreen(Screen):
         try:
             state = await audit_builder.run()
             self.post_message(AuditComplete(state))
-        except Exception:
+        except Exception as e:
             logger.exception("Audit pipeline failed")
             from basilisk.core.pipeline import PipelineState
             self.post_message(
-                AuditComplete(PipelineState(status="failed"), error=str(Exception))
+                AuditComplete(PipelineState(status="failed"), error=str(e))
             )
 
     # --- Message handlers ---

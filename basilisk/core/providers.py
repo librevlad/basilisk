@@ -69,7 +69,16 @@ class ProviderPool:
     ) -> PluginResult:
         """Run all providers, merge unique findings and data."""
         instances = [cls() for cls in providers]
-        tasks = [p.run(target, ctx) for p in instances]
+        for inst in instances:
+            await inst.setup(ctx)
+
+        async def _run_with_teardown(p: BasePlugin) -> PluginResult:
+            try:
+                return await p.run(target, ctx)
+            finally:
+                await p.teardown()
+
+        tasks = [_run_with_teardown(p) for p in instances]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         merged_findings: list[Finding] = []
@@ -122,14 +131,17 @@ class ProviderPool:
     ) -> PluginResult:
         """Run providers sequentially, return first success."""
         for cls in providers:
+            instance = cls()
+            await instance.setup(ctx)
             try:
-                instance = cls()
                 result = await instance.run(target, ctx)
                 if result.ok:
                     return result
             except Exception as e:
                 logger.warning("Provider %s failed: %s", cls.meta.name, e)
                 continue
+            finally:
+                await instance.teardown()
 
         return PluginResult.fail(
             f"provider_pool:{provides}", target.host,
@@ -145,21 +157,31 @@ class ProviderPool:
     ) -> PluginResult:
         """Race all providers, return the fastest success."""
         instances = [cls() for cls in providers]
-        tasks = [asyncio.create_task(p.run(target, ctx)) for p in instances]
+        for inst in instances:
+            await inst.setup(ctx)
+        tasks = {asyncio.create_task(p.run(target, ctx)) for p in instances}
 
         try:
-            done, pending = await asyncio.wait(
-                tasks, return_when=asyncio.FIRST_COMPLETED
-            )
-            for task in pending:
-                task.cancel()
-
-            for task in done:
-                exc = task.exception()
-                if exc is None:
-                    return task.result()
+            remaining = tasks
+            while remaining:
+                done, remaining = await asyncio.wait(
+                    remaining, return_when=asyncio.FIRST_COMPLETED,
+                )
+                for task in done:
+                    if task.exception() is None:
+                        result = task.result()
+                        if isinstance(result, PluginResult) and result.ok:
+                            for t in remaining:
+                                t.cancel()
+                            return result
         except Exception:
             pass
+        finally:
+            for t in tasks:
+                if not t.done():
+                    t.cancel()
+            for inst in instances:
+                await inst.teardown()
 
         return PluginResult.fail(
             f"provider_pool:{provides}", target.host,
