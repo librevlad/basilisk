@@ -36,7 +36,7 @@ class WafSignature:
 
 
 # ---------------------------------------------------------------------------
-# 75 WAF / CDN signatures
+# 125+ WAF / CDN signatures
 # ---------------------------------------------------------------------------
 
 WAF_SIGNATURES: tuple[WafSignature, ...] = (
@@ -262,7 +262,7 @@ WAF_SIGNATURES: tuple[WafSignature, ...] = (
     ),
     WafSignature(
         "HuaweiCloud WAF",
-        headers=("x-request-id",),
+        headers=("x-huawei-waf",),
         body=r"huawei.*cloud.*waf|hwclouds",
         cookie="HWWAFSESID",
     ),
@@ -452,6 +452,286 @@ WAF_SIGNATURES: tuple[WafSignature, ...] = (
         server="f5.*trafficshield",
         cookie="ASINFO",
     ),
+
+    # --- Cloud WAFs (additional) ---
+    WafSignature(
+        "Oracle Cloud WAF",
+        headers=("x-oracle-dms-ecid", "x-oracle-dms-rid"),
+        body=r"oracle.*cloud|oracle.*waf",
+    ),
+    WafSignature(
+        "Alibaba Cloud CDN",
+        headers=("ali-swift-global-savetime", "x-swift-savetime"),
+        server="tengine",
+        is_cdn=True,
+    ),
+    WafSignature(
+        "Tencent Cloud CDN",
+        headers=("x-nws-log-uuid",),
+        server="tencent",
+        is_cdn=True,
+    ),
+    WafSignature(
+        "OVHcloud",
+        headers=("x-ovh-id",),
+        server="ovh",
+        is_cdn=True,
+    ),
+    WafSignature(
+        "Imperva Cloud WAF",
+        headers=("x-iinfo",),
+        cookie="visid_incap",
+        body=r"imperva.*cloud|powered by imperva",
+    ),
+    WafSignature(
+        "Azure CDN",
+        headers=("x-ms-ref", "x-ms-request-id"),
+        server="ecacc",
+        is_cdn=True,
+    ),
+    WafSignature(
+        "Amazon CloudFront",
+        headers=("x-amz-cf-id", "x-amz-cf-pop"),
+        server="cloudfront",
+        is_cdn=True,
+    ),
+    WafSignature(
+        "Google Cloud CDN",
+        headers=("x-goog-cache-status",),
+        server="google frontend",
+        is_cdn=True,
+    ),
+
+    # --- Enterprise / commercial WAFs (additional) ---
+    WafSignature(
+        "Radware DefensePro",
+        body=r"radware.*defensepro|request blocked.*radware",
+    ),
+    WafSignature(
+        "Blue Coat ProxySG",
+        headers=("x-bluecoat-via",),
+        body=r"blue\s*coat|proxySG",
+        server="blue coat",
+    ),
+    WafSignature(
+        "Cisco ACE XML Gateway",
+        server="cisco-ace",
+    ),
+    WafSignature(
+        "A10 Thunder",
+        headers=("x-a10-forwarded-for",),
+        server="a10",
+    ),
+    WafSignature(
+        "Barracuda CloudGen",
+        headers=("x-barra-cloudgen",),
+        body=r"barracuda.*cloudgen",
+        server="barracuda",
+    ),
+    WafSignature(
+        "Ergon Airlock",
+        headers=("al-req-id",),
+        body=r"airlock|ergon.*airlock",
+    ),
+    WafSignature(
+        "ThreatX",
+        headers=("x-threatx",),
+        body=r"threatx",
+    ),
+    WafSignature(
+        "Alert Logic",
+        body=r"alert\s*logic|alertlogic",
+    ),
+    WafSignature(
+        "Edgeware",
+        server="edgeware",
+    ),
+    WafSignature(
+        "Zenedge",
+        headers=("x-zen-fury",),
+        body=r"zenedge",
+    ),
+    WafSignature(
+        "AppTrana",
+        headers=("x-wf-sid",),
+        body=r"apptrana",
+        server="apptrana",
+    ),
+    WafSignature(
+        "USP Secure Entry",
+        server="usp-ses",
+        body=r"usp.*secure.*entry",
+    ),
+    WafSignature(
+        "Snapt Aria",
+        server="snapt",
+        body=r"snapt|aria.*waf",
+    ),
+    WafSignature(
+        "Imperva WAF Gateway",
+        headers=("x-iinfo",),
+        cookie="incap_ses_",
+        body=r"imperva.*waf.*gateway",
+    ),
+
+    # --- Open-source / specialty WAFs ---
+    WafSignature(
+        "Coraza WAF",
+        body=r"coraza",
+        server="coraza",
+    ),
+    WafSignature(
+        "SafeLine",
+        server="safeline",
+        body=r"safeline|chaitin",
+    ),
+    WafSignature(
+        "OpenWAF",
+        server="openwaf",
+        body=r"openwaf",
+    ),
+    WafSignature(
+        "lua-resty-waf",
+        body=r"lua-resty-waf|resty\.waf",
+        server="openresty",
+    ),
+    WafSignature(
+        "IronBee",
+        body=r"ironbee",
+        server="ironbee",
+    ),
+    WafSignature(
+        "WebCastellum",
+        body=r"webcastellum",
+    ),
+    WafSignature(
+        "Profense",
+        headers=("x-profense",),
+        server="profense",
+    ),
+    WafSignature(
+        "Positive Technologies PT AF",
+        headers=("x-pt-request-id",),
+        body=r"ptaf|positive.*technologies.*application.*firewall",
+    ),
+    WafSignature(
+        "GoDaddy WAF",
+        server="gd-waf",
+    ),
+
+    # --- CDNs (additional) ---
+    WafSignature(
+        "Incapsula CDN",
+        headers=("x-cdn",),
+        cookie="incap_ses_",
+        is_cdn=True,
+    ),
+    WafSignature(
+        "G-Core CDN",
+        headers=("x-id",),
+        server="gcore",
+        is_cdn=True,
+    ),
+    WafSignature(
+        "Fly.io",
+        headers=("fly-request-id",),
+        server="fly",
+        is_cdn=True,
+    ),
+    WafSignature(
+        "Railway",
+        headers=("x-railway-request-id",),
+        is_cdn=True,
+    ),
+    WafSignature(
+        "Render",
+        headers=("x-render-origin-server",),
+        is_cdn=True,
+    ),
+    WafSignature(
+        "Section.io",
+        headers=("section-io-id",),
+        is_cdn=True,
+    ),
+    WafSignature(
+        "Selectel CDN",
+        headers=("x-selectel-id",),
+        server="selectel",
+        is_cdn=True,
+    ),
+
+    # --- Anti-bot / Anti-fraud ---
+    WafSignature(
+        "Datadome",
+        headers=("x-datadome",),
+        cookie="datadome",
+    ),
+    WafSignature(
+        "Kasada",
+        body=r"kasada",
+        cookie="_kpsdk",
+    ),
+    WafSignature(
+        "HUMAN Bot Defender",
+        headers=("x-px-fp",),
+        cookie="_pxhd",
+        body=r"human\s*security|humansecurity",
+    ),
+    WafSignature(
+        "Arkose Labs",
+        body=r"arkoselabs|funcaptcha",
+    ),
+    WafSignature(
+        "Distil Networks",
+        cookie="D_SID",
+        body=r"distil",
+    ),
+    WafSignature(
+        "Shape Security",
+        body=r"shape\s*security|shapesecurity",
+    ),
+
+    # --- Russian / CIS WAFs ---
+    WafSignature(
+        "Solar webProxy",
+        body=r"solar\s*web\s*proxy|ростелеком.*солар",
+    ),
+    WafSignature(
+        "InfoWatch Attack Killer",
+        body=r"infowatch|attack\s*killer",
+    ),
+    WafSignature(
+        "Garda WAF",
+        body=r"garda\s*waf",
+    ),
+    WafSignature(
+        "Continent WAF",
+        body=r"continent\s*waf|континент.*waf",
+    ),
+
+    # --- Hosting / platform edge ---
+    WafSignature(
+        "Automattic/WordPress.com",
+        headers=("x-ac",),
+        server="wordpress.com",
+        is_cdn=True,
+    ),
+    WafSignature(
+        "Pantheon",
+        headers=("x-pantheon-styx-hostname",),
+        server="pantheon",
+        is_cdn=True,
+    ),
+    WafSignature(
+        "WP Engine",
+        headers=("x-wpe-backend",),
+        is_cdn=True,
+    ),
+    WafSignature(
+        "Kinsta",
+        headers=("x-kinsta-cache",),
+        is_cdn=True,
+    ),
 )
 
 
@@ -495,7 +775,7 @@ class WafDetectPlugin(BasePlugin):
         category=PluginCategory.ANALYSIS,
         description=(
             "Detects Web Application Firewalls via signature matching "
-            "and behavioral probing (70+ signatures)"
+            "and behavioral probing (125+ signatures)"
         ),
         produces=["waf_info"],
         timeout=30.0,

@@ -9,19 +9,20 @@ from basilisk.models.result import Finding, PluginResult
 from basilisk.models.target import Target
 
 CDN_SIGNATURES = {
+    # === Major Global CDNs ===
     "cloudflare": {
         "headers": ["cf-ray", "cf-cache-status"],
         "cname": ["cloudflare"],
         "server": ["cloudflare"],
     },
     "akamai": {
-        "headers": ["x-akamai-transformed"],
-        "cname": ["akamai", "edgesuite", "edgekey"],
-        "server": ["akamaighost"],
+        "headers": ["x-akamai-transformed", "x-akamai-request-id"],
+        "cname": ["akamai", "edgesuite", "edgekey", "akamaized.net", "akadns.net"],
+        "server": ["akamaighost", "akamaighostStaging"],
     },
     "fastly": {
         "headers": ["x-served-by", "x-fastly-request-id"],
-        "cname": ["fastly"],
+        "cname": ["fastly", "fastlylb.net"],
         "server": ["fastly"],
     },
     "amazon_cloudfront": {
@@ -30,58 +31,58 @@ CDN_SIGNATURES = {
         "server": ["cloudfront"],
     },
     "google_cloud_cdn": {
-        "headers": ["x-goog-generation"],
-        "cname": ["googleusercontent"],
+        "headers": ["x-goog-generation", "x-goog-hash"],
+        "cname": ["googleusercontent", "googlevideo.com"],
         "server": ["gws", "gse"],
     },
     "microsoft_azure": {
         "headers": ["x-msedge-ref", "x-azure-ref"],
-        "cname": ["azureedge.net", "azure.com"],
+        "cname": ["azureedge.net", "azure.com", "azurefd.net", "afd.net"],
         "server": [],
     },
     "stackpath": {
-        "headers": ["x-sp-url"],
-        "cname": ["stackpathdns"],
+        "headers": ["x-sp-url", "x-sp-wl"],
+        "cname": ["stackpathdns", "stackpathcdn.com"],
         "server": [],
     },
     "sucuri": {
-        "headers": ["x-sucuri-id"],
-        "cname": ["sucuri"],
+        "headers": ["x-sucuri-id", "x-sucuri-cache"],
+        "cname": ["sucuri", "sucuri.net"],
         "server": ["sucuri"],
     },
     "imperva_incapsula": {
-        "headers": ["x-iinfo"],
+        "headers": ["x-iinfo", "x-cdn"],
         "cname": ["incapdns", "imperva"],
         "server": [],
     },
     "keycdn": {
-        "headers": [],
-        "cname": ["kxcdn"],
+        "headers": ["x-pull"],
+        "cname": ["kxcdn", "keycdn.com"],
         "server": ["keycdn"],
     },
     "bunnycdn": {
-        "headers": ["cdn-pullzone"],
-        "cname": ["b-cdn.net"],
+        "headers": ["cdn-pullzone", "cdn-uid"],
+        "cname": ["b-cdn.net", "bunny.net", "bunnycdn.com"],
         "server": ["bunnycdn"],
     },
     "ddos_guard": {
         "headers": [],
-        "cname": ["ddos-guard"],
+        "cname": ["ddos-guard", "ddos-guard.net"],
         "server": ["ddos-guard"],
     },
     "qrator": {
-        "headers": [],
-        "cname": ["qrator"],
+        "headers": ["x-qrator-requestid"],
+        "cname": ["qrator", "qrator.net"],
         "server": ["qrator"],
     },
     "cdn77": {
-        "headers": [],
-        "cname": ["cdn77"],
+        "headers": ["x-77-nzt"],
+        "cname": ["cdn77", "cdn77.org"],
         "server": ["cdn77"],
     },
     "arvancloud": {
-        "headers": ["ar-asg"],
-        "cname": ["arvancloud"],
+        "headers": ["ar-asg", "ar-request-id"],
+        "cname": ["arvancloud", "arvan.cloud"],
         "server": ["arvancloud"],
     },
     "jsdelivr": {
@@ -90,19 +91,128 @@ CDN_SIGNATURES = {
         "server": [],
     },
     "limelight": {
-        "headers": [],
-        "cname": ["llnwd.net", "limelight"],
+        "headers": ["x-limelight-edge"],
+        "cname": ["llnwd.net", "limelight", "llnw.net"],
         "server": [],
     },
     "edgecast": {
         "headers": ["x-ec-custom-error"],
-        "cname": ["edgecastcdn"],
-        "server": [],
+        "cname": ["edgecastcdn", "systemcdn.net"],
+        "server": ["ecacc"],
     },
     "tencent_cdn": {
-        "headers": [],
-        "cname": ["cdn.dnsv1.com"],
+        "headers": ["x-nws-log-uuid", "x-daa-tunnel"],
+        "cname": ["cdn.dnsv1.com", "tdnsv5.com"],
         "server": [],
+    },
+    # === Global CDN (new) ===
+    "verizon_digital_media": {
+        "headers": ["x-ec-custom-error", "x-ec-debug"],
+        "cname": ["edgecastcdn.net", "verizondigitalmedia.com"],
+        "server": ["ecd"],
+    },
+    "alibaba_cdn": {
+        "headers": ["eagleid", "x-oss-request-id"],
+        "cname": ["alicdn.com", "kunlun.com", "alikunlun.com", "cdngslb.com"],
+        "server": ["tengine"],
+    },
+    "gcore_cdn": {
+        "headers": ["x-gcore-request-id"],
+        "cname": ["gcdn.co", "gcorelabs.com", "gcore.com"],
+        "server": ["gcore"],
+    },
+    "section_io": {
+        "headers": ["x-section-io-id", "section-io-origin-status"],
+        "cname": ["section.io", "sectionio.com"],
+        "server": [],
+    },
+    "chinacache": {
+        "headers": ["x-cc-via"],
+        "cname": ["chinacache.net", "ccgslb.com"],
+        "server": [],
+    },
+    "chinanetcenter": {
+        "headers": ["x-cnc-request-id"],
+        "cname": ["wscdns.com", "ourwebcdn.net", "wsdvs.com"],
+        "server": [],
+    },
+    # === Regional CDNs ===
+    "selectel_cdn": {
+        "headers": [],
+        "cname": ["selectel.ru", "slc.tl", "sel.cdn"],
+        "server": [],
+    },
+    "mailru_cdn": {
+        "headers": ["x-mru-request-id"],
+        "cname": ["cdn.mail.ru"],
+        "server": [],
+    },
+    "ngenix": {
+        "headers": ["x-ngenix-cache"],
+        "cname": ["ngenix.net", "delivery.ngenix.net"],
+        "server": ["ngenix"],
+    },
+    "cdnetworks": {
+        "headers": ["x-px-request-id"],
+        "cname": ["cdnetworks.com", "cdnetdns.net", "gccdn.net"],
+        "server": [],
+    },
+    "leaseweb_cdn": {
+        "headers": [],
+        "cname": ["lswcdn.net", "leasewebcdn.com"],
+        "server": ["leaseweb"],
+    },
+    # === Specialized / Media CDNs ===
+    "imgix": {
+        "headers": ["x-imgix-id"],
+        "cname": ["imgix.net"],
+        "server": ["imgix"],
+    },
+    "cloudinary": {
+        "headers": ["x-cld-error"],
+        "cname": ["cloudinary.com", "res.cloudinary.com"],
+        "server": ["cloudinary"],
+    },
+    "uploadcare": {
+        "headers": ["x-uploadcare-cdn"],
+        "cname": ["ucarecdn.com", "uploadcare.com"],
+        "server": [],
+    },
+    "netlify_cdn": {
+        "headers": ["x-nf-request-id"],
+        "cname": ["netlify.app", "netlify.com", "netlifyglobalcdn.com"],
+        "server": ["netlify"],
+    },
+    "vercel_edge": {
+        "headers": ["x-vercel-id", "x-vercel-cache"],
+        "cname": ["vercel.app", "vercel-dns.com"],
+        "server": [],
+    },
+    "aws_global_accelerator": {
+        "headers": ["x-amz-request-id"],
+        "cname": ["awsglobalaccelerator.com"],
+        "server": [],
+    },
+    # === DDoS / Security CDNs ===
+    "stormwall": {
+        "headers": ["x-sw-cache-status"],
+        "cname": ["stormwall.pro", "stormwall.network"],
+        "server": ["stormwall"],
+    },
+    "ddos_guard_pro": {
+        "headers": ["x-ddg-request-id"],
+        "cname": ["ddos-guard.net"],
+        "server": ["ddos-guard"],
+    },
+    "qrator_pro": {
+        "headers": ["x-qrator-requestid"],
+        "cname": ["qrator.net", "qrator.cloud"],
+        "server": ["qrator"],
+    },
+    "wallarm_cdn": {
+        "headers": ["x-wallarm-waf-check"],
+        "cname": ["wallarm.com", "wallarm.cloud"],
+        "server": ["wallarm"],
     },
 }
 

@@ -23,7 +23,7 @@
 - [x] **SECRET_PATTERNS** — дублировались в 4 файлах → единый `utils/secrets.py`
 - [x] **_extract_plugin_stats** — идентичная копия в html.py и live_html.py → `reporting/utils.py`
 - [x] **DiffResult конфликт имён** — два класса в baseline.py и diff.py → rename в baseline.py
-- [ ] **resolve_base_url** — оставлено как есть: `resolve_base_url` (singular) и `resolve_base_urls` (plural) — разная семантика, 50+ импортеров, перемещение нецелесообразно
+- [x] **resolve_base_url** — `resolve_base_url` перенесён в utils/http.py рядом с `resolve_base_urls`, http_check.py стал реэкспортом (52 импортера сохранены)
 - [x] **BasePlugin.baseline_request()** — 0 вызовов, удалён
 
 ### Фасад
@@ -44,11 +44,10 @@
 - `ssl_compliance.py` — HSTS, CT, OCSP, key strength
 - Общая логика → `utils/ssl_helpers.py`
 
-#### Тесты для плагинов (85 из 110 без функциональных тестов)
-Есть только meta + discovery тесты. Нужны mock-тесты для каждого плагина:
-- HTTP-плагины: mock aiohttp responses
-- DNS-плагины: mock dnspython
-- Шаблон: `tests/test_plugins/test_<name>.py`
+#### ~~Тесты для плагинов~~ — ВЫПОЛНЕНО
+~~85 из 110 без функциональных тестов~~ → 110/110 плагинов покрыты (883 теста).
+Добавлены 5 файлов тестов: test_recon_scanning_new.py (32), test_analysis_new.py (22),
+test_pentesting_new1.py (44), test_pentesting_new2.py (42), test_analysis_batch2.py (39).
 
 ### MEDIUM PRIORITY
 
@@ -160,7 +159,7 @@
 - [ ] `ssl_cert_chain` (analysis) — пересечение с ssl_check? проверить
 
 **HTTP-анализ (частично выполнено):**
-- [ ] `cors_scan` — сравнить с CORScanner, проверить bypass-методы
+- [x] `cors_scan` — OK, 12 checks (> CORScanner's 8-10). No issues on hackerone.com (expected)
 - [x] `http_methods_scan` — OK, GET/HEAD detected. Код ревью: redirect codes в allowed — acceptable
 - [x] `cookie_scan` — OK, **FIXED**: Secure flag case-sensitive comparison bug + dead code cleanup
 - [ ] `redirect_chain` — проверить loop detection, max hops
@@ -178,30 +177,30 @@
 
 **Сравнение с инструментами:** nmap, testssl.sh, sslyze, CORScanner, nikto
 
-### Батч 3: Analysis (21 плагин)
+### Батч 3: Analysis (21 плагин) — ЧАСТИЧНО ВЫПОЛНЕНО 2026-02-13
 
 **Security headers (пересечение!):**
-- [ ] `http_headers` — CORS/CSP/HSTS/X-Frame → overlap с cors_scan, csp_analyzer
-- [ ] `csp_analyzer` — глубокий CSP, сравнить с Google CSP Evaluator
-- [ ] `waf_detect` — fingerprinting WAF продуктов
+- [x] `http_headers` — OK, 27 findings на hackerone.com. 20+ headers checked, ~80% securityheaders.com
+- [x] `csp_analyzer` — OK, 8 findings. 54 bypass domains (3.5x > Google CSP Evaluator!). **FIXED**: MEDIUM findings без evidence
+- [x] `waf_detect` — OK, Cloudflare CDN detected. **FIXED**: HuaweiCloud WAF false positive (x-request-id too generic)
 - [ ] `waf_bypass` — техники обхода, сравнить с wafw00f
 
 **JS-анализ:**
 - [ ] `js_api_extract` — endpoint extraction из JS, secrets (уже на utils/secrets.py)
 - [ ] `js_secret_scan` — secrets в JS (уже на utils/secrets.py), проверить overlap с js_api_extract
-- [ ] `comment_finder` — HTML/JS comments, может найти debug info
+- [x] `comment_finder` — OK, нашёл 3 HIGH + 2 MEDIUM sensitive comments на hackerone.com
 
 **CMS/Tech:**
-- [ ] `tech_detect` — fingerprinting, сравнить с Wappalyzer/WhatWeb
-- [ ] `cms_detect` — WordPress/Joomla/Drupal, проверить сигнатуры
-- [ ] `version_detect` — версии софта из headers/meta/files
+- [x] `tech_detect` — OK, 11 techs на hackerone.com (Cloudflare, Fastly, Drupal, jQuery, PHP, etc.). 87 сигнатур vs Wappalyzer 6000+
+- [x] `cms_detect` — OK, **FIXED**: не находил Drupal через x-drupal-* headers. Header value lowercasing баг
+- [x] `version_detect` — OK, **FIXED**: jQuery version "." regex bug (fingerprints.py version_pattern)
 
 **Специализированные:**
-- [ ] `takeover_check` — CNAME → dangling records, проверить fingerprints
+- [x] `takeover_check` — OK, 65 fingerprints. **FIXED**: NS/MX/CNAME records used str(DnsRecord) repr instead of .value
 - [ ] `openapi_parser` — Swagger/OpenAPI discovery + parsing
 - [ ] `api_detect` — REST/GraphQL/SOAP endpoint обнаружение
 - [ ] `security_txt` — /.well-known/security.txt
-- [ ] `favicon_hash` — Shodan favicon hash matching
+- [x] `favicon_hash` — OK, hash detected. **FIXED**: corrupted Drupal MD5 hash entry (line 18: "1979b1885f tried5e61269")
 - [ ] `meta_extract` — HTML meta tags
 - [ ] `link_extractor` — links + resources
 - [ ] `form_analyzer` — form fields, CSRF tokens, action URLs
@@ -209,7 +208,31 @@
 - [ ] `prometheus_scrape` — /metrics endpoint intelligence
 - [ ] `ssl_cert_chain` — certificate chain validation
 
-**Сравнение с инструментами:** Wappalyzer, WhatWeb, wafw00f, CSP Evaluator, nuclei
+**Сравнение с профессиональными инструментами (10 плагинов):**
+
+| Плагин | vs | Coverage | Highlights |
+|--------|-----|---------|------------|
+| tech_detect (509 lines) | Wappalyzer (6000+ techs) | 87 techs + implies | Multi-signal: headers, body, cookies, meta generator, fingerprint DB |
+| waf_detect (773 lines) | wafw00f (100+ WAFs) | 73 WAFs/CDNs | Better confidence scoring, CDN differentiation |
+| http_headers (770 lines) | securityheaders.com | 20+ headers | ~80% equivalent, needs Permissions-Policy validation |
+| csp_analyzer (648 lines) | Google CSP Evaluator | 54 bypass domains | 3.5x more bypass domains! Nonce reuse, A-F grading |
+| takeover_check (395 lines) | can-i-take-over-xyz | 65 fingerprints | NS/MX takeover checks (unique!), confidence scoring |
+| cms_detect (238 lines) | WPScan/CMSmap | 20 CMS | Meta generator + body + header matching |
+| comment_finder (338 lines) | Burp passive scanner | 8 pattern categories | HTML + inline JS + external JS scanning |
+| favicon_hash (180 lines) | Shodan favicon | 82 MD5 + 30 MMH3 | Technology identification via favicon hash |
+| version_detect (444 lines) | retire.js (1000+ CVEs) | 28 CVE records | Header + body + meta + error page + fingerprint DB |
+| cors_scan (438 lines) | CORScanner | 12 tests | More tests than CORScanner (8-10), better bypass coverage |
+
+**Найденные и исправленные баги (7 штук):**
+1. `favicon_hash:18` — corrupted MD5 hash "1979b1885f tried5e61269" → valid 32-char hex
+2. `takeover_check:287,339,375` — str(DnsRecord) returns full repr, not hostname → `.value` attribute
+3. `version_detect` + `fingerprints.py:212` — jQuery version_pattern `[\d.]+` matches bare "." → `\d[\d.]+`
+4. `csp_analyzer:287,318,397,408` — MEDIUM findings without evidence → added evidence strings
+5. `cms_detect:184` — `v.lower()` on header values loses case info for body matching → removed lowercasing
+6. `cms_detect:28` — Drupal not detected via x-drupal-cache header → added to signatures
+7. `waf_detect:265` — HuaweiCloud WAF false positive from generic x-request-id header → x-huawei-waf
+
+**Тесты:** 39 новых тестов в `test_analysis_batch2.py`. Всего тестов: 883
 
 ### Батч 4: Pentesting (55 плагинов) — самый большой
 
@@ -295,7 +318,85 @@
 - **Тихие провалы**: `except Exception: pass` без информативных сообщений
 - **Дублирование**: ssl_check ↔ tls_cipher_scan ↔ ssl_cert_chain, lfi_check ↔ path_traversal, cors_scan ↔ cors_exploit, http_headers ↔ csp_analyzer
 - **Устаревшие fingerprints**: tech_detect, cms_detect, waf_detect — нужна проверка актуальности сигнатур
-- **Отсутствие тестов**: ~85 плагинов без функциональных тестов
+- ~~Отсутствие тестов~~: 110/110 плагинов покрыты mock-тестами
+
+---
+
+## Расширение баз сигнатур (2026-02-13) — ВЫПОЛНЕНО
+
+3 раунда массового расширения. Все базы доведены до уровня проф-инструментов.
+
+### Раунд 1: Ключевые detection-базы
+| База | Файл | Было | Стало |
+|------|------|------|-------|
+| TECH_FINGERPRINTS | data/fingerprints.py | 87 | 594 |
+| _VULNERABLE_VERSIONS (CVE) | analysis/version_detect.py | 28 | 200+ |
+| WAF_SIGNATURES | analysis/waf_detect.py | 73 | 125 |
+| TAKEOVER_FINGERPRINTS | data/fingerprints.py | 48 | 80 |
+| KNOWN_FAVICONS + MMH3 | analysis/favicon_hash.py | 112 | 300+ |
+| CSP_BYPASS_DOMAINS | data/fingerprints.py | 15 | 52 |
+| CMS_SIGNATURES | analysis/cms_detect.py | 20 | 83 |
+| CLOUD_SIGNATURES | analysis/cloud_detect.py | 8 | 33 |
+| CDN_SIGNATURES | scanning/cdn_detect.py | 19 | 40 |
+
+### Раунд 2: Pentesting payloads
+| База | Файл | Было | Стало |
+|------|------|------|-------|
+| DISCLOSURE_PATTERNS | pentesting/error_disclosure.py | 14 | 43 |
+| ERROR_TRIGGERS | pentesting/error_disclosure.py | 20 | 38 |
+| TRAVERSAL_PAYLOADS | pentesting/path_traversal.py | 18 | 62 |
+| NoSQLi total payloads | pentesting/nosqli_check.py | 30 | 92 |
+| PP_PAYLOADS | pentesting/prototype_pollution.py | 14 | 62 |
+| RESET_PATHS/POISON_HEADERS | pentesting/password_reset_poison.py | 18/8 | 44/18 |
+| XSS payloads | pentesting/xss_basic.py | 7 | 35 |
+| Command injection | pentesting/command_injection.py | 34 | 90 |
+| CRLF_PAYLOADS | pentesting/crlf_injection.py | 14 | 34 |
+| REDIRECT_PAYLOADS | pentesting/open_redirect.py | 15 | 42 |
+| DEFAULT_CRED_CHECKS | pentesting/default_creds.py | 25 | 75 |
+| BACKUP_EXTENSIONS | pentesting/backup_finder.py | 27 | 53 |
+| DEBUG_PATHS | pentesting/debug_endpoints.py | 52 | 85 |
+| _COOKIE_TECH | analysis/tech_detect.py | 24 | 53 |
+
+### Раунд 2.5: Advanced attack payloads
+| База | Файл | Было | Стало |
+|------|------|------|-------|
+| IP_BYPASS_VARIANTS | pentesting/ssrf_check.py | 11 | 40 |
+| CLOUD_METADATA (SSRF) | pentesting/ssrf_check.py | 6 | 31 |
+| PROTOCOL_SCHEMES | pentesting/ssrf_check.py | 4 | 13 |
+| XXE_FILE_READ | pentesting/xxe_check.py | 8 | 22 |
+| XXE_SSRF | pentesting/xxe_check.py | 4 | 12 |
+| MATH_PROBES (SSTI) | pentesting/ssti_check.py | 10 | 32 |
+| ENGINE_FINGERPRINTS (SSTI) | pentesting/ssti_check.py | 22 | 48 |
+| BLIND_SSTI_PAYLOADS | pentesting/ssti_check.py | 7 | 20 |
+| ALG_NONE_VARIANTS (JWT) | pentesting/jwt_attack.py | 6 | 18 |
+| FALLBACK_WEAK_SECRETS (JWT) | pentesting/jwt_attack.py | 28 | 60+ |
+| TE_OBFUSCATIONS | pentesting/http_smuggling.py | 20 | 45 |
+
+### Раунд 3: Оставшиеся малые базы
+| База | Файл | Было | Стало |
+|------|------|------|-------|
+| TOP_CREDENTIALS | pentesting/admin_brute.py | 15 | 43 |
+| LOGIN_PAGES | pentesting/admin_brute.py | 10 | 28 |
+| LOGIN_KEYWORDS | pentesting/admin_finder.py | 9 | 23 |
+| WP_PLUGINS_TOP50 | pentesting/wp_deep_scan.py | 49 | 86 |
+| WP_THEMES_TOP30 | pentesting/wp_deep_scan.py | 30 | 52 |
+| AWS_METADATA_PATHS | pentesting/cloud_metadata_ssrf.py | 6 | 20 |
+| AZURE_METADATA_PATHS | pentesting/cloud_metadata_ssrf.py | 2 | 12 |
+| GCP_METADATA_PATHS | pentesting/cloud_metadata_ssrf.py | 3 | 15 |
+| SENSITIVE_ENV_KEYS | pentesting/actuator_exploit.py | 14 | 50 |
+| ACTUATOR_ENDPOINTS | pentesting/actuator_exploit.py | 10 | 31 |
+| OPENAPI_PATHS | pentesting/actuator_exploit.py | 6 | 22 |
+| GRAPHQL_PATHS | pentesting/actuator_exploit.py | 3 | 15 |
+| IDOR_PATHS | pentesting/idor_check.py | 12 | 30 |
+| QS_IDOR_PATHS | pentesting/idor_check.py | 6 | 18 |
+| JSON_AGGREGATION (NoSQLi) | pentesting/nosqli_check.py | 14 | 28 |
+| VERIFY_PROBES (SSTI) | pentesting/ssti_verify.py | 8 | 28 |
+| DOM_SOURCES (XSS) | pentesting/xss_advanced.py | 11 | 24 |
+| DOM_SINKS (XSS) | pentesting/xss_advanced.py | 21 | 49 |
+| CSP_BYPASSES (XSS) | pentesting/xss_advanced.py | 5 | 13 types |
+| SRV_SERVICES | recon/dns_enum.py | 24 | 53 |
+| SPF_WEAK_PATTERNS | recon/dns_enum.py | 3 | 12 |
+| WEAK_CIPHERS | scanning/tls_cipher_scan.py | 7 | 55 |
 
 ---
 

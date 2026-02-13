@@ -44,16 +44,37 @@ _META_GENERATOR_RE = re.compile(
 
 _COOKIE_TECH: list[tuple[str, str, str, int]] = [
     # (cookie_pattern, tech_name, category, confidence)
+    # ── Languages ─────────────────────────────────────────────────────
     ("PHPSESSID", "PHP", "language", 60),
     ("JSESSIONID", "Java", "language", 60),
+    # ── ASP.NET ───────────────────────────────────────────────────────
     ("ASP.NET_SessionId", "ASP.NET", "framework", 60),
     (".ASPXAUTH", "ASP.NET", "framework", 60),
+    (".AspNetCore.", "ASP.NET Core", "framework", 60),
+    # ── PHP Frameworks ────────────────────────────────────────────────
     ("laravel_session", "Laravel", "framework", 60),
     ("XSRF-TOKEN", "Laravel", "framework", 40),
-    ("csrftoken", "Django", "framework", 60),
-    ("django_language", "Django", "framework", 70),
     ("ci_session", "CodeIgniter", "framework", 60),
     ("cakephp", "CakePHP", "framework", 60),
+    ("CAKEPHP", "CakePHP", "framework", 60),
+    ("YII_CSRF_TOKEN", "Yii", "framework", 60),
+    ("_csrf", "Yii", "framework", 40),
+    ("phalcon", "Phalcon", "framework", 60),
+    # ── Python Frameworks ─────────────────────────────────────────────
+    ("csrftoken", "Django", "framework", 60),
+    ("django_language", "Django", "framework", 70),
+    # ── Ruby Frameworks ───────────────────────────────────────────────
+    ("_rails_session", "Ruby on Rails", "framework", 60),
+    ("rack.session", "Ruby", "language", 50),
+    # ── Node.js / Express ─────────────────────────────────────────────
+    ("connect.sid", "Express", "framework", 60),
+    ("express:sess", "Express", "framework", 60),
+    # ── Next.js ───────────────────────────────────────────────────────
+    ("__next", "Next.js", "framework", 50),
+    ("__Secure-next-auth", "Next.js", "framework", 60),
+    # ── Nuxt.js ───────────────────────────────────────────────────────
+    ("nuxt_session", "Nuxt.js", "framework", 60),
+    # ── CMS ───────────────────────────────────────────────────────────
     ("wordpress_", "WordPress", "cms", 60),
     ("wp-settings", "WordPress", "cms", 60),
     ("BITRIX_SM_", "Bitrix", "cms", 60),
@@ -61,14 +82,35 @@ _COOKIE_TECH: list[tuple[str, str, str, int]] = [
     ("joomla_", "Joomla", "cms", 60),
     ("fe_typo_user", "Typo3", "cms", 60),
     ("_shopify_s", "Shopify", "cms", 60),
-    ("__cfduid", "Cloudflare", "cdn", 50),
-    ("__cf_bm", "Cloudflare", "cdn", 50),
-    ("_rails_session", "Ruby on Rails", "framework", 60),
-    ("rack.session", "Ruby", "language", 50),
-    ("connect.sid", "Node.js", "language", 50),
-    ("YII_CSRF_TOKEN", "Yii", "framework", 60),
     ("Drupal.visitor", "Drupal", "cms", 60),
     ("dle_user_id", "DLE (DataLife Engine)", "cms", 60),
+    ("MoodleSession", "Moodle", "cms", 60),
+    # ── E-commerce ────────────────────────────────────────────────────
+    ("mage-cache-", "Magento", "cms", 50),
+    ("session-", "Shopware", "cms", 40),
+    # ── Enterprise CMS ────────────────────────────────────────────────
+    ("SC_ANALYTICS_GLOBAL_COOKIE", "Sitecore", "cms", 60),
+    ("CMSPreferredCulture", "Kentico", "cms", 60),
+    ("UMB_UCONTEXT", "Umbraco", "cms", 60),
+    # ── Forums / Community ────────────────────────────────────────────
+    ("_t", "Discourse", "cms", 40),
+    ("_forum_session", "Discourse", "cms", 60),
+    # ── Headless CMS ──────────────────────────────────────────────────
+    ("ghost-admin-api-session", "Ghost", "cms", 70),
+    ("strapi-jwt-token", "Strapi", "cms", 70),
+    # ── Auth providers ────────────────────────────────────────────────
+    ("auth0", "Auth0", "security", 60),
+    ("auth0_compat", "Auth0", "security", 60),
+    ("__session", "Firebase", "hosting", 50),
+    ("SPRING_SECURITY_REMEMBER_ME", "Spring", "framework", 60),
+    # ── CDN / WAF / Proxy ─────────────────────────────────────────────
+    ("__cfduid", "Cloudflare", "cdn", 50),
+    ("__cf_bm", "Cloudflare", "cdn", 50),
+    ("cf_clearance", "Cloudflare", "cdn", 50),
+    ("sucuri_cloudproxy", "Sucuri", "waf", 60),
+    ("AKA_A2", "Akamai", "cdn", 60),
+    ("visid_incap_", "Imperva", "waf", 60),
+    ("incap_ses_", "Imperva", "waf", 60),
 ]
 
 # ── Legacy fallback signatures (patterns not in fingerprints DB) ─────

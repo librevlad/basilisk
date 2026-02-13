@@ -290,6 +290,7 @@ class CspAnalyzerPlugin(BasePlugin):
                     "No CSP header or meta tag found. The site "
                     "has no policy to prevent XSS attacks."
                 ),
+                evidence="Neither Content-Security-Policy header nor meta tag present",
                 remediation=(
                     "Implement a Content-Security-Policy header "
                     "with at minimum: default-src 'self'; "
@@ -321,6 +322,7 @@ class CspAnalyzerPlugin(BasePlugin):
                     "Content-Security-Policy-Report-Only does not "
                     "block violations. It only reports them."
                 ),
+                evidence=csp_report_only[:200],
                 remediation=(
                     "Promote the policy to an enforced "
                     "Content-Security-Policy header"
@@ -397,6 +399,7 @@ class CspAnalyzerPlugin(BasePlugin):
                 findings.append(Finding.medium(
                     f"CSP missing {directive} directive",
                     description=desc,
+                    evidence=f"Current CSP directives: {', '.join(directives.keys())}",
                     remediation=(
                         f"Add {directive} directive to CSP"
                     ),
@@ -411,6 +414,7 @@ class CspAnalyzerPlugin(BasePlugin):
                     "Without default-src, unlisted resource types "
                     "have no restriction"
                 ),
+                evidence=f"Directives present: {', '.join(directives.keys())}",
                 remediation="Add default-src 'self' as baseline",
                 tags=["analysis", "csp"],
             ))

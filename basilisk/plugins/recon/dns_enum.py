@@ -17,37 +17,118 @@ from basilisk.models.target import Target
 
 # SRV records to enumerate (service, protocol, description)
 SRV_SERVICES = [
+    # VoIP / Messaging
     ("_sip", "_tcp", "SIP VoIP"),
     ("_sip", "_udp", "SIP VoIP UDP"),
     ("_sips", "_tcp", "SIP TLS"),
+    ("_h323cs", "_tcp", "H.323 Call Signaling"),
+    ("_h323ls", "_tcp", "H.323 Location"),
+    ("_h323rs", "_tcp", "H.323 Registration"),
     ("_xmpp-client", "_tcp", "XMPP Client"),
     ("_xmpp-server", "_tcp", "XMPP Server"),
+    # Directory / Auth
     ("_ldap", "_tcp", "LDAP"),
     ("_ldaps", "_tcp", "LDAPS"),
+    ("_gc", "_tcp", "Global Catalog"),
     ("_kerberos", "_tcp", "Kerberos"),
     ("_kerberos", "_udp", "Kerberos UDP"),
     ("_kpasswd", "_tcp", "Kerberos Password"),
+    ("_kpasswd", "_udp", "Kerberos Password UDP"),
+    # Web
     ("_http", "_tcp", "HTTP SRV"),
     ("_https", "_tcp", "HTTPS SRV"),
+    ("_wpad", "_tcp", "Web Proxy Auto-Discovery"),
+    # Mail
     ("_imap", "_tcp", "IMAP"),
     ("_imaps", "_tcp", "IMAPS"),
+    ("_pop3", "_tcp", "POP3"),
+    ("_pop3s", "_tcp", "POP3S"),
     ("_submission", "_tcp", "SMTP Submission"),
+    ("_submissions", "_tcp", "SMTP Submission TLS"),
     ("_autodiscover", "_tcp", "Autodiscover"),
+    # CalDAV / CardDAV
     ("_caldav", "_tcp", "CalDAV"),
+    ("_caldavs", "_tcp", "CalDAV TLS"),
     ("_carddav", "_tcp", "CardDAV"),
+    ("_carddavs", "_tcp", "CardDAV TLS"),
+    # STUN / TURN (WebRTC / NAT traversal)
+    ("_stun", "_udp", "STUN UDP"),
+    ("_stuns", "_tcp", "STUN TLS"),
+    ("_turn", "_udp", "TURN UDP"),
+    ("_turns", "_tcp", "TURN TLS"),
+    # DNS
+    ("_dns", "_udp", "DNS UDP"),
+    ("_dns", "_tcp", "DNS TCP"),
+    # Time / NTP
+    ("_ntp", "_udp", "NTP"),
+    # Active Directory
+    ("_msdcs", "_tcp", "MS Domain Controller"),
+    ("_vlmcs", "_tcp", "KMS Activation"),
+    # Collaboration / Chat
     ("_matrix", "_tcp", "Matrix"),
+    ("_collab", "_tcp", "Collaboration"),
+    # Database
+    ("_mongodb", "_tcp", "MongoDB SRV"),
+    ("_mysql", "_tcp", "MySQL SRV"),
+    # Gaming
     ("_minecraft", "_tcp", "Minecraft"),
     ("_ts3", "_udp", "TeamSpeak 3"),
     ("_mumble", "_tcp", "Mumble"),
-    ("_vlmcs", "_tcp", "KMS Activation"),
-    ("_gc", "_tcp", "Global Catalog"),
+    # SSH / FTP
+    ("_ssh", "_tcp", "SSH SRV"),
+    ("_sftp", "_tcp", "SFTP SRV"),
 ]
 
-# Weak SPF mechanisms
+# Weak SPF mechanisms and misconfigurations
 SPF_WEAK_PATTERNS = {
-    "+all": ("critical", "SPF allows all senders (+all)"),
-    "~all": ("low", "SPF soft fail (~all) — emails may still be delivered"),
-    "?all": ("medium", "SPF neutral (?all) — provides no protection"),
+    # Permissive "all" qualifiers
+    "+all": (
+        "critical",
+        "SPF allows all senders (+all)",
+    ),
+    "~all": (
+        "low",
+        "SPF soft fail (~all) — emails may still be delivered",
+    ),
+    "?all": (
+        "medium",
+        "SPF neutral (?all) — provides no protection",
+    ),
+    # Overly broad IP ranges
+    "ip4:0.0.0.0/0": (
+        "critical",
+        "SPF authorizes entire IPv4 space (ip4:0.0.0.0/0)",
+    ),
+    "ip6:::0/0": (
+        "critical",
+        "SPF authorizes entire IPv6 space (ip6:::0/0)",
+    ),
+    # Dangerous mechanisms
+    "+include:": (
+        "medium",
+        "SPF uses +include (pass qualifier) — overly permissive",
+    ),
+    "redirect=": (
+        "low",
+        "SPF uses redirect — verify target SPF is correct",
+    ),
+    "exists:": (
+        "low",
+        "SPF uses 'exists' macro — complex, verify correctness",
+    ),
+    "ptr:": (
+        "medium",
+        "SPF uses deprecated 'ptr' mechanism (RFC 7208 s5.5)",
+    ),
+    # Overly broad mechanism qualifiers
+    "a/0": (
+        "critical",
+        "SPF 'a' mechanism with /0 CIDR — authorizes all IPs",
+    ),
+    "mx/0": (
+        "critical",
+        "SPF 'mx' mechanism with /0 CIDR — authorizes all IPs",
+    ),
 }
 
 

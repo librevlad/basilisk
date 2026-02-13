@@ -12,8 +12,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 # Тесты
-.venv/Scripts/python.exe -m pytest tests/ -v              # все 704 теста
-.venv/Scripts/python.exe -m pytest tests/test_plugins/ -v  # только плагины (184)
+.venv/Scripts/python.exe -m pytest tests/ -v              # все 883 теста
+.venv/Scripts/python.exe -m pytest tests/test_plugins/ -v  # только плагины (324)
 .venv/Scripts/python.exe -m pytest tests/ -x --tb=short    # до первого падения
 
 # Линтинг
@@ -75,7 +75,7 @@ basilisk/
 │   └── exploit_chain.py           # ExploitChainEngine
 │
 ├── utils/                         # Утилиты
-│   ├── http.py                    # AsyncHttpClient (aiohttp), resolve_base_urls
+│   ├── http.py                    # AsyncHttpClient (aiohttp), resolve_base_url(s)
 │   ├── dns.py                     # DnsClient (dnspython)
 │   ├── net.py                     # TCP connect, banner grab, port check
 │   ├── rate_limiter.py            # Token bucket (aiolimiter), global + per-host
@@ -120,10 +120,10 @@ basilisk/
                                    # jwt_attack, cors_exploit, cache_poison, ...
 
 wordlists/bundled/                 # 13 словарей
-tests/                             # 704 теста, 49 файлов
+tests/                             # 883 теста, 54 файла
 ├── test_models/                   # 43 теста
 ├── test_core/                     # 147 тестов
-├── test_plugins/                  # 184 теста
+├── test_plugins/                  # 324 теста (110/110 плагинов покрыты)
 ├── test_utils/                    # 212 тестов
 ├── test_storage/                  # 18 тестов
 ├── test_reporting/                # 26 тестов
@@ -244,7 +244,7 @@ ctx = PluginContext(config=settings, http=http, dns=dns, net=net, rate=rate, ...
 
 ### Тестирование
 - pytest: asyncio_mode = "auto", testpaths = ["tests"]
-- Тесты плагинов: проверяют meta-данные + discovery для всех 112 плагинов
+- Тесты плагинов: meta + discovery + функциональные mock-тесты для всех 110 плагинов
 - Mock сетевые вызовы через `unittest.mock.AsyncMock`
 - Всегда запускать `ruff check` перед коммитом
 
@@ -270,10 +270,41 @@ ctx = PluginContext(config=settings, http=http, dns=dns, net=net, rate=rate, ...
 - [x] Глубокий аудит всей кодовой базы (3 параллельных ревью)
 - [x] 5 критических багов исправлено (race condition, progress math, etc.)
 - [x] DI-контейнер улучшен (типизация, requires_http, ProviderPool setup/teardown)
-- [x] DRY: централизованы SECRET_PATTERNS (utils/secrets.py), extract_plugin_stats (reporting/utils.py)
+- [x] DRY: централизованы SECRET_PATTERNS (utils/secrets.py), extract_plugin_stats (reporting/utils.py), resolve_base_url консолидация
 - [x] Фасад: decomposed Audit.run() God Method → 7 приватных методов
 - [x] Subdomain-плагины: аудит, исправление 4 сломанных, 2 новых провайдера (certspotter, anubis)
-- [x] 704 теста (было 664), ruff чисто
+- [x] Recon batch (18 плагинов): live-тест, 8 файлов исправлено, 24 теста добавлено
+- [x] Analysis/Scanning batch (10 плагинов): live-тест, сравнение с проф-инструментами, 7 багов исправлено, 39 тестов
+- [x] Тесты: 883 (было 664), 110/110 плагинов покрыты, ruff чисто
+- [x] Базы сигнатур расширены до уровня профессиональных инструментов (3 раунда)
+
+### Базы сигнатур (текущее состояние)
+
+| База | Файл | Кол-во | Аналог |
+|------|------|--------|--------|
+| TECH_FINGERPRINTS | data/fingerprints.py | 594 | Wappalyzer top-500 |
+| _VULNERABLE_VERSIONS (CVE) | analysis/version_detect.py | 200+ | retire.js |
+| WAF_SIGNATURES | analysis/waf_detect.py | 125 | wafw00f 100+ |
+| CMS_SIGNATURES | analysis/cms_detect.py | 83 | WPScan/CMSmap |
+| TAKEOVER_FINGERPRINTS | data/fingerprints.py | 80 | can-i-take-over-xyz |
+| CSP_BYPASS_DOMAINS | data/fingerprints.py | 52 | Google CSP Evaluator (3.5x) |
+| KNOWN_FAVICONS + MMH3 | analysis/favicon_hash.py | 300+ | Shodan |
+| CLOUD_SIGNATURES | analysis/cloud_detect.py | 33 | — |
+| CDN_SIGNATURES | scanning/cdn_detect.py | 40 | — |
+| WEAK_CIPHERS | scanning/tls_cipher_scan.py | 55 | testssl.sh |
+| XSS payloads | pentesting/xss_*.py | 35+ basic, 49 DOM sinks | XSStrike/Dalfox |
+| SQLi payloads | utils/payloads.py | 489 | sqlmap (~30%) |
+| SSTI probes | pentesting/ssti_*.py | 32 math + 48 fingerprints | tplmap |
+| SSRF bypasses | pentesting/ssrf_check.py | 40 IP + 31 cloud meta | — |
+| XXE payloads | pentesting/xxe_check.py | 22 file + 12 SSRF + 5 blind | — |
+| JWT attacks | pentesting/jwt_attack.py | 18 none + 60 secrets + 17 kid | — |
+| HTTP smuggling | pentesting/http_smuggling.py | 45 TE obfuscations | — |
+| NoSQLi payloads | pentesting/nosqli_check.py | 92 total | — |
+| Command injection | pentesting/command_injection.py | 90 | commix |
+| Path traversal | pentesting/path_traversal.py | 62 | — |
+| Default credentials | pentesting/default_creds.py | 75 | — |
+| WP plugins/themes | pentesting/wp_deep_scan.py | 86 + 52 | WPScan |
+| Actuator endpoints | pentesting/actuator_exploit.py | 31 + 22 OpenAPI + 15 GraphQL | — |
 
 ### Что нужно сделать (план в AUDIT_NOTES.md)
 
@@ -282,10 +313,11 @@ ctx = PluginContext(config=settings, http=http, dns=dns, net=net, rate=rate, ...
 сравнить с профессиональными инструментами → исправить сломанное → написать тесты.
 
 Порядок батчей:
-1. **Батч 1: Recon** (12 плагинов, без subdomain-*) — shodan, github_dorking, cloud_bucket, web_crawler, dns_*, whois, etc.
-2. **Батч 3: Analysis** (21 плагин) — http_headers, tech_detect, js_secret_scan, waf_detect, etc.
-3. **Батч 2: Scanning** (13 плагинов) — ssl_check (2563 строки God Plugin!), port_scan, cors_scan, etc.
-4. **Батч 4: Pentesting** (55 плагинов, разбить на подбатчи) — sqli, xss, ssrf, ssti, etc.
+1. ~~**Батч 1: Recon** (12 плагинов)~~ — ВЫПОЛНЕНО 2026-02-12
+2. ~~**Батч 2/3: Analysis + Scanning** (10 плагинов)~~ — ВЫПОЛНЕНО 2026-02-13
+3. **Батч 3 остаток: Analysis** (11 плагинов) — waf_bypass, js_api_extract, js_secret_scan, openapi_parser, api_detect, security_txt, meta_extract, link_extractor, form_analyzer, cloud_detect, prometheus_scrape
+4. **Батч 2 остаток: Scanning** (7 плагинов) — ssl_check (God Plugin!), tls_cipher_scan, redirect_chain, graphql_detect, websocket_detect, dnssec_check, ipv6_scan
+5. **Батч 4: Pentesting** (55 плагинов, разбить на подбатчи) — sqli, xss, ssrf, ssti, etc.
 
 #### Архитектурные задачи (отложены)
 - Разделение ssl_check.py (2563 строки → 4-5 плагинов)
@@ -299,4 +331,3 @@ ctx = PluginContext(config=settings, http=http, dns=dns, net=net, rate=rate, ...
 - Тихие провалы (`except Exception: pass`) — нужно добавить информативные сообщения
 - Дублирование findings между плагинами (ssl_check ↔ tls_cipher_scan, lfi_check ↔ path_traversal)
 - Устаревшие fingerprints/сигнатуры
-- ~85 плагинов без функциональных тестов

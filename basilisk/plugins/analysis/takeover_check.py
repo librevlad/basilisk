@@ -24,113 +24,217 @@ except ImportError:
 # Fallback fingerprints if centralized DB not available
 TAKEOVER_FINGERPRINTS: list[tuple[str, str, bool]] = [
     # (service, regex_pattern, requires_nxdomain)
+    # ── Hosting & PaaS ──────────────────────────────────────────────────
     ("GitHub Pages", r"There isn't a GitHub Pages site here", False),
     ("Heroku", r"No such app|herokucdn\.com/error-pages", False),
     ("Amazon S3", r"NoSuchBucket|The specified bucket does not exist", False),
     ("Amazon CloudFront", r"The request could not be satisfied.*CloudFront", False),
     ("Amazon Elastic Beanstalk", r"Invalid host header|NXDOMAIN", True),
+    ("AWS Amplify", r"If you see this page, the amplify app.*hasn't been deployed", False),
+    ("AWS API Gateway", r"Forbidden|Missing Authentication Token", True),
     ("Shopify", r"Sorry, this shop is currently unavailable", False),
+    ("Shopify Partners", r"shopify.*unavailable|only available to stores", False),
     ("Tumblr", r"There's nothing here|Whatever you were looking for doesn't", False),
     ("WordPress.com", r"Do you want to register", False),
+    ("Wordpress VIP", r"Do you want to register.*wordpress", False),
     ("Zendesk", r"Help Center Closed|Oops, this help center", False),
     ("Fastly", r"Fastly error: unknown domain", False),
     ("Pantheon", r"404 error unknown site|The gods have abandoned", False),
-    ("Surge.sh", r"project not found", False),
+    ("Surge.sh", r"project not found|surge\.sh", False),
     ("Bitbucket", r"Repository not found", False),
+    ("Bitbucket Cloud", r"The Git repository.*could not be found", False),
     ("Ghost", r"The thing you were looking for is no longer here", False),
-    ("Readme.io", r"Project doesnt exist|Project not found", False),
-    ("Cargo Collective", r"<title>404 &mdash; Cargo", False),
+    ("Readme.io", r"Project doesnt exist|Project not found.*readme", False),
+    ("Cargo Collective", r"404.*Cargo.*not found|<title>404 &mdash; Cargo", False),
     ("Netlify", r"Not Found - Request ID:", False),
     ("Fly.io", r"404 Not Found.*Fly\.io", False),
     ("Vercel", r"The deployment could not be found|DEPLOYMENT_NOT_FOUND", False),
     ("Webflow", r"The page you are looking for doesn't exist.*webflow", False),
     ("Discourse", r"you've found a page that doesn't exist", False),
     ("Freshdesk", r"There is no helpdesk here|May not be configured", False),
+    ("Render", r"not found.*onrender", True),
+    ("Kinsta", r"No site with that domain", False),
+    ("Thinkific", r"You may have mistyped the address", False),
+    ("WP Engine", r"This site can't be reached|wpengine\.com.*not configured", False),
+    # ── Azure ────────────────────────────────────────────────────────────
     ("Azure Traffic Manager", r"Web App - Pair Not Found", True),
     ("Azure Websites", r"404 Web Site not found|\.azurewebsites\.net", True),
     ("Azure CloudApp", r"The resource you are looking for has been removed", True),
     ("Azure Blob", r"The specified container does not exist|BlobNotFound", False),
     ("Azure Front Door", r"Our services aren't available right now", True),
+    ("Azure DevOps", r"Azure DevOps Services.*could not be found", False),
+    # ── Firebase / Google ────────────────────────────────────────────────
+    ("Firebase", r"site not found|Firebase.*not found", False),
+    # ── Landing pages / Marketing ────────────────────────────────────────
     ("Unbounce", r"The requested URL was not found on this server", False),
     ("Statuspage", r"You are being redirected|statuspage\.io|page not found", False),
-    ("Strikingly", r"page not found.*strikingly", False),
+    ("Strikingly", r"page not found.*strikingly|strikingly\.com.*not found", False),
     ("UserVoice", r"This UserVoice subdomain is currently available", False),
     ("LaunchRock", r"It looks like you may have taken a wrong turn", False),
-    ("Kinsta", r"No site with that domain", False),
-    ("Agile CRM", r"Sorry, this page is no longer available", False),
-    ("Canny", r"Company Not Found", False),
-    ("ReadTheDocs", r"unknown to Read the Docs", False),
-    ("Render", r"not found.*onrender", True),
-    ("Gemfury", r"404: This page could not be found", False),
-    ("Thinkific", r"You may have mistyped the address", False),
+    ("Landingi", r"It looks like you're lost|landingi\.com.*not found", False),
+    ("Instapage", r"Expired.*instapage|You've Discovered a Missing Link", False),
     ("Tilda", r"Please renew your subscription", False),
-    ("HatenaBlog", r"404 Blog is not found", False),
+    # ── Support / Helpdesk ───────────────────────────────────────────────
     ("Helpjuice", r"We could not find what you're looking for", False),
     ("HelpScout", r"No settings were found for this company", False),
     ("Intercom", r"This page is reserved for a company", False),
+    ("Desk.com", r"Please try again or try Desk\.com free", False),
+    ("Kayako", r"kayako.*not found|kayako\.com.*does not exist", False),
+    ("Tawk.to", r"The page you were looking for.*tawk", False),
+    # ── CRM / Project Management ─────────────────────────────────────────
+    ("Agile CRM", r"Sorry, this page is no longer available", False),
+    ("Canny", r"Company Not Found", False),
+    ("HubSpot", r"Domain not found.*hubspot|is no longer available", False),
+    ("Teamwork", r"Oops.*This page is no longer active", False),
+    # ── Docs / Wiki ──────────────────────────────────────────────────────
+    ("ReadTheDocs", r"unknown to Read the Docs", False),
+    ("Gitbook", r"If the owner of|gitbook\.io.*not found", False),
+    # ── Forms / Surveys ──────────────────────────────────────────────────
+    ("Wufoo", r"Hmmm.*looks like that form doesn't live here", False),
+    # ── Packages / Dev ───────────────────────────────────────────────────
+    ("Gemfury", r"404: This page could not be found", False),
+    ("JetBrains YouTrack", r"is not a registered InCloud YouTrack", False),
     ("Ngrok", r"Tunnel.*not found|ERR_NGROK_6024", False),
+    # ── Blogging / CMS ───────────────────────────────────────────────────
+    ("HatenaBlog", r"404 Blog is not found", False),
+    # ── Job boards ───────────────────────────────────────────────────────
     ("SmartJobBoard", r"This job board website is either expired", False),
+    # ── Monitoring ───────────────────────────────────────────────────────
     ("UptimeRobot", r"page not found.*uptimerobot", False),
+    ("Pingdom", r"Sorry, couldn't find the status page", False),
+    # ── Misc SaaS ────────────────────────────────────────────────────────
     ("Aha!", r"There is no portal here", False),
     ("Airee.ru", r"Ошибка 402. Pair not found", False),
     ("Announcekit", r"Error 404.*announcekit", False),
     ("Anima", r"If you are the site owner.*anima", False),
     ("Campaign Monitor", r"Trying to access your account", False),
-    ("HubSpot", r"Domain not found.*hubspot|is no longer available", False),
-    ("Instapage", r"Expired.*instapage|You've Discovered a Missing Link", False),
-    ("JetBrains YouTrack", r"is not a registered InCloud YouTrack", False),
-    ("Landingi", r"It looks like you're lost|landingi", False),
     ("Mashery", r"Unrecognized domain.*mashery", False),
-    ("Pingdom", r"Sorry, couldn't find the status page", False),
     ("Proposify", r"If you need immediate assistance.*proposify", False),
     ("Simplebooklet", r"We can't find this.*simplebooklet", False),
     ("Smugmug", r".*SmugMug.*", False),
-    ("Teamwork", r"Oops.*This page is no longer active", False),
-    ("Wufoo", r"Hmmm.*looks like that form doesn't live here", False),
+    ("Getresponse", r"With GetResponse|getresponse\.com.*not found", False),
+    ("Short.io", r"Link does not exist|short\.io.*not found", False),
+    ("Uberflip", r"Non-hub member|uberflip\.com.*not found", False),
+    ("Worksites", r"Hello! Sorry|worksites\.net.*not found", False),
+    ("Wunderkind", r"BounceX|bouncex\.net.*not found", False),
+    # ── Additional services from can-i-take-over-xyz ─────────────────────
+    ("Acquia", r"Web Site Not Found.*acquia|The site you are looking for", False),
+    ("BigCartel", r"<h1>Oops! We couldn&#8217;t find that page", False),
+    ("Buycraft", r"Buycraft.*not found|page not found", False),
+    ("Feedpress", r"The feed has not been found", False),
+    ("Frontify", r"Frontify.*404|page not found.*frontify", False),
+    ("GetResponse Landing", r"getresponse.*landing.*not found", False),
+    ("Hatenablog", r"404 Blog is not found", False),
+    ("Leadpages", r"Leadpages.*not found|page not found.*leadpages", False),
+    ("Maxcdn", r"MaxCDN.*not found|page not found.*netdna", False),
+    ("Moosend", r"moosend.*not found|page not found.*moosend", False),
+    ("Readme.com", r"Project not found.*readme\.com", False),
+    ("Sendgrid", r"sendgrid.*not found", False),
+    ("Squarespace", r"No Such Account|squarespace.*not found", False),
+    ("Strikingly Alt", r"But if you're looking to build your own", False),
+    ("Tictail", r"to target URL.*tictail|Building a brand", False),
+    ("Wishpond", r"https://www\.wishpond\.com/404", False),
+    ("Worpress VIP Alt", r"Do you want to register.*wordpress\.com", False),
 ]
 
 # CNAME patterns that indicate third-party services
 SERVICE_CNAME_PATTERNS: dict[str, list[str]] = {
+    # ── Hosting & PaaS ──────────────────────────────────────────────────
     "GitHub Pages": [".github.io"],
     "Heroku": [".herokuapp.com", ".herokussl.com"],
     "Amazon S3": [".s3.amazonaws.com", ".s3-website"],
     "Amazon CloudFront": [".cloudfront.net"],
+    "Amazon Elastic Beanstalk": [".elasticbeanstalk.com"],
+    "AWS Amplify": [".amplifyapp.com"],
+    "AWS API Gateway": [".execute-api.amazonaws.com"],
     "Shopify": [".myshopify.com"],
+    "Shopify Partners": [".myshopify.com"],
     "Tumblr": [".tumblr.com"],
     "WordPress.com": [".wordpress.com"],
-    "Zendesk": [".zendesk.com"],
+    "Wordpress VIP": [".wordpress.com"],
+    "Zendesk": [".zendesk.com", ".zopim.com"],
     "Fastly": [".fastly.net", ".fastlylb.net"],
     "Pantheon": [".pantheonsite.io"],
     "Surge.sh": [".surge.sh"],
     "Netlify": [".netlify.app", ".netlify.com"],
     "Fly.io": [".fly.dev"],
     "Vercel": [".vercel.app", ".now.sh"],
+    "Render": [".onrender.com"],
+    "Kinsta": [".kinsta.cloud"],
+    "WP Engine": [".wpengine.com"],
+    "Thinkific": [".thinkific.com"],
+    # ── Azure ────────────────────────────────────────────────────────────
     "Azure Websites": [".azurewebsites.net"],
     "Azure Traffic Manager": [".trafficmanager.net"],
     "Azure CloudApp": [".cloudapp.net", ".cloudapp.azure.com"],
     "Azure Blob": [".blob.core.windows.net"],
     "Azure Front Door": [".azurefd.net"],
-    "Render": [".onrender.com"],
+    "Azure DevOps": [".visualstudio.com"],
+    # ── Firebase / Google ────────────────────────────────────────────────
+    "Firebase": [".firebaseapp.com", ".web.app"],
+    # ── Bitbucket ────────────────────────────────────────────────────────
     "Bitbucket": [".bitbucket.io"],
+    "Bitbucket Cloud": [".bitbucket.org"],
+    # ── CMS / Blog ──────────────────────────────────────────────────────
     "Ghost": [".ghost.io"],
-    "HubSpot": [".hubspot.net", ".hs-sites.com"],
-    "Unbounce": [".unbouncepages.com"],
-    "Statuspage": [".statuspage.io"],
-    "Strikingly": [".strikingly.com"],
     "Tilda": [".tilda.ws"],
     "Webflow": [".webflow.io"],
-    "Cargo Collective": [".cargocollective.com"],
-    "Readme.io": [".readme.io"],
-    "Instapage": [".pagedemo.co"],
-    "Campaign Monitor": [".createsend.com"],
+    "HatenaBlog": [".hatenablog.com"],
+    # ── Docs / Wiki ──────────────────────────────────────────────────────
+    "Gitbook": [".gitbook.io"],
+    "ReadTheDocs": [".readthedocs.io"],
+    # ── Support / Helpdesk ───────────────────────────────────────────────
     "Freshdesk": [".freshdesk.com"],
     "Helpjuice": [".helpjuice.com"],
     "HelpScout": [".helpscoutdocs.com"],
     "Intercom": [".intercom.help"],
-    "LaunchRock": [".launchrock.com"],
+    "Desk.com": [".desk.com"],
+    "Kayako": [".kayako.com"],
+    "Tawk.to": [".tawk.to"],
+    # ── CRM / Project ────────────────────────────────────────────────────
+    "HubSpot": [".hubspot.net", ".hs-sites.com"],
     "Canny": [".canny.io"],
+    # ── Landing / Marketing ──────────────────────────────────────────────
+    "Unbounce": [".unbouncepages.com"],
+    "Statuspage": [".statuspage.io"],
+    "Strikingly": [".strikingly.com", ".s.strikinglydns.com"],
+    "LaunchRock": [".launchrock.com"],
+    "Landingi": [".landingi.com"],
+    "Instapage": [".pagedemo.co"],
+    "Campaign Monitor": [".createsend.com"],
+    # ── Forms / Surveys ──────────────────────────────────────────────────
+    "Wufoo": [".wufoo.com"],
+    # ── Monitoring ───────────────────────────────────────────────────────
     "UptimeRobot": [".uptimerobot.com"],
-    "Kinsta": [".kinsta.cloud"],
+    "Pingdom": [".pingdom.com"],
+    # ── Packages / Dev ───────────────────────────────────────────────────
+    "Cargo Collective": [".cargocollective.com"],
+    "Readme.io": [".readme.io"],
+    "Gemfury": [".gemfury.com"],
+    "SmartJobBoard": [".smartjobboard.com"],
+    "Ngrok": [".ngrok.io"],
+    # ── Misc SaaS ────────────────────────────────────────────────────────
+    "Getresponse": [".gr8.com"],
+    "Short.io": [".short.io"],
+    "Uberflip": [".uberflip.com"],
+    "Worksites": [".worksites.net"],
+    "Wunderkind": [".bouncex.net"],
+    "Smugmug": [".smugmug.com"],
+    "UserVoice": [".uservoice.com"],
+    "Aha!": [".aha.io"],
+    "Mashery": [".mashery.com"],
+    "Proposify": [".proposify.com"],
+    # ── Additional services ──────────────────────────────────────────────
+    "Acquia": [".acquia-sites.com"],
+    "BigCartel": [".bigcartel.com"],
+    "Feedpress": [".feed.press"],
+    "Frontify": [".frontify.com"],
+    "Leadpages": [".leadpages.net"],
+    "Squarespace": [".squarespace.com"],
+    "Wishpond": [".wishpond.com"],
+    "Agile CRM": [".agilecrm.com"],
+    "JetBrains YouTrack": [".myjetbrains.com"],
+    "Discourse": [".discourse.team"],
 }
 
 
@@ -140,7 +244,7 @@ class TakeoverCheckPlugin(BasePlugin):
         display_name="Subdomain Takeover Check",
         category=PluginCategory.ANALYSIS,
         description=(
-            "Detects subdomain takeover via 60+ service fingerprints, "
+            "Detects subdomain takeover via 90+ service fingerprints, "
             "CNAME analysis, NXDOMAIN detection, and DNS delegation checks"
         ),
         produces=["takeover_findings"],
@@ -284,7 +388,8 @@ class TakeoverCheckPlugin(BasePlugin):
                     try:
                         result = await ctx.dns.resolve(current, "CNAME")
                         if result:
-                            cname = str(result[0]).rstrip(".")
+                            rec = result[0]
+                            cname = (rec.value if hasattr(rec, "value") else str(rec)).rstrip(".")
                             chain.append(cname)
                             current = cname
                         else:
@@ -336,7 +441,7 @@ class TakeoverCheckPlugin(BasePlugin):
                 return
 
             for ns in ns_records:
-                ns_str = str(ns).rstrip(".")
+                ns_str = (ns.value if hasattr(ns, "value") else str(ns)).rstrip(".")
                 try:
                     result = await ctx.dns.resolve(ns_str, "A")
                     if not result:
@@ -372,7 +477,8 @@ class TakeoverCheckPlugin(BasePlugin):
                 return
 
             for mx in mx_records:
-                mx_host = str(mx).split()[-1].rstrip(".") if " " in str(mx) else str(mx).rstrip(".")
+                mx_val = mx.value if hasattr(mx, "value") else str(mx)
+                mx_host = mx_val.split()[-1].rstrip(".") if " " in mx_val else mx_val.rstrip(".")
                 try:
                     result = await ctx.dns.resolve(mx_host, "A")
                     if not result:
