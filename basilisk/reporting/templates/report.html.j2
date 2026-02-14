@@ -522,6 +522,13 @@
     padding: 2px 7px; border-radius: 3px; font-size: 0.6rem; font-weight: 600;
     background: rgba(0,229,255,0.08); color: var(--neon-cyan); flex-shrink: 0;
   }
+  .conf-badge {
+    padding: 1px 5px; border-radius: 3px; font-size: 0.55rem; font-weight: 700;
+    background: rgba(0,255,106,0.08); color: var(--neon-green); flex-shrink: 0;
+  }
+  .conf-badge.low-conf {
+    background: rgba(255,184,0,0.1); color: var(--medium);
+  }
   .finding-body { padding: 0 1rem 0.75rem 2rem; font-size: 0.75rem; }
   .finding-body .desc { color: var(--fg-dim); margin-bottom: 0.4rem; line-height: 1.5; }
   .evidence-label {
@@ -600,6 +607,90 @@
   }
   .perf-bar-fill { height: 100%; background: var(--neon-green); border-radius: 2px; }
 
+  /* --- Plugin Coverage Matrix --- */
+  .matrix-wrap {
+    overflow-x: auto; margin-bottom: 1.5rem;
+  }
+  .matrix-table { border-collapse: collapse; font-size: 0.62rem; width: auto; min-width: 100%; }
+  .matrix-table th, .matrix-table td {
+    padding: 3px 5px; border: 1px solid var(--border); text-align: center;
+  }
+  .matrix-table th {
+    background: var(--bg3); color: var(--fg-dim); font-weight: 600;
+    position: sticky; top: 0; z-index: 2;
+  }
+  .matrix-table th.col-hdr {
+    writing-mode: vertical-lr; text-orientation: mixed;
+    max-width: 28px; min-height: 80px; font-size: 0.58rem;
+  }
+  .matrix-table td.host-cell {
+    text-align: left; color: var(--neon-green); font-weight: 600;
+    position: sticky; left: 0; background: var(--bg2); z-index: 1;
+    white-space: nowrap; max-width: 180px; overflow: hidden; text-overflow: ellipsis;
+  }
+  .matrix-dot {
+    display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+    cursor: default;
+  }
+  .matrix-dot.success { background: var(--neon-green); box-shadow: 0 0 4px rgba(0,255,106,0.4); }
+  .matrix-dot.success-empty { background: var(--fg-muted); }
+  .matrix-dot.timeout { background: var(--medium); box-shadow: 0 0 4px rgba(255,184,0,0.3); }
+  .matrix-dot.error { background: var(--critical); box-shadow: 0 0 4px rgba(255,23,68,0.3); }
+  .matrix-dot.skipped { background: transparent; border: 1px solid var(--border); }
+  .matrix-filter { margin-bottom: 0.5rem; }
+  .matrix-filter label { font-size: 0.68rem; color: var(--fg-dim); cursor: pointer; }
+  .matrix-filter input { margin-right: 4px; }
+
+  /* --- Plugin Breakdown (per-host details) --- */
+  .plugin-breakdown { margin-top: 0.5rem; }
+  .plugin-breakdown summary {
+    font-size: 0.65rem; color: var(--fg-dim); cursor: pointer;
+    font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .plugin-breakdown table { width: 100%; border-collapse: collapse; font-size: 0.68rem; margin-top: 0.3rem; }
+  .plugin-breakdown th {
+    text-align: left; color: var(--fg-dim); font-weight: 600; padding: 2px 4px;
+    border-bottom: 1px solid var(--border); font-size: 0.6rem;
+  }
+  .plugin-breakdown td { padding: 2px 4px; border-bottom: 1px solid rgba(26,34,54,0.3); }
+  .plugin-breakdown .status-ok { color: var(--neon-green); }
+  .plugin-breakdown .status-err { color: var(--critical); }
+  .plugin-breakdown .status-timeout { color: var(--medium); }
+
+  /* --- Port Findings Column --- */
+  .port-findings { display: flex; gap: 3px; align-items: center; }
+  .severity-dot {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 16px; height: 16px; border-radius: 8px;
+    font-size: 0.55rem; font-weight: 700; color: var(--bg);
+    padding: 0 3px;
+  }
+  .severity-dot.critical { background: var(--critical); }
+  .severity-dot.high { background: var(--high); }
+  .severity-dot.medium { background: var(--medium); }
+
+  /* --- JS Intelligence --- */
+  .js-intel-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 0.75rem;
+  }
+  .js-intel-card {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 0.85rem 1rem;
+  }
+  .js-intel-card-title {
+    font-size: 0.75rem; font-weight: 700; color: var(--neon-purple);
+    margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.3rem;
+  }
+  .js-intel-paths { list-style: none; font-size: 0.7rem; max-height: 200px; overflow-y: auto; }
+  .js-intel-paths li { padding: 2px 0; display: flex; align-items: center; gap: 0.3rem; }
+  .js-intel-paths .sensitive { color: var(--critical); }
+  .js-intel-paths .standard { color: var(--fg); }
+  .js-coverage-bar {
+    height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: 0.3rem;
+  }
+  .js-coverage-fill { height: 100%; background: var(--neon-purple); border-radius: 3px; }
+
   /* --- Footer --- */
   footer {
     margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border);
@@ -673,10 +764,14 @@
     <div class="sep"></div>
     <a href="#attack-surface">Attack Surface</a>
     {% if site_tree %}<a href="#site-tree">Site Tree<span class="cnt">{{ site_tree|length }}</span></a>{% endif %}
+    {% if plugin_matrix and plugin_matrix.hosts %}<a href="#plugin-matrix">Coverage Matrix</a>{% endif %}
     <a href="#war-board">War Board<span class="cnt">{{ total_aggregated_count }}</span></a>
     <div class="sep"></div>
+    {% if js_intelligence and (js_intelligence.total_paths > 0 or js_intelligence.total_forms > 0) %}<a href="#js-intel">JS Intelligence</a>{% endif %}
     {% if ssl_details or dns_details %}<a href="#intelligence">Intelligence</a>{% endif %}
     {% if plugin_stats %}<a href="#plugin-perf">Plugin Ops</a>{% endif %}
+    {% if remediation_priority %}<a href="#remediation">Remediation</a>{% endif %}
+    {% if quality_metrics %}<a href="#scan-quality">Scan Quality</a>{% endif %}
     <div class="sep"></div>
     {% if severity_counts.get('CRITICAL', 0) > 0 %}
     <a href="#sev-CRITICAL" style="color:var(--critical)">Critical<span class="cnt">{{ severity_counts.get('CRITICAL', 0) }}</span></a>
@@ -902,7 +997,7 @@
 
     <div class="atk-grid">
     {% for host, info in attack_surface.hosts.items() %}
-      {% if info.ports or info.services or info.tech or info.paths or info.admin_panels or info.exposed_files or info.api_endpoints or info.backup_files %}
+      {% if info.ports or info.services or info.tech or info.paths or info.admin_panels or info.exposed_files or info.api_endpoints or info.backup_files or info.forms %}
       <div class="atk-card">
         <div class="atk-card-hdr"><span class="host">{{ host }}</span></div>
 
@@ -927,13 +1022,21 @@
 
         {% if info.ports or info.services %}
         <table class="port-table">
-          <tr><th>Port</th><th>Service</th><th>Banner</th></tr>
+          <tr><th>Port</th><th>Service</th><th>Banner</th>{% if port_findings %}<th>Findings</th>{% endif %}</tr>
           {% set ns_ports = namespace(shown=[]) %}
           {% for s in info.services %}
           <tr>
             <td class="port-num">{{ s.port }}</td>
             <td class="svc-name">{{ s.service }}</td>
             <td class="banner-text" title="{{ s.banner|default('') }}">{{ s.banner|default('')|truncate(40) }}</td>
+            {% if port_findings %}
+            {% set pf = port_findings.get(host, {}).get(s.port, {}) %}
+            <td class="port-findings">
+              {% if pf.get('critical', 0) > 0 %}<span class="severity-dot critical">{{ pf.critical }}</span>{% endif %}
+              {% if pf.get('high', 0) > 0 %}<span class="severity-dot high">{{ pf.high }}</span>{% endif %}
+              {% if pf.get('medium', 0) > 0 %}<span class="severity-dot medium">{{ pf.medium }}</span>{% endif %}
+            </td>
+            {% endif %}
           </tr>
           {% set ns_ports.shown = ns_ports.shown + [s.port] %}
           {% endfor %}
@@ -943,6 +1046,14 @@
             <td class="port-num">{{ p.port }}</td>
             <td class="svc-name">{{ p.service|default('') }}</td>
             <td class="banner-text"></td>
+            {% if port_findings %}
+            {% set pf = port_findings.get(host, {}).get(p.port, {}) %}
+            <td class="port-findings">
+              {% if pf.get('critical', 0) > 0 %}<span class="severity-dot critical">{{ pf.critical }}</span>{% endif %}
+              {% if pf.get('high', 0) > 0 %}<span class="severity-dot high">{{ pf.high }}</span>{% endif %}
+              {% if pf.get('medium', 0) > 0 %}<span class="severity-dot medium">{{ pf.medium }}</span>{% endif %}
+            </td>
+            {% endif %}
           </tr>
           {% endif %}
           {% endfor %}
@@ -982,7 +1093,36 @@
           {% for e in info.api_endpoints[:10] %}
           <li><span class="dot-s s2xx"></span><span class="p-text">{{ e.path }}</span><span class="p-status">{{ e.status }}</span></li>
           {% endfor %}
+          {% if info.api_endpoints|length > 10 %}<li style="color:var(--fg-muted)">...+{{ info.api_endpoints|length - 10 }} more</li>{% endif %}
         </ul>
+        {% endif %}
+
+        {% if info.forms %}
+        <div style="margin-top:0.4rem;font-size:0.65rem;color:var(--warning);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Forms ({{ info.forms|length }})</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:2px;">
+          {% for form in info.forms[:15] %}
+          <div style="background:rgba(255,140,0,0.06);border:1px solid rgba(255,140,0,0.15);border-radius:4px;padding:3px 6px;font-size:0.62rem;">
+            <span style="color:{% if form.method|default('GET') == 'POST' %}var(--high){% else %}var(--neon-cyan){% endif %};font-weight:600;">{{ form.method|default('GET') }}</span>
+            <span style="color:var(--fg-dim);margin:0 2px;">→</span>
+            <span>{{ form.action|default('?')|truncate(40) }}</span>
+            {% if form.has_csrf is defined and not form.has_csrf and form.method|default('GET') == 'POST' %}
+            <span style="color:var(--critical);font-weight:700;margin-left:3px;" title="No CSRF token">⚠ NO CSRF</span>
+            {% endif %}
+            {% if form.has_password %}<span style="color:var(--high);margin-left:3px;" title="Password field">🔑</span>{% endif %}
+            {% if form.inputs %}<span style="color:var(--fg-muted);margin-left:3px;">{{ form.inputs|length }} fields</span>{% endif %}
+          </div>
+          {% endfor %}
+          {% if info.forms|length > 15 %}<div style="color:var(--fg-muted);font-size:0.6rem;padding:3px;">...+{{ info.forms|length - 15 }} more</div>{% endif %}
+        </div>
+        {% endif %}
+
+        {% if info.internal_ips %}
+        <div style="margin-top:0.4rem;font-size:0.65rem;color:var(--critical);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Internal IPs Leaked</div>
+        <div style="font-size:0.65rem;">
+          {% for ip in info.internal_ips[:10] %}
+          <span style="background:rgba(255,43,94,0.08);border:1px solid rgba(255,43,94,0.2);border-radius:3px;padding:1px 5px;margin:1px;">{{ ip }}</span>
+          {% endfor %}
+        </div>
         {% endif %}
 
         {% if info.paths %}
@@ -1005,6 +1145,25 @@
           <span class="chip chip-method {% if m in ['PUT','DELETE','TRACE','CONNECT'] %}risky{% endif %}">{{ m }}</span>
           {% endfor %}
         </div>
+        {% endif %}
+
+        {# Per-host plugin breakdown (Phase 2.3) #}
+        {% if plugin_matrix and plugin_matrix.cells.get(host) %}
+        {% set host_plugins = plugin_matrix.cells[host] %}
+        <details class="plugin-breakdown">
+          <summary>Plugin Results ({{ host_plugins|length }} plugins)</summary>
+          <table>
+            <tr><th>Plugin</th><th>Status</th><th>Findings</th><th>Time</th></tr>
+            {% for pname, pinfo in host_plugins|dictsort %}
+            <tr>
+              <td style="color:var(--neon-cyan)">{{ pname }}</td>
+              <td class="{% if pinfo.status == 'success' %}status-ok{% elif pinfo.status == 'error' %}status-err{% else %}status-timeout{% endif %}">{{ pinfo.status }}</td>
+              <td>{{ pinfo.findings }}{% if pinfo.critical > 0 %} <span style="color:var(--critical)">{{ pinfo.critical }}C</span>{% endif %}{% if pinfo.high > 0 %} <span style="color:var(--high)">{{ pinfo.high }}H</span>{% endif %}</td>
+              <td style="color:var(--fg-dim)">{{ pinfo.duration }}s</td>
+            </tr>
+            {% endfor %}
+          </table>
+        </details>
         {% endif %}
 
         {% if info.dns_records %}
@@ -1097,6 +1256,61 @@
   </div>
   {% endif %}
 
+  <!-- ===== PLUGIN COVERAGE MATRIX ===== -->
+  {% if plugin_matrix and plugin_matrix.hosts|length > 0 and plugin_matrix.plugins|length > 0 %}
+  <div class="section" id="plugin-matrix">
+    <div class="section-hdr">
+      <span class="icon">[=]</span>
+      <h2>Plugin Coverage Matrix</h2>
+      <span class="cnt">({{ plugin_matrix.hosts|length }} hosts &times; {{ plugin_matrix.plugins|length }} plugins)</span>
+    </div>
+    <div class="matrix-filter">
+      <label><input type="checkbox" id="matrixFilterFindings" onchange="filterMatrix()"> Show only hosts with findings</label>
+    </div>
+    <div class="matrix-wrap">
+      <table class="matrix-table" id="pluginMatrix">
+        <thead>
+          <tr>
+            <th style="text-align:left;min-width:140px;">Host</th>
+            {% for plugin in plugin_matrix.plugins %}
+            <th class="col-hdr" title="{{ plugin }}">{{ plugin }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for host in plugin_matrix.hosts %}
+          {% set host_cells = plugin_matrix.cells.get(host, {}) %}
+          {% set host_total_findings = host_cells.values()|map(attribute='findings')|sum %}
+          <tr data-has-findings="{{ 'yes' if host_total_findings > 0 else 'no' }}">
+            <td class="host-cell" title="{{ host }}">{{ host }}</td>
+            {% for plugin in plugin_matrix.plugins %}
+            {% set cell = host_cells.get(plugin) %}
+            {% if cell %}
+            <td title="{{ plugin }}: {{ cell.status }} | {{ cell.findings }} findings | {{ cell.duration }}s">
+              {% if cell.status == 'success' and cell.findings > 0 %}
+              <span class="matrix-dot success"></span>
+              {% elif cell.status == 'success' %}
+              <span class="matrix-dot success-empty"></span>
+              {% elif cell.status == 'timeout' %}
+              <span class="matrix-dot timeout"></span>
+              {% elif cell.status == 'error' %}
+              <span class="matrix-dot error"></span>
+              {% else %}
+              <span class="matrix-dot success-empty"></span>
+              {% endif %}
+            </td>
+            {% else %}
+            <td><span class="matrix-dot skipped"></span></td>
+            {% endif %}
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- ===== FINDINGS WAR BOARD ===== -->
   <div class="section" id="war-board">
     <div class="section-hdr">
@@ -1135,9 +1349,11 @@
     <div class="finding-group" data-group="severity" data-group-key="{{ sev }}" id="sev-{{ sev }}">
       <div class="finding-group-title">{{ sev }} <span class="cnt">({{ sev_findings|length }})</span></div>
       {% for f in sev_findings %}
-      <details class="finding {{ f.severity }}" data-severity="{{ f.severity }}" data-target="{{ f.target }}" data-plugin="{{ f.plugin }}" data-search="{{ f.title|lower }} {{ f.description|lower }} {{ (f.evidence or '')|lower }}">
+      <details class="finding {{ f.severity }}" data-severity="{{ f.severity }}" data-target="{{ f.target }}" data-plugin="{{ f.plugin }}" data-confidence="{{ f.confidence|default(1.0) }}" data-search="{{ f.title|lower }} {{ f.description|lower }} {{ (f.evidence or '')|lower }}">
         <summary>
           <span class="badge {{ f.severity }}">{{ f.severity }}</span>
+          {% set conf = f.confidence|default(1.0) %}
+          {% if conf < 1.0 %}<span class="conf-badge{% if conf < 0.7 %} low-conf{% endif %}" title="Confidence: {{ (conf * 100)|round|int }}%">{{ (conf * 100)|round|int }}%</span>{% endif %}
           <span class="f-title">{{ f.title }}</span>
           {% if f.is_aggregated %}<span class="affects-badge">{{ f.count }} hosts</span>{% endif %}
           {% if not f.is_aggregated %}<span class="f-target">{{ f.target }}</span>{% endif %}
@@ -1266,6 +1482,124 @@
   </div>
   {% endif %}
 
+  <!-- ===== JS INTELLIGENCE ===== -->
+  {% if js_intelligence and (js_intelligence.total_paths > 0 or js_intelligence.total_forms > 0) %}
+  <div class="section" id="js-intel">
+    <div class="section-hdr">
+      <span class="icon">[JS]</span>
+      <h2>JavaScript &amp; HTML Intelligence</h2>
+      <span class="cnt">({{ js_intelligence.total_paths }} paths, {{ js_intelligence.total_forms }} forms, {{ js_intelligence.total_pages }} pages scanned, {{ js_intelligence.total_js_files }} JS files)</span>
+    </div>
+    <div class="js-intel-grid">
+      {# API Map by host #}
+      {% for host, paths in js_intelligence.api_paths_by_host.items() %}
+      {% if paths %}
+      <div class="js-intel-card">
+        <div class="js-intel-card-title">{{ host }}</div>
+        <ul class="js-intel-paths">
+          {% for p in paths[:25] %}
+          <li>
+            <span class="{% if '/admin' in p or '/internal' in p or '/debug' in p or '/auth' in p or '/token' in p %}sensitive{% else %}standard{% endif %}">{{ p }}</span>
+          </li>
+          {% endfor %}
+          {% if paths|length > 25 %}<li style="color:var(--fg-muted)">...+{{ paths|length - 25 }} more</li>{% endif %}
+        </ul>
+      </div>
+      {% endif %}
+      {% endfor %}
+
+      {# Secrets summary #}
+      {% if js_intelligence.total_secrets > 0 %}
+      <div class="js-intel-card">
+        <div class="js-intel-card-title">Secrets Found ({{ js_intelligence.total_secrets }})</div>
+        {% for host, secrets in js_intelligence.secrets_by_host.items() %}
+        {% if secrets %}
+        <div style="font-size:0.7rem;margin-bottom:0.3rem;">
+          <span style="color:var(--neon-green)">{{ host }}</span>:
+          {% for s in secrets[:5] %}
+          <span style="color:var(--critical)">{{ s }}</span>{% if not loop.last %}, {% endif %}
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {# Source maps #}
+      {% if js_intelligence.source_maps %}
+      <div class="js-intel-card">
+        <div class="js-intel-card-title">Source Maps ({{ js_intelligence.source_maps|length }})</div>
+        <ul class="js-intel-paths">
+          {% for sm in js_intelligence.source_maps %}
+          <li><span class="sensitive">{{ sm }}</span></li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+
+      {# GraphQL #}
+      {% if js_intelligence.graphql_endpoints %}
+      <div class="js-intel-card">
+        <div class="js-intel-card-title">GraphQL Endpoints</div>
+        <ul class="js-intel-paths">
+          {% for ep in js_intelligence.graphql_endpoints %}
+          <li><span style="color:var(--neon-purple)">{{ ep }}</span></li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+
+      {# WebSocket #}
+      {% if js_intelligence.websocket_urls %}
+      <div class="js-intel-card">
+        <div class="js-intel-card-title">WebSocket URLs</div>
+        <ul class="js-intel-paths">
+          {% for ws in js_intelligence.websocket_urls %}
+          <li><span style="color:var(--neon-cyan)">{{ ws }}</span></li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+
+      {# Forms by host #}
+      {% if js_intelligence.total_forms > 0 %}
+      {% for host, forms in js_intelligence.forms_by_host.items() %}
+      {% if forms %}
+      <div class="js-intel-card">
+        <div class="js-intel-card-title">{{ host }} — Forms ({{ forms|length }})</div>
+        <div style="font-size:0.65rem;">
+          {% for form in forms[:15] %}
+          <div style="padding:2px 0;display:flex;align-items:center;gap:4px;">
+            <span style="display:inline-block;min-width:30px;text-align:center;padding:0 3px;border-radius:2px;font-size:0.55rem;font-weight:700;{% if form.method|default('GET') == 'POST' %}background:rgba(255,43,94,0.15);color:var(--critical);{% else %}background:rgba(0,229,255,0.1);color:var(--neon-cyan);{% endif %}">{{ form.method|default('GET') }}</span>
+            <span>{{ form.action|default('?')|truncate(35) }}</span>
+            {% if form.has_csrf is defined and not form.has_csrf and form.method|default('GET') == 'POST' %}<span style="color:var(--critical);font-weight:700;font-size:0.55rem;">NO CSRF</span>{% endif %}
+            {% if form.has_password %}<span style="color:var(--high);font-size:0.55rem;">LOGIN</span>{% endif %}
+          </div>
+          {% endfor %}
+          {% if forms|length > 15 %}<div style="color:var(--fg-muted)">...+{{ forms|length - 15 }} more</div>{% endif %}
+        </div>
+      </div>
+      {% endif %}
+      {% endfor %}
+      {% endif %}
+
+      {# Internal IPs by host #}
+      {% for host, ips in js_intelligence.internal_ips_by_host.items() %}
+      {% if ips %}
+      <div class="js-intel-card">
+        <div class="js-intel-card-title" style="color:var(--critical)">{{ host }} — Internal IPs ({{ ips|length }})</div>
+        <div style="display:flex;flex-wrap:wrap;gap:3px;font-size:0.65rem;">
+          {% for ip in ips %}
+          <span style="background:rgba(255,43,94,0.08);border:1px solid rgba(255,43,94,0.2);border-radius:3px;padding:1px 5px;color:var(--critical)">{{ ip }}</span>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
   <!-- ===== PLUGIN PERFORMANCE ===== -->
   {% if plugin_stats %}
   <div class="section" id="plugin-perf">
@@ -1302,6 +1636,69 @@
       </tr>
       {% endfor %}
     </table>
+  </div>
+  {% endif %}
+
+  <!-- ===== PRIORITY REMEDIATION ===== -->
+  {% if remediation_priority %}
+  <div class="section" id="remediation">
+    <div class="section-hdr">
+      <span class="icon">[!]</span>
+      <h2>Priority Remediation</h2>
+      <span class="cnt">(Top {{ remediation_priority|length }})</span>
+    </div>
+    <table class="plugin-table">
+      <tr>
+        <th style="width:30px">#</th>
+        <th>Finding</th>
+        <th style="text-align:center">Severity</th>
+        <th style="text-align:center">Confidence</th>
+        <th style="text-align:center">Fix Effort</th>
+        <th style="text-align:center">Priority</th>
+      </tr>
+      {% for item in remediation_priority %}
+      <tr>
+        <td class="pnum">{{ loop.index }}</td>
+        <td style="max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ item.title }}">{{ item.title|truncate(60) }}</td>
+        <td class="pnum"><span class="badge {{ item.severity }}" style="font-size:0.55rem;padding:1px 5px;">{{ item.severity }}</span></td>
+        <td class="pnum">{{ (item.confidence * 100)|round|int }}%</td>
+        <td class="pnum" style="{% if item.fix_effort == 'Easy' %}color:var(--neon-green){% elif item.fix_effort == 'Moderate' %}color:var(--medium){% elif item.fix_effort == 'Hard' %}color:var(--high){% else %}color:var(--critical){% endif %}">{{ item.fix_effort }}</td>
+        <td class="pnum" style="font-weight:700;color:var(--neon-cyan)">{{ item.priority }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% endif %}
+
+  <!-- ===== SCAN QUALITY ===== -->
+  {% if quality_metrics %}
+  <div class="section" id="scan-quality">
+    <div class="section-hdr">
+      <span class="icon">[Q]</span>
+      <h2>Scan Quality</h2>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;">
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:12px;">
+        <div style="font-size:0.6rem;color:var(--fg-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;">Evidence Coverage</div>
+        <div style="font-size:1.4rem;font-weight:700;color:{% if quality_metrics.evidence_pct >= 80 %}var(--neon-green){% elif quality_metrics.evidence_pct >= 50 %}var(--medium){% else %}var(--critical){% endif %}">{{ quality_metrics.evidence_pct }}%</div>
+        <div style="font-size:0.6rem;color:var(--fg-dim);">{{ quality_metrics.with_evidence }}/{{ quality_metrics.total_findings }} findings with evidence</div>
+      </div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:12px;">
+        <div style="font-size:0.6rem;color:var(--fg-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;">High-Confidence Critical/High</div>
+        <div style="font-size:1.4rem;font-weight:700;color:{% if quality_metrics.high_conf_pct >= 80 %}var(--neon-green){% elif quality_metrics.high_conf_pct >= 50 %}var(--medium){% else %}var(--critical){% endif %}">{{ quality_metrics.high_conf_pct }}%</div>
+        <div style="font-size:0.6rem;color:var(--fg-dim);">{{ quality_metrics.high_confidence_high_sev }}/{{ quality_metrics.total_high_sev }} with confidence &gt;80%</div>
+      </div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:12px;">
+        <div style="font-size:0.6rem;color:var(--fg-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;">Plugin Coverage</div>
+        <div style="font-size:1.4rem;font-weight:700;color:{% if quality_metrics.plugin_success_pct >= 90 %}var(--neon-green){% elif quality_metrics.plugin_success_pct >= 70 %}var(--medium){% else %}var(--critical){% endif %}">{{ quality_metrics.plugin_success_pct }}%</div>
+        <div style="font-size:0.6rem;color:var(--fg-dim);">{{ quality_metrics.successful_plugins }}/{{ quality_metrics.total_plugins }} plugins successful{% if quality_metrics.errored_plugins %}, {{ quality_metrics.errored_plugins }} errors{% endif %}{% if quality_metrics.timed_out_plugins %}, {{ quality_metrics.timed_out_plugins }} timeouts{% endif %}</div>
+      </div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:12px;">
+        <div style="font-size:0.6rem;color:var(--fg-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;">Findings Quality</div>
+        <div style="font-size:1.4rem;font-weight:700;color:var(--fg)">{{ quality_metrics.total_findings }}</div>
+        <div style="font-size:0.6rem;color:var(--fg-dim);">{% if quality_metrics.no_evidence_medium_plus %}<span style="color:var(--medium)">{{ quality_metrics.no_evidence_medium_plus }} MEDIUM+ without evidence</span>{% endif %}{% if quality_metrics.low_confidence %} · <span style="color:var(--medium)">{{ quality_metrics.low_confidence }} low confidence</span>{% endif %}</div>
+      </div>
+    </div>
   </div>
   {% endif %}
 
@@ -1369,6 +1766,20 @@ function groupFindings(by) {
   applyFilters();
 }
 applyFilters();
+
+/* Plugin Matrix filter */
+function filterMatrix() {
+  const cb = document.getElementById('matrixFilterFindings');
+  if (!cb) return;
+  const showOnlyFindings = cb.checked;
+  document.querySelectorAll('#pluginMatrix tbody tr').forEach(tr => {
+    if (showOnlyFindings && tr.dataset.hasFindings === 'no') {
+      tr.style.display = 'none';
+    } else {
+      tr.style.display = '';
+    }
+  });
+}
 
 /* Sidebar scroll spy */
 const obs = new IntersectionObserver(entries => {

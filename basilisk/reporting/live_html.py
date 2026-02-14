@@ -5,301 +5,40 @@ from __future__ import annotations
 import time
 from datetime import datetime
 from pathlib import Path
-from urllib.parse import urlparse
 
 from jinja2 import Environment, FileSystemLoader
 
 from basilisk.core.pipeline import PipelineState
 from basilisk.models.result import Severity
-from basilisk.reporting.utils import extract_plugin_stats
+from basilisk.reporting.aggregation import (
+    aggregate_findings,
+    build_timeline,
+    detect_exploit_chains,
+)
+from basilisk.reporting.analysis import categorize_findings, compute_radar_points
+from basilisk.reporting.extraction import (
+    extract_attack_surface,
+    extract_dns_details,
+    extract_js_intelligence,
+    extract_plugin_stats,
+    extract_ssl_details,
+    extract_whois_details,
+)
+from basilisk.reporting.filtering import is_noise
+from basilisk.reporting.rendering import (
+    build_plugin_matrix,
+    build_port_findings,
+    build_site_tree,
+    filesize,
+)
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 
-# INFO findings matching these patterns are noise (hidden by default)
-NOISE_PATTERNS = (
-    "no ", "not detected", "not found", "not vulnerable",
-    "not reachable", "host not", "no issues",
-    "connection refused", "timed out", "no response",
-    "host unreachable", "dns resolution failed",
-    "paths checked", "hosts checked",
-)
-
-
-def _is_noise(finding: dict) -> bool:
-    """Check if a finding is informational noise."""
-    if finding["severity"] != "INFO":
-        return False
-    title = finding["title"].lower()
-    return any(p in title for p in NOISE_PATTERNS)
-
-
-def _url_to_path(url: str, host: str) -> str | None:
-    """Extract the path component from a URL, ignoring external hosts."""
-    if url.startswith("/"):
-        return url.split("?")[0].split("#")[0]
-    try:
-        parsed = urlparse(url)
-        if parsed.hostname and parsed.hostname != host and not parsed.hostname.endswith(f".{host}"):
-            return None
-        return parsed.path or "/"
-    except Exception:
-        return None
-
-
-def _extract_attack_surface(results: list) -> dict:
-    """Extract attack surface data from plugin results for the map."""
-    surface: dict = {
-        "hosts": {},  # host -> {ports, services, tech, paths, ...}
-        "subdomains": [],
-        "emails": [],
-    }
-
-    all_subdomains: set[str] = set()
-
-    for result in results:
-        host = result.target
-        data = result.data
-
-        if host not in surface["hosts"]:
-            surface["hosts"][host] = {
-                "ports": [],
-                "services": [],
-                "tech": [],
-                "paths": [],
-                "admin_panels": [],
-                "exposed_files": [],
-                "backup_files": [],
-                "api_endpoints": [],
-                "methods": [],
-                "waf": [],
-                "cms": [],
-                "cloud": [],
-                "dns_records": [],
-            }
-
-        h = surface["hosts"][host]
-
-        # Ports & services
-        if data.get("open_ports"):
-            for p in data["open_ports"]:
-                if isinstance(p, dict) and p not in h["ports"]:
-                    h["ports"].append(p)
-        if data.get("services"):
-            for s in data["services"]:
-                if isinstance(s, dict) and s not in h["services"]:
-                    h["services"].append(s)
-
-        # Technologies
-        if data.get("technologies"):
-            for t in data["technologies"]:
-                if t not in h["tech"]:
-                    h["tech"].append(t)
-
-        # CMS
-        if data.get("cms"):
-            for c in data["cms"]:
-                if isinstance(c, dict) and c not in h["cms"]:
-                    h["cms"].append(c)
-
-        # Paths (dir_brute)
-        if data.get("found_paths"):
-            for p in data["found_paths"]:
-                if isinstance(p, dict):
-                    entry = dict(p)
-                    entry.setdefault("source", "brute")
-                    if entry not in h["paths"]:
-                        h["paths"].append(entry)
-
-        # Crawled URLs (web_crawler)
-        if data.get("crawled_urls"):
-            for url in data["crawled_urls"]:
-                path = _url_to_path(url, host)
-                if path:
-                    entry = {"path": path, "status": 200, "source": "crawler"}
-                    if entry not in h["paths"]:
-                        h["paths"].append(entry)
-
-        # Disallowed paths (robots_parser)
-        if data.get("disallow_paths"):
-            for dp in data["disallow_paths"]:
-                path = dp if isinstance(dp, str) else str(dp)
-                entry = {"path": path, "status": 0, "source": "robots"}
-                if entry not in h["paths"]:
-                    h["paths"].append(entry)
-
-        # Sitemap URLs (sitemap_parser)
-        if data.get("urls") and result.plugin in ("sitemap_parser", "sitemap"):
-            for url in data["urls"]:
-                path = _url_to_path(url, host)
-                if path:
-                    entry = {"path": path, "status": 200, "source": "sitemap"}
-                    if entry not in h["paths"]:
-                        h["paths"].append(entry)
-
-        # Internal links (link_extractor)
-        if data.get("internal_links"):
-            for url in data["internal_links"]:
-                path = _url_to_path(url, host)
-                if path:
-                    entry = {"path": path, "status": 0, "source": "links"}
-                    if entry not in h["paths"]:
-                        h["paths"].append(entry)
-
-        # Admin panels
-        if data.get("admin_panels"):
-            for a in data["admin_panels"]:
-                if isinstance(a, dict) and a not in h["admin_panels"]:
-                    h["admin_panels"].append(a)
-
-        # Git / sensitive files
-        for data_key in ("exposed_files", "sensitive_files"):
-            if data.get(data_key):
-                for f in data[data_key]:
-                    entry = f if isinstance(f, dict) else {"path": f}
-                    if entry not in h["exposed_files"]:
-                        h["exposed_files"].append(entry)
-
-        # Backups
-        if data.get("backup_files"):
-            for b in data["backup_files"]:
-                if isinstance(b, dict) and b not in h["backup_files"]:
-                    h["backup_files"].append(b)
-
-        # API endpoints
-        if data.get("api_endpoints"):
-            for e in data["api_endpoints"]:
-                entry = e if isinstance(e, dict) else {"path": e, "status": 200}
-                if entry not in h["api_endpoints"]:
-                    h["api_endpoints"].append(entry)
-
-        # HTTP methods
-        if data.get("methods"):
-            for m in data["methods"]:
-                if m not in h["methods"]:
-                    h["methods"].append(m)
-
-        # WAF
-        if data.get("waf"):
-            for w in data["waf"]:
-                if w not in h["waf"]:
-                    h["waf"].append(w)
-
-        # Cloud
-        if data.get("cloud_providers"):
-            for c in data["cloud_providers"]:
-                if c not in h["cloud"]:
-                    h["cloud"].append(c)
-
-        # DNS
-        if data.get("records"):
-            for r in data["records"]:
-                if isinstance(r, dict) and r not in h["dns_records"]:
-                    h["dns_records"].append(r)
-
-        # Subdomains
-        if data.get("subdomains"):
-            for s in data["subdomains"]:
-                all_subdomains.add(s)
-
-        # Emails
-        for key in ("domain_emails", "other_emails"):
-            if data.get(key):
-                for e in data[key]:
-                    if e not in surface["emails"]:
-                        surface["emails"].append(e)
-
-    surface["subdomains"] = sorted(all_subdomains)
-    return surface
-
-
-def _build_site_tree(attack_surface: dict) -> dict:
-    """Build a Burp-style hierarchical site tree from all discovered paths.
-
-    Returns ``{host: {"root": node, "total": int}}`` where each node is
-    ``{"children": {segment: node}, "entries": [entry_dict]}``.
-    """
-    tree: dict = {}
-
-    for host, info in attack_surface.get("hosts", {}).items():
-        all_entries: list[dict] = []
-
-        # Gather from all path-like collections
-        for entry in info.get("paths", []):
-            if isinstance(entry, dict) and "path" in entry:
-                all_entries.append(entry)
-
-        for entry in info.get("admin_panels", []):
-            if isinstance(entry, dict) and "path" in entry:
-                e = dict(entry)
-                e.setdefault("source", "admin")
-                all_entries.append(e)
-
-        for entry in info.get("exposed_files", []):
-            if isinstance(entry, dict) and "path" in entry:
-                e = dict(entry)
-                e.setdefault("source", "exposed")
-                e.setdefault("status", 200)
-                all_entries.append(e)
-
-        for entry in info.get("backup_files", []):
-            if isinstance(entry, dict) and "path" in entry:
-                e = dict(entry)
-                e.setdefault("source", "backup")
-                e.setdefault("status", 200)
-                all_entries.append(e)
-
-        for entry in info.get("api_endpoints", []):
-            if isinstance(entry, dict) and "path" in entry:
-                e = dict(entry)
-                e.setdefault("source", "api")
-                all_entries.append(e)
-
-        if not all_entries:
-            continue
-
-        # Deduplicate by path
-        seen_paths: set[str] = set()
-        unique_entries: list[dict] = []
-        for entry in all_entries:
-            p = entry["path"]
-            if p not in seen_paths:
-                seen_paths.add(p)
-                unique_entries.append(entry)
-
-        # Build trie
-        root: dict = {"children": {}, "entries": []}
-        for entry in unique_entries:
-            path = entry["path"].strip("/")
-            parts = path.split("/") if path else []
-            node = root
-            for part in parts[:-1]:
-                if part not in node["children"]:
-                    node["children"][part] = {"children": {}, "entries": []}
-                node = node["children"][part]
-            # Leaf: last segment (or root for "/")
-            if parts:
-                leaf = parts[-1]
-                if leaf not in node["children"]:
-                    node["children"][leaf] = {"children": {}, "entries": []}
-                node["children"][leaf]["entries"].append(entry)
-            else:
-                node["entries"].append(entry)
-
-        tree[host] = {"root": root, "total": len(unique_entries)}
-
-    return tree
-
-
-def _filesize(value: int | float | None) -> str:
-    """Format bytes as human-readable file size."""
-    if not value:
-        return ""
-    v = float(value)
-    for unit in ("B", "KB", "MB", "GB"):
-        if v < 1024:
-            return f"{v:.1f} {unit}" if v >= 10 else f"{v:.2f} {unit}"
-        v /= 1024
-    return f"{v:.1f} TB"
+# Backward-compat aliases (imported by html.py and tests)
+_is_noise = is_noise
+_extract_attack_surface = extract_attack_surface
+_build_site_tree = build_site_tree
+_build_plugin_matrix = build_plugin_matrix
 
 
 class LiveHtmlRenderer:
@@ -312,7 +51,7 @@ class LiveHtmlRenderer:
             loader=FileSystemLoader(str(TEMPLATES_DIR)),
             autoescape=True,
         )
-        self._env.filters["filesize"] = _filesize
+        self._env.filters["filesize"] = filesize
         self._start_time = time.monotonic()
 
     def update(self, state: PipelineState) -> None:
@@ -341,8 +80,30 @@ class LiveHtmlRenderer:
         )
 
         # Filter noise
-        actionable_findings = [f for f in all_findings if not _is_noise(f)]
+        actionable_findings = [f for f in all_findings if not is_noise(f)]
         noise_count = len(all_findings) - len(actionable_findings)
+
+        # Aggregate
+        aggregated_findings = aggregate_findings(actionable_findings)
+        top_findings = [
+            f for f in aggregated_findings if f["severity"] in ("CRITICAL", "HIGH")
+        ][:5]
+
+        # Risk score
+        risk_weights = {"CRITICAL": 10, "HIGH": 5, "MEDIUM": 2, "LOW": 0.5, "INFO": 0}
+        risk_score = sum(
+            risk_weights.get(f["severity"], 0) * f["count"]
+            for f in aggregated_findings
+        )
+        risk_score = min(round(risk_score), 100)
+        if severity_counts.get("CRITICAL", 0) > 0:
+            risk_label = "CRITICAL"
+        elif severity_counts.get("HIGH", 0) > 0:
+            risk_label = "HIGH"
+        elif severity_counts.get("MEDIUM", 0) > 0:
+            risk_label = "MEDIUM"
+        else:
+            risk_label = "LOW"
 
         phases = []
         for name, phase in state.phases.items():
@@ -360,10 +121,21 @@ class LiveHtmlRenderer:
 
         targets = {r.target for r in state.results}
         plugins = {r.plugin for r in state.results}
+        total_duration = sum(r.duration for r in state.results)
 
-        attack_surface = _extract_attack_surface(state.results)
+        attack_surface = extract_attack_surface(state.results)
         plugin_stats = extract_plugin_stats(state.results)
-        site_tree = _build_site_tree(attack_surface)
+        site_tree = build_site_tree(attack_surface)
+        plugin_matrix = build_plugin_matrix(state.results)
+        ssl_details = extract_ssl_details(state.results)
+        dns_details = extract_dns_details(state.results)
+        whois_details = extract_whois_details(state.results)
+        timeline = build_timeline(actionable_findings, state.results)
+        vuln_categories = categorize_findings(actionable_findings)
+        radar_points = compute_radar_points(vuln_categories)
+        exploit_chains = detect_exploit_chains(aggregated_findings)
+        js_intelligence = extract_js_intelligence(state.results)
+        port_findings = build_port_findings(state.results)
 
         html = template.render(
             title="Basilisk Live Audit Report",
@@ -373,15 +145,30 @@ class LiveHtmlRenderer:
             severity_counts=severity_counts,
             phases=phases,
             findings=actionable_findings,
+            aggregated_findings=aggregated_findings,
+            top_findings=top_findings,
+            risk_score=risk_score,
+            risk_label=risk_label,
             noise_count=noise_count,
             refresh_interval=self.refresh_interval if is_running else 0,
             elapsed_total=round(elapsed_total, 1),
             is_running=is_running,
             targets_scanned=len(targets),
             plugins_run=len(plugins),
+            duration=round(total_duration, 1),
             attack_surface=attack_surface,
             plugin_stats=plugin_stats,
             site_tree=site_tree,
+            plugin_matrix=plugin_matrix,
+            ssl_details=ssl_details,
+            dns_details=dns_details,
+            whois_details=whois_details,
+            timeline=timeline,
+            vuln_categories=vuln_categories,
+            radar_points=radar_points,
+            exploit_chains=exploit_chains,
+            js_intelligence=js_intelligence,
+            port_findings=port_findings,
         )
 
         self.output_path.parent.mkdir(parents=True, exist_ok=True)

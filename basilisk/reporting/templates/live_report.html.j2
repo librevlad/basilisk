@@ -638,6 +638,61 @@ a:hover { text-decoration: underline; text-underline-offset: 2px; }
 /* Search filter */
 .tree-node.hidden, .tree-leaf.hidden { display: none; }
 
+/* ── Threat Radar ── */
+.radar-wrap { display:flex; gap:20px; align-items:flex-start; flex-wrap:wrap; }
+.radar-legend { flex:1; min-width:180px; }
+.radar-legend-row { display:flex; align-items:center; gap:6px; padding:3px 0; font-size:10px; }
+.radar-legend-row .cat-name { width:70px; color:var(--text-muted); text-transform:capitalize; }
+.radar-legend-row .cat-val { width:30px; text-align:right; color:var(--green); font-weight:700; }
+.radar-legend-row .cat-bar { flex:1; height:4px; background:rgba(255,255,255,0.05); border-radius:2px; overflow:hidden; }
+.radar-legend-row .cat-bar-fill { height:100%; background:var(--green); border-radius:2px; }
+
+/* ── Exploit Chains ── */
+.chain-card { background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:10px 14px; margin-bottom:8px; }
+.chain-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+.chain-name { font-size:11px; font-weight:700; color:var(--text-bright); }
+.chain-risk { font-size:9px; font-weight:700; padding:1px 6px; border-radius:3px; }
+.chain-risk.CRITICAL { background:rgba(255,43,94,0.15); color:var(--red); }
+.chain-risk.HIGH { background:rgba(255,140,0,0.15); color:var(--orange); }
+.chain-steps { display:flex; gap:6px; align-items:center; }
+.chain-step { flex:1; text-align:center; padding:6px 4px; background:rgba(0,255,106,0.03); border:1px solid var(--border); border-radius:4px; }
+.chain-step .step-label { font-size:8px; font-weight:600; color:var(--text-muted); text-transform:uppercase; margin-bottom:2px; }
+.chain-step .step-count { font-size:14px; font-weight:700; color:var(--green); }
+.chain-step .step-detail { font-size:8px; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.chain-steps .chain-step + .chain-step::before { content:'→'; position:absolute; left:-10px; color:var(--green); font-size:12px; }
+.chain-step { position:relative; }
+
+/* ── Intel Cards ── */
+.intel-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:8px; }
+.intel-card { background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:10px 12px; }
+.intel-card-title { font-size:10px; font-weight:700; color:var(--green); margin-bottom:6px; border-bottom:1px solid var(--border); padding-bottom:4px; }
+.intel-row { display:flex; gap:8px; padding:2px 0; font-size:10px; }
+.intel-row .k { color:var(--text-muted); min-width:70px; }
+.intel-row .v { color:var(--text); flex:1; word-break:break-all; }
+
+/* ── JS Intelligence ── */
+.js-intel-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:8px; }
+.js-intel-card { background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:10px 12px; }
+.js-intel-card-title { font-size:10px; font-weight:700; color:var(--green); margin-bottom:4px; }
+.js-intel-paths { list-style:none; padding:0; font-size:9px; }
+.js-intel-paths li { padding:1px 0; }
+.js-intel-paths .sensitive { color:var(--red); }
+.js-intel-paths .standard { color:var(--text); }
+
+/* ── View Toggle ── */
+.view-toggle { display:inline-flex; gap:0; margin-right:8px; }
+.view-toggle button { font-size:9px; padding:2px 8px; border:1px solid var(--border); background:transparent; color:var(--text-muted); cursor:pointer; font-family:inherit; }
+.view-toggle button:first-child { border-radius:4px 0 0 4px; }
+.view-toggle button:last-child { border-radius:0 4px 4px 0; }
+.view-toggle button.active { background:rgba(0,255,106,0.1); color:var(--green); border-color:rgba(0,255,106,0.3); }
+
+/* ── Aggregated findings ── */
+.affects-badge { font-size:8px; padding:1px 5px; border-radius:3px; background:rgba(0,229,255,0.1); color:var(--cyan); margin-left:4px; }
+
+/* ── Top findings ── */
+.top-finding { display:flex; align-items:center; gap:6px; padding:4px 0; font-size:10px; border-bottom:1px solid var(--border); }
+.top-finding:last-child { border-bottom:none; }
+
 /* ── Print Styles ── */
 @media print {
   body { overflow: visible; height: auto; background: #fff; color: #111; }
@@ -926,14 +981,148 @@ a:hover { text-decoration: underline; text-underline-offset: 2px; }
 
     <!-- Tab Bar -->
     <div class="tab-bar">
+      <button class="tab-btn" data-tab="summary">Summary</button>
       <button class="tab-btn active" data-tab="findings">Findings</button>
       <button class="tab-btn" data-tab="surface">Attack Surface</button>
+      {% if ssl_details or dns_details or whois_details or (js_intelligence and (js_intelligence.total_paths > 0 or js_intelligence.total_forms > 0)) %}<button class="tab-btn" data-tab="intel">Intel</button>{% endif %}
+      {% if plugin_matrix and plugin_matrix.hosts %}<button class="tab-btn" data-tab="matrix">Coverage</button>{% endif %}
       <button class="tab-btn" data-tab="plugins">Plugins</button>
+    </div>
+
+    <!-- ═══ Tab: Summary ═══ -->
+    <div class="tab-content" id="tab-summary">
+      {# Risk + severity breakdown #}
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
+        <div style="flex:1;min-width:200px;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:12px;">
+          <div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;font-weight:600;margin-bottom:8px;">Risk Assessment</div>
+          <div style="display:flex;align-items:center;gap:16px;">
+            <div style="position:relative;width:80px;height:80px;">
+              <svg viewBox="0 0 40 40" style="width:80px;height:80px;">
+                <circle cx="20" cy="20" r="18" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="3"/>
+                <circle cx="20" cy="20" r="18" fill="none" stroke="{% if risk_score >= 70 %}var(--red){% elif risk_score >= 40 %}var(--orange){% else %}var(--yellow){% endif %}" stroke-width="3" stroke-dasharray="113" stroke-dashoffset="{{ 113 - (risk_score * 113 / 100)|round|int }}" stroke-linecap="round" transform="rotate(-90 20 20)"/>
+              </svg>
+              <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:{% if risk_score >= 70 %}var(--red){% elif risk_score >= 40 %}var(--orange){% else %}var(--yellow){% endif %}">{{ risk_score }}</div>
+            </div>
+            <div>
+              <div style="font-size:18px;font-weight:700;color:{% if risk_label == 'CRITICAL' %}var(--red){% elif risk_label == 'HIGH' %}var(--orange){% elif risk_label == 'MEDIUM' %}var(--yellow){% else %}var(--green){% endif %}">{{ risk_label }}</div>
+              <div style="font-size:10px;color:var(--text-muted);margin-top:2px;">{{ targets_scanned }} targets &middot; {{ plugins_run }} plugins &middot; {{ duration }}s</div>
+            </div>
+          </div>
+        </div>
+
+        {# Severity breakdown #}
+        <div style="flex:1;min-width:200px;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:12px;">
+          <div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;font-weight:600;margin-bottom:8px;">Severity Distribution</div>
+          {% set sev_items = [('CRITICAL', c, '--red'), ('HIGH', h, '--orange'), ('MEDIUM', m, '--yellow'), ('LOW', l, '--green'), ('INFO', i, '--blue')] %}
+          {% for name, count, color in sev_items %}
+          {% if count > 0 %}
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+            <span style="width:55px;font-size:9px;color:var({{ color }});font-weight:600;">{{ name }}</span>
+            <span style="font-size:11px;color:var({{ color }});font-weight:700;width:25px;text-align:right;">{{ count }}</span>
+            <div style="flex:1;height:6px;background:rgba(255,255,255,0.05);border-radius:3px;overflow:hidden;">
+              <div style="height:100%;width:{{ (count / [total, 1]|max * 100)|round|int }}%;background:var({{ color }});border-radius:3px;"></div>
+            </div>
+          </div>
+          {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+
+      {# Top findings #}
+      {% if top_findings %}
+      <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:12px;margin-bottom:12px;">
+        <div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;font-weight:600;margin-bottom:8px;">Priority Targets — Top {{ top_findings|length }}</div>
+        {% for f in top_findings %}
+        <div class="top-finding">
+          <span class="badge {{ f.severity|lower }}" style="font-size:8px;">{{ f.severity[:4] }}</span>
+          <span style="flex:1;color:var(--text-bright);">{{ f.title }}</span>
+          {% if f.is_aggregated %}<span class="affects-badge">{{ f.count }} hosts</span>{% else %}<span style="font-size:9px;color:var(--text-muted);">{{ f.target }}</span>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {# Threat Radar #}
+      {% if radar_points %}
+      <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:12px;margin-bottom:12px;">
+        <div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;font-weight:600;margin-bottom:8px;">Threat Radar</div>
+        <div class="radar-wrap">
+          <svg viewBox="0 0 280 280" style="width:220px;height:220px;">
+            <circle cx="140" cy="140" r="110" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>
+            <circle cx="140" cy="140" r="73" fill="none" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+            <circle cx="140" cy="140" r="37" fill="none" stroke="rgba(255,255,255,0.02)" stroke-width="1"/>
+            {% for pt in radar_points %}
+            <line x1="140" y1="140" x2="{{ pt.ax }}" y2="{{ pt.ay }}" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+            {% endfor %}
+            <polygon points="{% for pt in radar_points %}{{ pt.dx }},{{ pt.dy }}{% if not loop.last %} {% endif %}{% endfor %}" fill="rgba(0,255,106,0.1)" stroke="var(--green)" stroke-width="1.5"/>
+            {% for pt in radar_points %}
+            <circle cx="{{ pt.dx }}" cy="{{ pt.dy }}" r="3" fill="var(--green)"/>
+            <text x="{{ pt.lx }}" y="{{ pt.ly }}" fill="var(--text-muted)" font-size="8" text-anchor="middle" dominant-baseline="middle">{{ pt.cat }}</text>
+            {% endfor %}
+          </svg>
+          <div class="radar-legend">
+            {% set max_cat = radar_points|map(attribute='val')|max if radar_points else 1 %}
+            {% set max_cat = max_cat if max_cat > 0 else 1 %}
+            {% for pt in radar_points %}
+            <div class="radar-legend-row">
+              <span class="cat-name">{{ pt.cat }}</span>
+              <span class="cat-val">{{ pt.val }}</span>
+              <div class="cat-bar"><div class="cat-bar-fill" style="width:{{ (pt.val / max_cat * 100)|round|int }}%"></div></div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+      {# Exploit Chains #}
+      {% if exploit_chains %}
+      <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:12px;margin-bottom:12px;">
+        <div style="font-size:9px;color:var(--red);text-transform:uppercase;font-weight:600;margin-bottom:8px;">Critical Path — Exploit Chains ({{ exploit_chains|length }})</div>
+        {% for chain in exploit_chains %}
+        <div class="chain-card">
+          <div class="chain-header">
+            <span class="chain-name">{{ chain.name }}</span>
+            <span class="chain-risk {{ chain.risk }}">{{ chain.risk }}</span>
+          </div>
+          <div class="chain-steps">
+            {% for step in chain.steps %}
+            <div class="chain-step">
+              <div class="step-label">{{ step.label }}</div>
+              {% if step.count > 0 %}<div class="step-count">{{ step.count }}</div>{% endif %}
+              <div class="step-detail" title="{{ step.detail }}">{{ step.detail }}</div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {# Kill Chain Progress #}
+      {% if phases %}
+      <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:12px;">
+        <div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;font-weight:600;margin-bottom:8px;">Kill Chain Progress</div>
+        {% for phase in phases %}
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+          <span style="width:60px;font-size:10px;color:{% if phase.status == 'completed' %}var(--green){% elif phase.status == 'running' %}var(--cyan){% else %}var(--text-muted){% endif %};font-weight:600;">{{ phase.name }}</span>
+          <div style="flex:1;height:6px;background:rgba(255,255,255,0.05);border-radius:3px;overflow:hidden;">
+            <div style="height:100%;width:{{ phase.pct }}%;background:{% if phase.status == 'completed' %}var(--green){% elif phase.status == 'running' %}var(--cyan){% else %}var(--text-muted){% endif %};border-radius:3px;transition:width 0.5s;"></div>
+          </div>
+          <span style="font-size:9px;color:var(--text-muted);">{{ phase.completed }}/{{ phase.total }} ({{ phase.elapsed }}s)</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
     </div>
 
     <!-- ═══ Tab: Findings ═══ -->
     <div class="tab-content active" id="tab-findings">
-      <div class="filters-row">
+      <div class="filters-row" style="flex-wrap:wrap;">
+        <div class="view-toggle">
+          <button class="active" onclick="switchView('aggregated',this)">Aggregated{% if aggregated_findings %} ({{ aggregated_findings|length }}){% endif %}</button>
+          <button onclick="switchView('all',this)">All ({{ findings|length }})</button>
+        </div>
         <button class="filter-chip active sc" data-sev="CRITICAL" onclick="toggleFilter(this)">Critical {{ c }}</button>
         <button class="filter-chip active sh" data-sev="HIGH" onclick="toggleFilter(this)">High {{ h }}</button>
         <button class="filter-chip active sm" data-sev="MEDIUM" onclick="toggleFilter(this)">Medium {{ m }}</button>
@@ -943,7 +1132,47 @@ a:hover { text-decoration: underline; text-underline-offset: 2px; }
         {% if noise_count %}<span style="font-size:8px;color:var(--text-muted);">{{ noise_count }} noise hidden</span>{% endif %}
       </div>
 
-      <div id="findings-container">
+      {# Aggregated view (default) #}
+      <div id="aggregated-container">
+      {% for sev in ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'] %}
+      {% set sev_findings = aggregated_findings | selectattr('severity', 'equalto', sev) | list if aggregated_findings else [] %}
+      {% if sev_findings %}
+      <div class="finding-group" data-group-key="{{ sev }}" id="agg-{{ sev }}">
+        <div style="font-size:12px;font-weight:700;color:{% if sev == 'CRITICAL' %}var(--red){% elif sev == 'HIGH' %}var(--orange){% elif sev == 'MEDIUM' %}var(--yellow){% elif sev == 'LOW' %}var(--green){% else %}var(--blue){% endif %};margin:10px 0 6px;display:flex;align-items:center;gap:4px;">
+          {{ sev }} <span style="color:var(--text-muted);font-weight:400;font-size:10px;">({{ sev_findings|length }})</span>
+        </div>
+        {% for f in sev_findings %}
+        <details class="finding-card" data-severity="{{ f.severity }}" data-search="{{ f.title|lower }} {{ (f.description or '')|lower }} {{ (f.evidence or '')|lower }} {{ f.target|lower }} {{ f.plugin|lower }}">
+          <summary>
+            <span class="badge {{ f.severity|lower }}">{{ f.severity[:4] }}</span>
+            <span class="finding-title" title="{{ f.title }}">{{ f.title }}</span>
+            {% if f.is_aggregated and f.affected_targets|length > 1 %}<span class="affects-badge">{{ f.affected_targets|length }} hosts</span>{% else %}<span class="finding-target">{{ f.target }}</span>{% endif %}
+          </summary>
+          <div class="finding-body">
+            {% if f.description %}<div style="color:var(--text-muted);margin-bottom:6px;">{{ f.description }}</div>{% endif %}
+            {% if f.evidence %}<div class="evidence"><span class="prompt">$ </span>{{ f.evidence }}</div>{% endif %}
+            {% if f.remediation %}<div class="remediation">{{ f.remediation }}</div>{% endif %}
+            <div style="font-size:9px;color:var(--cyan);margin-top:4px;">
+              <span style="color:var(--text-muted);">Plugin:</span> {{ f.plugin }}
+              <span style="color:var(--text-muted);margin-left:6px;">Target:</span> {{ f.target }}
+            </div>
+            {% if f.tags %}<div class="finding-tags">{% for tag in f.tags %}<span class="tag">{{ tag }}</span>{% endfor %}</div>{% endif %}
+            {% if f.is_aggregated and f.affected_targets and f.affected_targets|length > 1 %}
+            <details style="margin-top:6px;">
+              <summary style="font-size:9px;color:var(--text-muted);cursor:pointer;">All affected hosts ({{ f.affected_targets|length }})</summary>
+              <div style="font-size:9px;padding:4px 0;">{% for t in f.affected_targets %}<span style="color:var(--cyan);">{{ t }}</span>{% if not loop.last %}, {% endif %}{% endfor %}</div>
+            </details>
+            {% endif %}
+          </div>
+        </details>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% endfor %}
+      </div>
+
+      {# All findings view (hidden) #}
+      <div id="findings-container" style="display:none">
       {% for sev in ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'] %}
       {% set sev_findings = findings | selectattr('severity', 'equalto', sev) | list %}
       {% if sev_findings %}
@@ -952,7 +1181,7 @@ a:hover { text-decoration: underline; text-underline-offset: 2px; }
           {{ sev }} <span style="color:var(--text-muted);font-weight:400;font-size:10px;">({{ sev_findings|length }})</span>
         </div>
         {% for f in sev_findings %}
-        <details class="finding-card" data-severity="{{ f.severity }}" data-search="{{ f.title|lower }} {{ f.description|lower }} {{ (f.evidence or '')|lower }} {{ f.target|lower }} {{ f.plugin|lower }}">
+        <details class="finding-card" data-severity="{{ f.severity }}" data-search="{{ f.title|lower }} {{ (f.description or '')|lower }} {{ (f.evidence or '')|lower }} {{ f.target|lower }} {{ f.plugin|lower }}">
           <summary>
             <span class="badge {{ f.severity|lower }}">{{ f.severity[:4] }}</span>
             <span class="finding-title" title="{{ f.title }}">{{ f.title }}</span>
@@ -962,6 +1191,9 @@ a:hover { text-decoration: underline; text-underline-offset: 2px; }
             {% if f.description %}<div style="color:var(--text-muted);margin-bottom:6px;">{{ f.description }}</div>{% endif %}
             {% if f.evidence %}<div class="evidence"><span class="prompt">$ </span>{{ f.evidence }}</div>{% endif %}
             {% if f.remediation %}<div class="remediation">{{ f.remediation }}</div>{% endif %}
+            <div style="font-size:9px;color:var(--cyan);margin-top:4px;">
+              <span style="color:var(--text-muted);">Plugin:</span> {{ f.plugin }}
+            </div>
             {% if f.tags %}<div class="finding-tags">{% for tag in f.tags %}<span class="tag">{{ tag }}</span>{% endfor %}</div>{% endif %}
           </div>
         </details>
@@ -982,7 +1214,7 @@ a:hover { text-decoration: underline; text-underline-offset: 2px; }
     <div class="tab-content" id="tab-surface">
       {% if attack_surface and attack_surface.hosts %}
       {% for host, info in attack_surface.hosts.items() %}
-      {% if info.ports or info.services or info.tech or info.paths or info.admin_panels or info.exposed_files or info.api_endpoints %}
+      {% if info.ports or info.services or info.tech or info.paths or info.admin_panels or info.exposed_files or info.api_endpoints or info.forms %}
       <details class="section-card" open>
         <summary>
           <span class="arrow">&#9654;</span>
@@ -1040,10 +1272,34 @@ a:hover { text-decoration: underline; text-underline-offset: 2px; }
           {% endif %}
 
           {% if info.api_endpoints %}
-          <div style="margin-top:8px;font-size:9px;color:var(--purple);font-weight:600;text-transform:uppercase;">API Endpoints</div>
+          <div style="margin-top:8px;font-size:9px;color:var(--purple);font-weight:600;text-transform:uppercase;">API Endpoints ({{ info.api_endpoints|length }})</div>
           {% for e in info.api_endpoints[:10] %}
           <div style="font-size:10px;padding:2px 0;"><span class="api-badge" style="font-size:7px;">API</span> {{ e.path }} <span style="color:var(--text-muted);">{{ e.status }}</span></div>
           {% endfor %}
+          {% if info.api_endpoints|length > 10 %}<div style="font-size:9px;color:var(--text-muted);">...+{{ info.api_endpoints|length - 10 }} more</div>{% endif %}
+          {% endif %}
+
+          {% if info.forms %}
+          <div style="margin-top:8px;font-size:9px;color:var(--orange);font-weight:600;text-transform:uppercase;">Forms ({{ info.forms|length }})</div>
+          {% for form in info.forms[:10] %}
+          <div style="font-size:10px;padding:2px 0;">
+            <span style="display:inline-block;padding:0 4px;border-radius:2px;font-size:8px;font-weight:700;{% if form.method|default('GET') == 'POST' %}background:rgba(255,43,94,0.15);color:var(--red);{% else %}background:rgba(0,229,255,0.1);color:var(--cyan);{% endif %}">{{ form.method|default('GET') }}</span>
+            <span style="color:var(--text);">{{ form.action|default('?')|truncate(40) }}</span>
+            {% if form.has_csrf is defined and not form.has_csrf and form.method|default('GET') == 'POST' %}<span style="color:var(--red);font-weight:700;font-size:8px;margin-left:3px;">NO CSRF</span>{% endif %}
+            {% if form.has_password %}<span style="color:var(--orange);font-size:8px;margin-left:3px;">PASS</span>{% endif %}
+            {% if form.inputs %}<span style="color:var(--text-muted);font-size:8px;margin-left:3px;">{{ form.inputs|length }}f</span>{% endif %}
+          </div>
+          {% endfor %}
+          {% if info.forms|length > 10 %}<div style="font-size:9px;color:var(--text-muted);">...+{{ info.forms|length - 10 }} more</div>{% endif %}
+          {% endif %}
+
+          {% if info.internal_ips %}
+          <div style="margin-top:8px;font-size:9px;color:var(--red);font-weight:600;text-transform:uppercase;">Internal IPs Leaked</div>
+          <div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:2px;">
+            {% for ip in info.internal_ips[:10] %}
+            <span style="background:rgba(255,43,94,0.1);border:1px solid rgba(255,43,94,0.2);border-radius:2px;padding:1px 4px;font-size:9px;color:var(--red);">{{ ip }}</span>
+            {% endfor %}
+          </div>
           {% endif %}
 
           {% if info.dns_records %}
@@ -1055,6 +1311,27 @@ a:hover { text-decoration: underline; text-underline-offset: 2px; }
             {% endfor %}
           </table>
           {% endif %}
+
+          {# Per-host plugin breakdown #}
+          {% if plugin_matrix and plugin_matrix.cells.get(host) %}
+          {% set host_plugins = plugin_matrix.cells[host] %}
+          <details style="margin-top:8px;">
+            <summary style="font-size:9px;color:var(--text-muted);font-weight:600;text-transform:uppercase;cursor:pointer;list-style:none;">
+              Plugin Results ({{ host_plugins|length }})
+            </summary>
+            <table style="margin-top:4px;">
+              <tr><th>Plugin</th><th>Status</th><th>Finds</th><th>Time</th></tr>
+              {% for pname, pinfo in host_plugins|dictsort %}
+              <tr>
+                <td style="color:var(--cyan);">{{ pname }}</td>
+                <td style="color:{% if pinfo.status == 'success' %}var(--green){% elif pinfo.status == 'error' %}var(--red){% else %}var(--yellow){% endif %};">{{ pinfo.status }}</td>
+                <td>{{ pinfo.findings }}{% if pinfo.critical > 0 %} <span style="color:var(--red)">{{ pinfo.critical }}C</span>{% endif %}{% if pinfo.high > 0 %} <span style="color:var(--orange)">{{ pinfo.high }}H</span>{% endif %}</td>
+                <td style="color:var(--text-muted);">{{ pinfo.duration }}s</td>
+              </tr>
+              {% endfor %}
+            </table>
+          </details>
+          {% endif %}
         </div>
       </details>
       {% endif %}
@@ -1062,6 +1339,222 @@ a:hover { text-decoration: underline; text-underline-offset: 2px; }
       {% else %}
       <div style="padding:30px;text-align:center;color:var(--text-muted);">
         {% if is_running %}Mapping attack surface...{% else %}No attack surface data{% endif %}
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- ═══ Tab: Coverage Matrix ═══ -->
+    {% if plugin_matrix and plugin_matrix.hosts %}
+    <div class="tab-content" id="tab-matrix">
+      <div style="font-size:10px;color:var(--text-muted);margin-bottom:8px;">
+        {{ plugin_matrix.hosts|length }} hosts &times; {{ plugin_matrix.plugins|length }} plugins
+        <label style="margin-left:12px;cursor:pointer;">
+          <input type="checkbox" id="liveMatrixFilter" onchange="filterLiveMatrix()"> Only with findings
+        </label>
+      </div>
+      <div style="overflow-x:auto;">
+        <table style="border-collapse:collapse;font-size:9px;width:auto;" id="liveMatrix">
+          <thead>
+            <tr>
+              <th style="text-align:left;padding:4px 6px;position:sticky;left:0;background:rgba(10,14,23,0.95);z-index:2;min-width:120px;">Host</th>
+              {% for plugin in plugin_matrix.plugins %}
+              <th style="writing-mode:vertical-lr;text-orientation:mixed;padding:4px 2px;max-width:22px;min-height:70px;font-size:8px;" title="{{ plugin }}">{{ plugin }}</th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for host in plugin_matrix.hosts %}
+            {% set host_cells = plugin_matrix.cells.get(host, {}) %}
+            {% set host_total = host_cells.values()|map(attribute='findings')|sum %}
+            <tr data-has-findings="{{ 'yes' if host_total > 0 else 'no' }}">
+              <td style="color:var(--green);font-weight:600;padding:3px 6px;white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis;position:sticky;left:0;background:rgba(10,14,23,0.95);z-index:1;border-bottom:1px solid var(--border);" title="{{ host }}">{{ host }}</td>
+              {% for plugin in plugin_matrix.plugins %}
+              {% set cell = host_cells.get(plugin) %}
+              <td style="text-align:center;padding:2px;border-bottom:1px solid var(--border);" title="{% if cell %}{{ plugin }}: {{ cell.status }} | {{ cell.findings }}f | {{ cell.duration }}s{% else %}skipped{% endif %}">
+                {% if cell %}
+                  {% if cell.status == 'success' and cell.findings > 0 %}
+                  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 4px rgba(0,255,106,0.4);"></span>
+                  {% elif cell.status == 'success' %}
+                  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#3a4555;"></span>
+                  {% elif cell.status == 'timeout' %}
+                  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--yellow);box-shadow:0 0 4px rgba(255,214,0,0.3);"></span>
+                  {% elif cell.status == 'error' %}
+                  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--red);box-shadow:0 0 4px rgba(255,43,94,0.3);"></span>
+                  {% else %}
+                  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#3a4555;"></span>
+                  {% endif %}
+                {% else %}
+                <span style="display:inline-block;width:8px;height:8px;border-radius:50%;border:1px solid var(--border);"></span>
+                {% endif %}
+              </td>
+              {% endfor %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div style="margin-top:8px;font-size:9px;color:var(--text-muted);display:flex;gap:12px;">
+        <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);vertical-align:middle;"></span> findings</span>
+        <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#3a4555;vertical-align:middle;"></span> clean</span>
+        <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--yellow);vertical-align:middle;"></span> timeout</span>
+        <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--red);vertical-align:middle;"></span> error</span>
+        <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;border:1px solid var(--border);vertical-align:middle;"></span> skipped</span>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- ═══ Tab: Intel ═══ -->
+    <div class="tab-content" id="tab-intel">
+      {# SSL/TLS Details #}
+      {% if ssl_details %}
+      <div style="font-size:10px;font-weight:700;color:var(--green);margin-bottom:6px;text-transform:uppercase;">SSL/TLS Certificates ({{ ssl_details|length }})</div>
+      <div class="intel-grid" style="margin-bottom:12px;">
+        {% for ssl in ssl_details %}
+        <div class="intel-card">
+          <div class="intel-card-title">{{ ssl.target }}</div>
+          {% if ssl.subject is defined %}<div class="intel-row"><span class="k">Subject</span><span class="v">{{ ssl.subject }}</span></div>{% endif %}
+          {% if ssl.issuer is defined %}<div class="intel-row"><span class="k">Issuer</span><span class="v">{{ ssl.issuer }}</span></div>{% endif %}
+          {% if ssl.not_before is defined %}<div class="intel-row"><span class="k">Valid From</span><span class="v">{{ ssl.not_before }}</span></div>{% endif %}
+          {% if ssl.not_after is defined %}<div class="intel-row"><span class="k">Expires</span><span class="v" style="{% if ssl.is_expired|default(false) %}color:var(--red);font-weight:700{% elif ssl.days_until_expiry is defined and ssl.days_until_expiry < 30 %}color:var(--yellow){% endif %}">{{ ssl.not_after }}{% if ssl.days_until_expiry is defined %} ({{ ssl.days_until_expiry }}d){% endif %}</span></div>{% endif %}
+          {% if ssl.protocol is defined %}<div class="intel-row"><span class="k">Protocol</span><span class="v"><span class="chip" style="font-size:8px;">{{ ssl.protocol }}</span></span></div>{% endif %}
+          {% if ssl.protocols is defined %}<div class="intel-row"><span class="k">Supported</span><span class="v">{% for p in ssl.protocols %}<span class="chip" style="font-size:8px;">{{ p }}</span> {% endfor %}</span></div>{% endif %}
+          {% if ssl.cipher is defined %}<div class="intel-row"><span class="k">Cipher</span><span class="v">{{ ssl.cipher }}{% if ssl.key_size is defined %} ({{ ssl.key_size }}bit){% endif %}</span></div>{% endif %}
+          {% if ssl.grade is defined %}<div class="intel-row"><span class="k">Grade</span><span class="v" style="font-weight:700;color:{% if ssl.grade == 'A' or ssl.grade == 'A+' %}var(--green){% elif ssl.grade == 'B' %}var(--yellow){% else %}var(--red){% endif %}">{{ ssl.grade }}</span></div>{% endif %}
+          {% if ssl.san is defined and ssl.san %}<div style="font-size:9px;margin-top:3px;color:var(--text-muted);">SAN: {% for s in ssl.san[:8] %}{{ s }}{% if not loop.last %}, {% endif %}{% endfor %}{% if ssl.san|length > 8 %} +{{ ssl.san|length - 8 }}{% endif %}</div>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {# DNS Details #}
+      {% if dns_details %}
+      <div style="font-size:10px;font-weight:700;color:var(--cyan);margin-bottom:6px;text-transform:uppercase;">DNS Records</div>
+      <div class="intel-grid" style="margin-bottom:12px;">
+        {% for dns in dns_details %}
+        <div class="intel-card">
+          <div class="intel-card-title">{{ dns.target }}</div>
+          {% if dns.nameservers is defined %}<div class="intel-row"><span class="k">NS</span><span class="v">{{ dns.nameservers|join(', ') }}</span></div>{% endif %}
+          {% for rec in dns.records[:12] %}
+          <div class="intel-row"><span class="k" style="color:var(--cyan);">{{ rec.type|default('?') }}</span><span class="v">{{ rec.value|default(rec.data|default('')) }}</span></div>
+          {% endfor %}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {# WHOIS Details #}
+      {% if whois_details %}
+      <div style="font-size:10px;font-weight:700;color:var(--purple);margin-bottom:6px;text-transform:uppercase;">WHOIS</div>
+      <div class="intel-grid" style="margin-bottom:12px;">
+        {% for host, whois in whois_details.items() %}
+        <div class="intel-card">
+          <div class="intel-card-title">{{ host }}</div>
+          {% if whois.registrar is defined %}<div class="intel-row"><span class="k">Registrar</span><span class="v">{{ whois.registrar }}</span></div>{% endif %}
+          {% if whois.creation_date is defined %}<div class="intel-row"><span class="k">Created</span><span class="v">{{ whois.creation_date }}</span></div>{% endif %}
+          {% if whois.expiration_date is defined %}<div class="intel-row"><span class="k">Expires</span><span class="v">{{ whois.expiration_date }}</span></div>{% endif %}
+          {% if whois.org is defined %}<div class="intel-row"><span class="k">Org</span><span class="v">{{ whois.org }}</span></div>{% endif %}
+          {% if whois.country is defined %}<div class="intel-row"><span class="k">Country</span><span class="v">{{ whois.country }}</span></div>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {# JS & HTML Intelligence #}
+      {% if js_intelligence and (js_intelligence.total_paths > 0 or js_intelligence.total_forms > 0) %}
+      <div style="font-size:10px;font-weight:700;color:var(--green);margin-bottom:6px;text-transform:uppercase;">
+        JS &amp; HTML Intelligence
+        <span style="font-weight:400;color:var(--text-muted);">({{ js_intelligence.total_paths }} paths, {{ js_intelligence.total_forms }} forms, {{ js_intelligence.total_pages }} pages, {{ js_intelligence.total_js_files }} JS files)</span>
+      </div>
+      <div class="js-intel-grid">
+        {# API paths by host #}
+        {% for host, paths in js_intelligence.api_paths_by_host.items() %}
+        {% if paths %}
+        <div class="js-intel-card">
+          <div class="js-intel-card-title">{{ host }} — API Paths ({{ paths|length }})</div>
+          <ul class="js-intel-paths">
+            {% for p in paths[:25] %}
+            <li><span class="{% if '/admin' in p or '/internal' in p or '/debug' in p or '/auth' in p or '/token' in p %}sensitive{% else %}standard{% endif %}">{{ p }}</span></li>
+            {% endfor %}
+            {% if paths|length > 25 %}<li style="color:var(--text-muted);">...+{{ paths|length - 25 }} more</li>{% endif %}
+          </ul>
+        </div>
+        {% endif %}
+        {% endfor %}
+
+        {# Secrets #}
+        {% if js_intelligence.total_secrets > 0 %}
+        <div class="js-intel-card">
+          <div class="js-intel-card-title" style="color:var(--red);">Secrets Found ({{ js_intelligence.total_secrets }})</div>
+          {% for host, secrets in js_intelligence.secrets_by_host.items() %}
+          <div style="font-size:9px;margin-bottom:3px;">
+            <span style="color:var(--green);">{{ host }}</span>:
+            {% for s in secrets[:5] %}<span style="color:var(--red);">{{ s }}</span>{% if not loop.last %}, {% endif %}{% endfor %}
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        {# Source maps #}
+        {% if js_intelligence.source_maps %}
+        <div class="js-intel-card">
+          <div class="js-intel-card-title" style="color:var(--red);">Source Maps ({{ js_intelligence.source_maps|length }})</div>
+          <ul class="js-intel-paths">{% for sm in js_intelligence.source_maps %}<li><span class="sensitive">{{ sm }}</span></li>{% endfor %}</ul>
+        </div>
+        {% endif %}
+
+        {# GraphQL #}
+        {% if js_intelligence.graphql_endpoints %}
+        <div class="js-intel-card">
+          <div class="js-intel-card-title">GraphQL Endpoints</div>
+          <ul class="js-intel-paths">{% for ep in js_intelligence.graphql_endpoints %}<li><span style="color:var(--purple);">{{ ep }}</span></li>{% endfor %}</ul>
+        </div>
+        {% endif %}
+
+        {# WebSocket #}
+        {% if js_intelligence.websocket_urls %}
+        <div class="js-intel-card">
+          <div class="js-intel-card-title">WebSocket URLs</div>
+          <ul class="js-intel-paths">{% for ws in js_intelligence.websocket_urls %}<li><span style="color:var(--cyan);">{{ ws }}</span></li>{% endfor %}</ul>
+        </div>
+        {% endif %}
+
+        {# Forms by host #}
+        {% if js_intelligence.total_forms > 0 %}
+        {% for host, forms in js_intelligence.forms_by_host.items() %}
+        {% if forms %}
+        <div class="js-intel-card">
+          <div class="js-intel-card-title">{{ host }} — Forms ({{ forms|length }})</div>
+          {% for form in forms[:15] %}
+          <div style="font-size:9px;padding:2px 0;display:flex;align-items:center;gap:4px;">
+            <span style="display:inline-block;min-width:28px;text-align:center;padding:0 3px;border-radius:2px;font-size:8px;font-weight:700;{% if form.method|default('GET') == 'POST' %}background:rgba(255,43,94,0.15);color:var(--red);{% else %}background:rgba(0,229,255,0.1);color:var(--cyan);{% endif %}">{{ form.method|default('GET') }}</span>
+            <span>{{ form.action|default('?')|truncate(35) }}</span>
+            {% if form.has_csrf is defined and not form.has_csrf and form.method|default('GET') == 'POST' %}<span style="color:var(--red);font-weight:700;font-size:8px;">NO CSRF</span>{% endif %}
+            {% if form.has_password %}<span style="color:var(--orange);font-size:8px;">LOGIN</span>{% endif %}
+          </div>
+          {% endfor %}
+          {% if forms|length > 15 %}<div style="font-size:8px;color:var(--text-muted);">...+{{ forms|length - 15 }} more</div>{% endif %}
+        </div>
+        {% endif %}
+        {% endfor %}
+        {% endif %}
+
+        {# Internal IPs #}
+        {% for host, ips in js_intelligence.internal_ips_by_host.items() %}
+        {% if ips %}
+        <div class="js-intel-card">
+          <div class="js-intel-card-title" style="color:var(--red);">{{ host }} — Internal IPs ({{ ips|length }})</div>
+          <div style="display:flex;flex-wrap:wrap;gap:3px;">
+            {% for ip in ips %}<span style="background:rgba(255,43,94,0.1);border:1px solid rgba(255,43,94,0.2);border-radius:2px;padding:1px 4px;font-size:9px;color:var(--red);">{{ ip }}</span>{% endfor %}
+          </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% if not ssl_details and not dns_details and not whois_details and not (js_intelligence and js_intelligence.total_paths > 0) %}
+      <div style="padding:30px;text-align:center;color:var(--text-muted);">
+        {% if is_running %}Gathering intelligence...{% else %}No intelligence data{% endif %}
       </div>
       {% endif %}
     </div>
@@ -1151,6 +1644,17 @@ function collapseAll() {
   });
 }
 
+/* ── View toggle (aggregated / all) ── */
+function switchView(view, btn) {
+  document.querySelectorAll('.view-toggle button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const agg = document.getElementById('aggregated-container');
+  const all = document.getElementById('findings-container');
+  if (view === 'all') { if (agg) agg.style.display='none'; if (all) all.style.display=''; }
+  else { if (agg) agg.style.display=''; if (all) all.style.display='none'; }
+  applyFilters();
+}
+
 /* ── Finding filters ── */
 function toggleFilter(btn) { btn.classList.toggle('active'); applyFilters(); }
 function applyFilters() {
@@ -1164,6 +1668,16 @@ function applyFilters() {
   });
 }
 applyFilters();
+
+/* ── Live matrix filter ── */
+function filterLiveMatrix() {
+  const cb = document.getElementById('liveMatrixFilter');
+  if (!cb) return;
+  const showOnly = cb.checked;
+  document.querySelectorAll('#liveMatrix tbody tr').forEach(tr => {
+    tr.style.display = (showOnly && tr.dataset.hasFindings === 'no') ? 'none' : '';
+  });
+}
 
 /* ── Active tree node ── */
 document.querySelectorAll('.tree-node > summary').forEach(el => {

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import math
-from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
@@ -11,259 +9,33 @@ from jinja2 import Environment, FileSystemLoader
 
 from basilisk.core.pipeline import PipelineState
 from basilisk.models.result import Severity
-from basilisk.reporting.live_html import _build_site_tree, _extract_attack_surface, _is_noise
-from basilisk.reporting.utils import extract_plugin_stats
+from basilisk.reporting.aggregation import (
+    aggregate_findings,
+    build_timeline,
+    detect_exploit_chains,
+)
+from basilisk.reporting.analysis import (
+    categorize_findings,
+    compute_quality_metrics,
+    compute_radar_points,
+    compute_remediation_priority,
+)
+from basilisk.reporting.extraction import (
+    extract_attack_surface,
+    extract_dns_details,
+    extract_js_intelligence,
+    extract_plugin_stats,
+    extract_ssl_details,
+    extract_whois_details,
+)
+from basilisk.reporting.filtering import is_noise
+from basilisk.reporting.rendering import (
+    build_plugin_matrix,
+    build_port_findings,
+    build_site_tree,
+)
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
-
-# OWASP-like vulnerability categories for the threat radar
-VULN_CATEGORY_MAP: dict[str, list[str]] = {
-    "injection": [
-        "sqli", "sql injection", "xss", "cross-site scripting", "command injection",
-        "ssti", "template injection", "xxe", "xml", "nosql", "ldap injection",
-        "crlf", "header injection", "lfi", "local file", "rfi", "remote file",
-        "deserialization", "prototype pollution",
-    ],
-    "auth": [
-        "authentication", "password", "credential", "login", "session",
-        "jwt", "token", "oauth", "brute", "default cred", "weak password",
-        "password reset",
-    ],
-    "config": [
-        "misconfiguration", "config", "cors", "csp", "header", "hsts",
-        "x-frame", "server header", "directory listing", "debug", "verbose",
-        "admin panel", "actuator", "default page", "http method",
-    ],
-    "crypto": [
-        "ssl", "tls", "certificate", "cipher", "crypto", "encryption",
-        "expired", "self-signed", "weak key", "protocol",
-    ],
-    "disclosure": [
-        "information", "disclosure", "exposed", "sensitive", "backup",
-        "git", ".env", "stack trace", "error", "version", "banner",
-        "email", "comment", "source code", "api key",
-    ],
-    "access": [
-        "access control", "idor", "privilege", "authorization", "forbidden",
-        "open redirect", "ssrf", "server-side request", "path traversal",
-        "takeover", "subdomain", "cache poison", "smuggling", "race condition",
-    ],
-}
-
-
-def _categorize_findings(findings: list[dict]) -> dict[str, int]:
-    """Categorize findings into OWASP-like threat categories for the radar."""
-    cats: dict[str, int] = {k: 0 for k in VULN_CATEGORY_MAP}
-    for f in findings:
-        text = f"{f['title']} {f.get('description', '')}".lower()
-        tags = " ".join(f.get("tags", []))
-        combined = f"{text} {tags}"
-        for cat, keywords in VULN_CATEGORY_MAP.items():
-            if any(kw in combined for kw in keywords):
-                weight = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1, "INFO": 0}
-                cats[cat] += weight.get(f["severity"], 0)
-    return cats
-
-
-def _compute_radar_points(vuln_categories: dict[str, int]) -> list[dict]:
-    """Pre-compute SVG radar chart points for Jinja2 (no trig in templates)."""
-    cats = list(vuln_categories.keys())
-    n = len(cats)
-    if n == 0:
-        return []
-
-    max_val = max(vuln_categories.values()) or 1
-    cx, cy, r = 140, 140, 110
-    points = []
-    for idx, cat in enumerate(cats):
-        angle = -math.pi / 2 + idx * 2 * math.pi / n
-        val = vuln_categories[cat] / max_val
-        # Axis endpoint (for grid lines)
-        ax = round(cx + r * math.cos(angle), 1)
-        ay = round(cy + r * math.sin(angle), 1)
-        # Data point
-        dx = round(cx + r * val * math.cos(angle), 1)
-        dy = round(cy + r * val * math.sin(angle), 1)
-        # Label position (slightly beyond axis)
-        lx = round(cx + (r + 14) * math.cos(angle), 1)
-        ly = round(cy + (r + 14) * math.sin(angle), 1)
-        points.append({
-            "cat": cat, "val": vuln_categories[cat],
-            "ax": ax, "ay": ay, "dx": dx, "dy": dy, "lx": lx, "ly": ly,
-        })
-    return points
-
-
-def _extract_ssl_details(results: list) -> list[dict]:
-    """Extract SSL/TLS details from ssl_check plugin results."""
-    details = []
-    for r in results:
-        if r.plugin != "ssl_check" or not r.data:
-            continue
-        d = r.data
-        entry = {"target": r.target}
-        if "subject" in d:
-            entry["subject"] = d["subject"]
-        if "issuer" in d:
-            entry["issuer"] = d["issuer"]
-        if "not_before" in d:
-            entry["not_before"] = d["not_before"]
-        if "not_after" in d:
-            entry["not_after"] = d["not_after"]
-        if "serial" in d:
-            entry["serial"] = d["serial"]
-        if "san" in d:
-            entry["san"] = d["san"]
-        if "chain" in d:
-            entry["chain"] = d["chain"]
-        if "protocols" in d:
-            entry["protocols"] = d["protocols"]
-        if "ciphers" in d:
-            entry["ciphers"] = d["ciphers"]
-        if "grade" in d:
-            entry["grade"] = d["grade"]
-        if entry.keys() - {"target"}:
-            details.append(entry)
-    return details
-
-
-def _extract_dns_details(results: list) -> list[dict]:
-    """Extract DNS details from dns_enum plugin results."""
-    details = []
-    for r in results:
-        if r.plugin != "dns_enum" or not r.data:
-            continue
-        entry = {"target": r.target, "records": r.data.get("records", [])}
-        if "nameservers" in r.data:
-            entry["nameservers"] = r.data["nameservers"]
-        if "mx" in r.data:
-            entry["mx"] = r.data["mx"]
-        details.append(entry)
-    return details
-
-
-def _extract_whois_details(results: list) -> dict[str, dict]:
-    """Extract WHOIS info from whois plugin results."""
-    info: dict[str, dict] = {}
-    for r in results:
-        if r.plugin != "whois_lookup" or not r.data:
-            continue
-        info[r.target] = r.data
-    return info
-
-
-def _build_timeline(all_findings: list[dict], results: list) -> list[dict]:
-    """Build a timeline of findings ordered by plugin execution order."""
-    timeline: list[dict] = []
-    cumulative_duration = 0.0
-    for r in results:
-        cumulative_duration += r.duration
-        for finding in r.findings:
-            timeline.append({
-                "time_offset": round(cumulative_duration, 1),
-                "plugin": r.plugin,
-                "target": r.target,
-                "severity": finding.severity.label,
-                "title": finding.title,
-            })
-    return timeline
-
-
-def _detect_exploit_chains(aggregated_findings: list[dict]) -> list[dict]:
-    """Detect potential exploit chains from finding combinations."""
-    chains: list[dict] = []
-
-    # Pattern: Information Disclosure + Injection = Data Breach path
-    disclosures = [f for f in aggregated_findings if f["severity"] in ("LOW", "MEDIUM")
-                   and any(k in f["title"].lower() for k in ("exposed", "disclosure", "version",
-                           "backup", "git", "debug", "server header", "error"))]
-    injections = [f for f in aggregated_findings if f["severity"] in ("HIGH", "CRITICAL")
-                  and any(k in f["title"].lower() for k in ("injection", "sqli", "xss",
-                          "ssti", "xxe", "command", "lfi", "rfi", "deserialization"))]
-
-    if disclosures and injections:
-        chains.append({
-            "name": "Recon-to-Exploit",
-            "risk": "CRITICAL",
-            "steps": [
-                {"label": "Information Disclosure", "count": len(disclosures),
-                 "detail": disclosures[0]["title"]},
-                {"label": "Vulnerability Exploitation", "count": len(injections),
-                 "detail": injections[0]["title"]},
-                {"label": "Potential Data Breach", "count": 0,
-                 "detail": "Impact assessment needed"},
-            ],
-        })
-
-    # Pattern: Misconfig + Auth issues = Account Takeover
-    misconfigs = [f for f in aggregated_findings
-                  if any(k in f["title"].lower() for k in ("cors", "csp", "header", "hsts",
-                         "cookie", "http method"))]
-    auth_issues = [f for f in aggregated_findings
-                   if any(k in f["title"].lower() for k in ("auth", "password", "session",
-                          "jwt", "token", "credential", "brute", "csrf", "idor"))]
-
-    if misconfigs and auth_issues:
-        chains.append({
-            "name": "Misconfig-to-Takeover",
-            "risk": "HIGH",
-            "steps": [
-                {"label": "Security Misconfiguration", "count": len(misconfigs),
-                 "detail": misconfigs[0]["title"]},
-                {"label": "Auth/Session Weakness", "count": len(auth_issues),
-                 "detail": auth_issues[0]["title"]},
-                {"label": "Account Takeover Risk", "count": 0,
-                 "detail": "Manual verification needed"},
-            ],
-        })
-
-    # Pattern: SSRF / Open Redirect chains
-    ssrf_or_redirect = [f for f in aggregated_findings
-                        if any(k in f["title"].lower() for k in ("ssrf", "redirect", "smuggling"))]
-    sensitive_endpoints = [f for f in aggregated_findings
-                          if any(k in f["title"].lower() for k in ("admin", "api", "internal",
-                                 "actuator", "metadata", "cloud"))]
-
-    if ssrf_or_redirect and sensitive_endpoints:
-        chains.append({
-            "name": "SSRF-to-Internal",
-            "risk": "CRITICAL",
-            "steps": [
-                {"label": "Request Manipulation", "count": len(ssrf_or_redirect),
-                 "detail": ssrf_or_redirect[0]["title"]},
-                {"label": "Internal Service Access", "count": len(sensitive_endpoints),
-                 "detail": sensitive_endpoints[0]["title"]},
-                {"label": "Infrastructure Compromise", "count": 0,
-                 "detail": "Cloud metadata / internal APIs at risk"},
-            ],
-        })
-
-    return chains
-
-
-def _aggregate_findings(findings: list[dict]) -> list[dict]:
-    """Aggregate duplicate findings across targets.
-
-    Groups by (title, plugin, severity) and merges affected targets.
-    Returns a list of aggregated finding dicts with extra fields:
-    ``affected_targets``, ``count``, ``is_aggregated``.
-    """
-    groups: dict[tuple[str, str, str], list[dict]] = defaultdict(list)
-    for f in findings:
-        key = (f["title"], f["plugin"], f["severity"])
-        groups[key].append(f)
-
-    aggregated: list[dict] = []
-    for (_title, _plugin, _severity), group in groups.items():
-        base = dict(group[0])
-        targets = list(dict.fromkeys(f["target"] for f in group))
-        base["affected_targets"] = targets
-        base["count"] = len(group)
-        base["is_aggregated"] = len(group) > 1
-        aggregated.append(base)
-
-    aggregated.sort(key=lambda x: Severity[x["severity"]].value, reverse=True)
-    return aggregated
 
 
 class HtmlRenderer:
@@ -295,6 +67,8 @@ class HtmlRenderer:
                     "evidence": finding.evidence,
                     "remediation": finding.remediation,
                     "tags": finding.tags,
+                    "confidence": finding.confidence,
+                    "verified": finding.verified,
                 })
 
         all_findings.sort(
@@ -302,11 +76,11 @@ class HtmlRenderer:
         )
 
         # Filter noise
-        actionable_findings = [f for f in all_findings if not _is_noise(f)]
+        actionable_findings = [f for f in all_findings if not is_noise(f)]
         noise_count = len(all_findings) - len(actionable_findings)
 
         # Aggregate findings
-        aggregated_findings = _aggregate_findings(actionable_findings)
+        aggregated_findings = aggregate_findings(actionable_findings)
 
         # Top critical/high for executive summary
         top_findings = [
@@ -334,18 +108,22 @@ class HtmlRenderer:
         plugins = {r.plugin for r in state.results}
         total_duration = sum(r.duration for r in state.results)
 
-        attack_surface = _extract_attack_surface(state.results)
-        site_tree = _build_site_tree(attack_surface)
+        attack_surface = extract_attack_surface(state.results)
+        site_tree = build_site_tree(attack_surface)
 
-        # New data for War Room template
         plugin_stats = extract_plugin_stats(state.results)
-        ssl_details = _extract_ssl_details(state.results)
-        dns_details = _extract_dns_details(state.results)
-        whois_details = _extract_whois_details(state.results)
-        timeline = _build_timeline(actionable_findings, state.results)
-        vuln_categories = _categorize_findings(actionable_findings)
-        radar_points = _compute_radar_points(vuln_categories)
-        exploit_chains = _detect_exploit_chains(aggregated_findings)
+        ssl_details = extract_ssl_details(state.results)
+        dns_details = extract_dns_details(state.results)
+        whois_details = extract_whois_details(state.results)
+        timeline = build_timeline(actionable_findings, state.results)
+        vuln_categories = categorize_findings(actionable_findings)
+        radar_points = compute_radar_points(vuln_categories)
+        exploit_chains = detect_exploit_chains(aggregated_findings)
+        plugin_matrix = build_plugin_matrix(state.results)
+        js_intelligence = extract_js_intelligence(state.results)
+        port_findings = build_port_findings(state.results)
+        remediation_priority = compute_remediation_priority(aggregated_findings)
+        quality_metrics = compute_quality_metrics(state.results)
 
         # Phase stats
         phase_list = []
@@ -387,6 +165,11 @@ class HtmlRenderer:
             radar_points=radar_points,
             exploit_chains=exploit_chains,
             site_tree=site_tree,
+            plugin_matrix=plugin_matrix,
+            js_intelligence=js_intelligence,
+            port_findings=port_findings,
+            remediation_priority=remediation_priority,
+            quality_metrics=quality_metrics,
         )
 
         output_path.write_text(html, encoding="utf-8")
