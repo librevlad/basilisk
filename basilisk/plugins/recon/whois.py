@@ -107,8 +107,10 @@ class WhoisPlugin(BasePlugin):
             tags=["recon", "whois"],
         ))
 
-        # DNSSEC status
-        if merged.get("dnssec"):
+        # DNSSEC status (only for root domains — subdomains inherit zone DNSSEC)
+        from basilisk.utils.dns import is_root_domain
+
+        if merged.get("dnssec") and is_root_domain(target.host):
             dnssec_val = merged["dnssec"].lower()
             if "unsigned" in dnssec_val:
                 findings.append(Finding.low(

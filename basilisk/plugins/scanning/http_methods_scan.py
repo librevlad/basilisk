@@ -238,31 +238,28 @@ class HttpMethodsScanPlugin(BasePlugin):
             if method == "PUT":
                 try:
                     test_path = f"{base_url}/.basilisk_method_test_{method.lower()}"
+                    test_body = "basilisk-put-verify-38668"
                     async with ctx.rate:
                         resp = await ctx.http.request(
                             "PUT", test_path,
-                            data="basilisk-test",
+                            data=test_body,
                             headers={"Content-Type": "text/plain"},
                             timeout=5.0,
                         )
                         if resp.status in (200, 201, 204):
-                            findings.append(Finding.critical(
-                                f"{method} method allows file upload",
-                                description=(
-                                    f"Server accepted {method} and returned "
-                                    f"HTTP {resp.status}, indicating writable "
-                                    "web root — arbitrary file upload possible"
-                                ),
-                                evidence=f"{method} {test_path} -> HTTP {resp.status}",
-                                remediation=(
-                                    f"Disable {method} or restrict to authenticated "
-                                    "API endpoints only"
-                                ),
-                                tags=[
-                                    "scanning", "http-methods", method.lower(),
-                                    "file-upload", "owasp:a01",
-                                ],
-                            ))
+                            # Verify: GET the file back to confirm it was stored
+                            verified = False
+                            try:
+                                async with ctx.rate:
+                                    get_resp = await ctx.http.get(
+                                        test_path, timeout=5.0,
+                                    )
+                                    if get_resp.status == 200:
+                                        content = await get_resp.text()
+                                        if test_body in content:
+                                            verified = True
+                            except Exception:
+                                pass
                             # Clean up: try DELETE
                             try:
                                 async with ctx.rate:
@@ -271,6 +268,37 @@ class HttpMethodsScanPlugin(BasePlugin):
                                     )
                             except Exception:
                                 pass
+                            if verified:
+                                findings.append(Finding.critical(
+                                    f"{method} method allows file upload",
+                                    description=(
+                                        f"Server accepted {method}, returned "
+                                        f"HTTP {resp.status}, and GET confirmed "
+                                        "the file was stored — arbitrary file "
+                                        "upload possible"
+                                    ),
+                                    evidence=(
+                                        f"PUT {test_path} -> HTTP {resp.status}, "
+                                        f"GET {test_path} -> content verified"
+                                    ),
+                                    remediation=(
+                                        f"Disable {method} or restrict to "
+                                        "authenticated API endpoints only"
+                                    ),
+                                    tags=[
+                                        "scanning", "http-methods", method.lower(),
+                                        "file-upload", "owasp:a01",
+                                    ],
+                                ))
+                            else:
+                                findings.append(Finding.info(
+                                    f"{method} accepted but file not persisted",
+                                    evidence=(
+                                        f"PUT {test_path} -> HTTP {resp.status}, "
+                                        "but GET did not return the content"
+                                    ),
+                                    tags=["scanning", "http-methods", method.lower()],
+                                ))
                             continue
                 except Exception:
                     pass

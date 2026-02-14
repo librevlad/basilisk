@@ -12,7 +12,7 @@ from typing import ClassVar
 
 from basilisk.core.plugin import BasePlugin, PluginCategory, PluginMeta
 from basilisk.models.result import Finding, PluginResult
-from basilisk.models.target import Target
+from basilisk.models.target import Target, TargetType
 
 # Max pages to fetch for large domains
 MAX_PAGES = 5
@@ -33,6 +33,9 @@ class SubdomainCrtshPlugin(BasePlugin):
         timeout=45.0,
         requires_http=False,
     )
+
+    def accepts(self, target: Target) -> bool:
+        return target.type == TargetType.DOMAIN
 
     async def run(self, target: Target, ctx) -> PluginResult:
         if ctx.http is None:

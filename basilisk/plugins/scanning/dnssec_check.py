@@ -19,6 +19,7 @@ import dns.rdatatype
 from basilisk.core.plugin import BasePlugin, PluginCategory, PluginMeta
 from basilisk.models.result import Finding, PluginResult
 from basilisk.models.target import Target
+from basilisk.utils.dns import is_root_domain
 
 # ---------------------------------------------------------------------------
 # DNSSEC algorithm registry (RFC 8624)
@@ -92,10 +93,13 @@ class DnssecCheckPlugin(BasePlugin):
             domain, resolver, findings,
         )
 
-        # --- NSEC / NSEC3 detection ---
-        nsec_info = await self._detect_nsec(
-            domain, resolver, findings,
-        )
+        # --- NSEC / NSEC3 detection (root domain only — zone walking is a zone-root concern) ---
+        if is_root_domain(domain):
+            nsec_info = await self._detect_nsec(
+                domain, resolver, findings,
+            )
+        else:
+            nsec_info = {"has_nsec": False, "has_nsec3": False}
 
         # --- Chain validation (DS matches DNSKEY) ---
         chain_valid = False
@@ -107,7 +111,7 @@ class DnssecCheckPlugin(BasePlugin):
         # --- Overall assessment ---
         has_dnssec = bool(dnskey_info["keys"]) or bool(ds_info["records"])
 
-        if not has_dnssec:
+        if not has_dnssec and is_root_domain(domain):
             findings.append(Finding.low(
                 "DNSSEC not enabled",
                 description=(

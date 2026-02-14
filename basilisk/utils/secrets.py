@@ -198,6 +198,40 @@ SECRET_REGISTRY: list[SecretPattern] = [
     ),
 ]
 
+# Known false-positive patterns — matched values that are NOT real secrets
+_FALSE_POSITIVE_VALUES = {
+    # React prop-types internal constant (every React app has this)
+    "SECRET_DO_NOT_PASS_THIS_OR_YOU_WILL_BE_FIRED",
+    # Common test/placeholder values
+    "password", "secret", "changeme", "example", "password123",
+    "YOUR_SECRET_KEY", "your_secret_key", "YOUR_API_KEY",
+    "your_api_key", "INSERT_YOUR_KEY_HERE", "CHANGE_ME",
+    "xxxxxxxx", "XXXXXXXX", "000000", "123456",
+    # Common library constants mistaken for secrets
+    "abcdefghijklmnop",
+}
+
+# Known FP substrings in the matched text
+_FALSE_POSITIVE_SUBSTRINGS = (
+    "DO_NOT_PASS_THIS_OR_YOU_WILL_BE_FIRED",
+    "PropTypesSecret",
+    "example.com",
+    "placeholder",
+)
+
+
+def _is_false_positive(match_text: str) -> bool:
+    """Check if a matched secret value is a known false positive."""
+    # Extract the actual secret value from the match (after = or :)
+    for sep in ("=", ":"):
+        if sep in match_text:
+            value = match_text.split(sep, 1)[1].strip().strip("'\"` ")
+            if value in _FALSE_POSITIVE_VALUES:
+                return True
+            break
+    # Check the full match text for known FP substrings
+    return any(fp in match_text for fp in _FALSE_POSITIVE_SUBSTRINGS)
+
 
 def scan_text(text: str, *, min_severity: Severity = Severity.LOW) -> list[SecretMatch]:
     """Scan text for secrets using the full registry.
@@ -212,6 +246,8 @@ def scan_text(text: str, *, min_severity: Severity = Severity.LOW) -> list[Secre
             continue
         for m in sp.pattern.finditer(text):
             match_text = m.group(0)[:120]  # truncate long matches
+            if _is_false_positive(match_text):
+                continue
             dedup_key = f"{sp.name}:{match_text}"
             if dedup_key not in seen:
                 seen.add(dedup_key)

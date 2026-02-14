@@ -254,6 +254,7 @@ class HttpHeadersPlugin(BasePlugin):
             findings.append(factory(
                 f"{config['title']} on {host}",
                 description=f"The {header_name} header is not set",
+                evidence=f"Response headers from {host} do not include {header_name}",
                 remediation=config["remediation"],
                 tags=["headers", header_name.lower()],
             ))
@@ -682,6 +683,10 @@ class HttpHeadersPlugin(BasePlugin):
                 description=(
                     "Neither X-Frame-Options nor CSP frame-ancestors "
                     "is set; the page can be framed by any origin"
+                ),
+                evidence=(
+                    f"Response from {host} lacks both X-Frame-Options "
+                    f"and CSP frame-ancestors directives"
                 ),
                 remediation=(
                     "Add X-Frame-Options: DENY or "

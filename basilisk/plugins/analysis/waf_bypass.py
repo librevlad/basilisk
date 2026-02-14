@@ -116,7 +116,12 @@ class WafBypassPlugin(BasePlugin):
                 self.meta.name, target.host, error="HTTP client not available"
             )
 
-        waf_type = waf_list[0] if waf_list else "unknown"
+        waf_entry = waf_list[0] if waf_list else "unknown"
+        # waf_detect returns list[dict] with "name" key, not plain strings
+        if isinstance(waf_entry, dict):
+            waf_type = str(waf_entry.get("name", "Unknown WAF"))
+        else:
+            waf_type = str(waf_entry)
         findings: list[Finding] = []
         working_bypasses: list[str] = []
 

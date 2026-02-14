@@ -14,6 +14,7 @@ from typing import ClassVar
 from basilisk.core.plugin import BasePlugin, PluginCategory, PluginMeta
 from basilisk.models.result import Finding, PluginResult
 from basilisk.models.target import Target
+from basilisk.utils.dns import is_root_domain
 
 # SRV records to enumerate (service, protocol, description)
 SRV_SERVICES = [
@@ -180,36 +181,41 @@ class DnsEnumPlugin(BasePlugin):
                 tags=["dns", "srv"],
             ))
 
-        # Phase 3: SPF analysis
-        txt_records = [r for r in records if r.type.value == "TXT"]
-        spf_findings = self._analyze_spf(txt_records)
-        findings.extend(spf_findings)
+        # Phases 3-5c: Email security checks (SPF/DMARC/DKIM/MTA-STS/BIMI)
+        # Only check on root domains — subdomains inherit these from the root.
+        _is_root = is_root_domain(target.host)
 
-        # Phase 4: DMARC analysis
-        dmarc_findings = await self._analyze_dmarc(ctx, target.host)
-        findings.extend(dmarc_findings)
+        if _is_root:
+            # Phase 3: SPF analysis
+            txt_records = [r for r in records if r.type.value == "TXT"]
+            spf_findings = self._analyze_spf(txt_records)
+            findings.extend(spf_findings)
 
-        # Phase 5: DKIM check (common selectors)
-        dkim_findings = await self._check_dkim(ctx, target.host)
-        findings.extend(dkim_findings)
+            # Phase 4: DMARC analysis
+            dmarc_findings = await self._analyze_dmarc(ctx, target.host)
+            findings.extend(dmarc_findings)
 
-        # Phase 5b: MTA-STS check
-        if not ctx.should_stop and ctx.http:
-            mta_sts_findings = await self._check_mta_sts(ctx, target.host)
-            findings.extend(mta_sts_findings)
+            # Phase 5: DKIM check (common selectors)
+            dkim_findings = await self._check_dkim(ctx, target.host)
+            findings.extend(dkim_findings)
 
-        # Phase 5c: BIMI check
-        if not ctx.should_stop:
-            bimi_findings = await self._check_bimi(ctx, target.host)
-            findings.extend(bimi_findings)
+            # Phase 5b: MTA-STS check
+            if not ctx.should_stop and ctx.http:
+                mta_sts_findings = await self._check_mta_sts(ctx, target.host)
+                findings.extend(mta_sts_findings)
+
+            # Phase 5c: BIMI check
+            if not ctx.should_stop:
+                bimi_findings = await self._check_bimi(ctx, target.host)
+                findings.extend(bimi_findings)
 
         # Phase 5d: CAA check
         if not ctx.should_stop:
             caa_findings = await self._check_caa(ctx, target.host)
             findings.extend(caa_findings)
 
-        # Phase 5e: NSEC zone walking
-        if not ctx.should_stop:
+        # Phase 5e: NSEC zone walking (root domain only — applies to zone root)
+        if not ctx.should_stop and _is_root:
             nsec_findings = await self._check_nsec_walk(
                 ctx, target.host,
             )

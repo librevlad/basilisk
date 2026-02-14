@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 
 from basilisk.core.plugin import BasePlugin, PluginCategory, PluginMeta
 from basilisk.models.result import Finding, PluginResult
-from basilisk.models.target import Target
+from basilisk.models.target import Target, TargetType
 
 
 class SubdomainWaybackPlugin(BasePlugin):
@@ -22,6 +22,9 @@ class SubdomainWaybackPlugin(BasePlugin):
         timeout=30.0,
         requires_http=False,
     )
+
+    def accepts(self, target: Target) -> bool:
+        return target.type == TargetType.DOMAIN
 
     async def run(self, target: Target, ctx) -> PluginResult:
         if ctx.http is None:

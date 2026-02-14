@@ -6,7 +6,7 @@ from typing import ClassVar
 
 from basilisk.core.plugin import BasePlugin, PluginCategory, PluginMeta
 from basilisk.models.result import Finding, PluginResult
-from basilisk.models.target import Target
+from basilisk.models.target import Target, TargetType
 
 
 class SubdomainHackerTargetPlugin(BasePlugin):
@@ -20,6 +20,9 @@ class SubdomainHackerTargetPlugin(BasePlugin):
         timeout=20.0,
         requires_http=False,
     )
+
+    def accepts(self, target: Target) -> bool:
+        return target.type == TargetType.DOMAIN
 
     async def run(self, target: Target, ctx) -> PluginResult:
         if ctx.http is None:

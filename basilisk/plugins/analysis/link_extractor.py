@@ -276,7 +276,7 @@ class LinkExtractorPlugin(BasePlugin):
 
         # Store parameters for pentesting
         if all_params:
-            ctx.state.setdefault("discovered_params", []).extend(
+            ctx.state.setdefault("link_params", []).extend(
                 sorted(all_params)
             )
 

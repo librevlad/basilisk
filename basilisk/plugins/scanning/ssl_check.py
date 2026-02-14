@@ -1529,6 +1529,10 @@ class SslCheckPlugin(BasePlugin):
                         "Without HSTS, browsers allow HTTP downgrade attacks. "
                         "First visit is always vulnerable to SSL stripping."
                     ),
+                    evidence=(
+                        f"HTTPS response from {host} has no "
+                        f"Strict-Transport-Security header"
+                    ),
                     remediation=(
                         "Add Strict-Transport-Security header: "
                         "max-age=31536000; includeSubDomains; preload"
