@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from basilisk.utils.waf_bypass import (
-    WAF_PROFILES,
+from basilisk.utils.waf_bypass import WafBypassEngine
+from basilisk.utils.waf_encodings import (
     BypassResult,
-    WafBypassEngine,
     _case_swap,
     _comment_split,
     _double_encode,
@@ -14,6 +13,7 @@ from basilisk.utils.waf_bypass import (
     _unicode_normalize,
     _whitespace_variant,
 )
+from basilisk.utils.waf_profiles import WAF_PROFILES
 
 
 class TestWafProfiles:

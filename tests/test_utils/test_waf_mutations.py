@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from basilisk.utils.waf_bypass import (
-    WafBypassEngine,
+from basilisk.utils.waf_bypass import WafBypassEngine
+from basilisk.utils.waf_encodings import (
     _chunked_randomized,
     _double_slash,
     _header_case_variation,
