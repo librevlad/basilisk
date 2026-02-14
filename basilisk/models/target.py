@@ -26,11 +26,11 @@ class Target(BaseModel):
     meta: dict[str, Any] = Field(default_factory=dict)
 
     def __hash__(self) -> int:
-        return hash(self.host)
+        return hash((self.host, self.type))
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, Target):
-            return self.host == other.host
+            return self.host == other.host and self.type == other.type
         return NotImplemented
 
     @classmethod

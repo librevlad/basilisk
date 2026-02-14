@@ -199,7 +199,8 @@ async def resolve_base_url(host: str, ctx: Any) -> str | None:
         try:
             await ctx.http.head(f"{scheme}://{host}/", timeout=5.0)
             return f"{scheme}://{host}"
-        except Exception:
+        except Exception as e:
+            logger.debug("resolve_base_url: %s://%s failed: %s", scheme, host, e)
             continue
     return None
 
@@ -246,6 +247,27 @@ async def resolve_base_urls(target: Any, ctx: Any) -> list[str]:
                                 scheme = "https" if "https" in sname else "http"
                                 candidates.append((scheme, port))
 
+    # Check pipeline cache first (populated by earlier phases)
+    scheme_map = ctx.state.get("http_scheme", {}) if ctx.state else {}
+    if target.host in scheme_map and scheme_map[target.host]:
+        cached_scheme = scheme_map[target.host]
+        cached_url = f"{cached_scheme}://{target.host}"
+        # Still check non-standard ports from port_scan
+        base_urls = [cached_url]
+        for scheme, port in candidates:
+            if port in (80, 443):
+                continue
+            if (scheme == "https" and port == 443) or (scheme == "http" and port == 80):
+                continue
+            url = f"{scheme}://{target.host}:{port}"
+            try:
+                async with ctx.rate:
+                    await ctx.http.head(f"{url}/", timeout=5.0)
+                    base_urls.append(url)
+            except Exception as e:
+                logger.debug("resolve_base_urls: %s unreachable: %s", url, e)
+        return base_urls
+
     # Verify each candidate is reachable
     base_urls: list[str] = []
     seen: set[str] = set()
@@ -264,7 +286,8 @@ async def resolve_base_urls(target: Any, ctx: Any) -> list[str]:
             async with ctx.rate:
                 await ctx.http.head(f"{url}/", timeout=5.0)
                 base_urls.append(url)
-        except Exception:
+        except Exception as e:
+            logger.debug("resolve_base_urls: %s unreachable: %s", url, e)
             # For non-standard ports, try the other scheme
             if port not in (80, 443):
                 alt = "http" if scheme == "https" else "https"
@@ -275,7 +298,9 @@ async def resolve_base_urls(target: Any, ctx: Any) -> list[str]:
                         async with ctx.rate:
                             await ctx.http.head(f"{alt_url}/", timeout=5.0)
                             base_urls.append(alt_url)
-                    except Exception:
-                        pass
+                    except Exception as e2:
+                        logger.debug(
+                            "resolve_base_urls: %s alt unreachable: %s", alt_url, e2,
+                        )
 
     return base_urls

@@ -102,8 +102,8 @@ class FormLoginStrategy(LoginStrategy):
                 body = await resp.text(encoding="utf-8", errors="replace")
                 cookies = self._extract_cookies(resp)
                 session.cookies.update(cookies)
-        except Exception:
-            logger.debug("Failed to fetch login page: %s", login_url)
+        except Exception as e:
+            logger.warning("Failed to fetch login page %s: %s", login_url, e)
             return session
 
         # Extract form fields
@@ -158,8 +158,8 @@ class FormLoginStrategy(LoginStrategy):
                     if self._check_auth_success(resp.status, resp_body):
                         session.is_authenticated = True
 
-        except Exception:
-            logger.debug("Login POST failed for %s", host)
+        except Exception as e:
+            logger.warning("Login POST failed for %s: %s", host, e)
 
         if session.is_authenticated:
             logger.info("Authenticated to %s via form login", host)
@@ -174,7 +174,8 @@ class FormLoginStrategy(LoginStrategy):
                 async with ctx.rate:
                     await ctx.http.head(f"{scheme}://{host}/", timeout=5.0)
                     return f"{scheme}://{host}"
-            except Exception:
+            except Exception as e:
+                logger.debug("Auth base resolve %s://%s failed: %s", scheme, host, e)
                 continue
         return ""
 
@@ -195,7 +196,8 @@ class FormLoginStrategy(LoginStrategy):
                     )
                     if resp.status in (200, 301, 302):
                         return path
-            except Exception:
+            except Exception as e:
+                logger.debug("Login discovery %s%s failed: %s", base_url, path, e)
                 continue
         return ""
 
@@ -382,10 +384,10 @@ class AuthManager:
                     if session.is_authenticated:
                         self._sessions[host] = session
                         return session
-                except Exception:
-                    logger.debug(
-                        "Strategy %s failed for %s",
-                        strategy.name, host,
+                except Exception as e:
+                    logger.warning(
+                        "Strategy %s failed for %s: %s",
+                        strategy.name, host, e,
                     )
                     continue
 

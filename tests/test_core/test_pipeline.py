@@ -137,3 +137,32 @@ class TestPipeline:
 
         await pipeline.run(scope, phases=["recon"])
         assert "recon_test:example.com" in ctx.pipeline
+
+    async def test_progress_reaches_100_pct(self, registry, ctx):
+        """Phase progress must reach exactly 100% when all work is done."""
+        executor = AsyncExecutor(max_concurrency=10)
+        pipeline = Pipeline(registry, executor, ctx)
+
+        scope = TargetScope()
+        scope.add(Target.domain("example.com"))
+
+        state = await pipeline.run(scope, phases=["scanning"])
+        phase = state.phases["scanning"]
+        assert phase.status == "done"
+        assert phase.total > 0
+        assert phase.completed == phase.total
+        assert phase.progress_pct == 100.0
+
+    async def test_progress_with_resume_skips(self, registry, ctx):
+        """Resumed pipeline must still reach 100% with skipped targets."""
+        executor = AsyncExecutor(max_concurrency=10)
+        completed = {("recon_test", "example.com")}
+        pipeline = Pipeline(registry, executor, ctx, completed_pairs=completed)
+
+        scope = TargetScope()
+        scope.add(Target.domain("example.com"))
+
+        state = await pipeline.run(scope, phases=["recon"])
+        phase = state.phases["recon"]
+        assert phase.status == "done"
+        assert phase.completed == phase.total

@@ -6,14 +6,17 @@ parses webpack bundles / sourcemaps for secret leakage.
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import ClassVar
 from urllib.parse import urljoin, urlparse
 
 from basilisk.core.plugin import BasePlugin, PluginCategory, PluginMeta
-from basilisk.models.result import Finding, PluginResult
+from basilisk.models.result import Finding, PluginResult, Severity
 from basilisk.models.target import Target
 from basilisk.utils.secrets import redact, scan_text
+
+logger = logging.getLogger(__name__)
 
 # Webpack/build manifest paths
 _MANIFEST_PATHS = [
@@ -106,7 +109,8 @@ class WebCrawlerPlugin(BasePlugin):
                         if "{" in body[:10]:  # Looks like JSON
                             webpack_detected = True
                             manifest_paths.append(mpath)
-            except Exception:
+            except Exception as e:
+                logger.debug("Manifest check %s failed: %s", url, e)
                 continue
 
         data["webpack_detected"] = webpack_detected
@@ -141,7 +145,8 @@ class WebCrawlerPlugin(BasePlugin):
                         if not sm_url.startswith("http"):
                             sm_url = urljoin(js_url, sm_url)
                         sourcemap_urls.append(sm_url)
-            except Exception:
+            except Exception as e:
+                logger.debug("JS fetch %s failed: %s", js_url, e)
                 continue
 
         # Phase 5: Fetch and analyze sourcemaps
@@ -279,8 +284,10 @@ class WebCrawlerPlugin(BasePlugin):
                     return secrets
                 body = await resp.text(encoding="utf-8", errors="replace")
 
-                # Scan for secrets in sourcesContent
-                for sm in scan_text(body):
+                # Scan for secrets in sourcesContent (MEDIUM+ only —
+                # LOW-severity matches like internal IPs are too noisy
+                # in bundled JS source maps)
+                for sm in scan_text(body, min_severity=Severity.MEDIUM):
                     secrets.append({
                         "type": sm.pattern_name,
                         "redacted": redact(sm.match),

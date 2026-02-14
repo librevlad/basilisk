@@ -126,30 +126,37 @@ class Pipeline:
             phase = self.state.phases[phase_name]
             phase.status = "running"
             phase.started_at = time.monotonic()
-            phase.total = len(scope) * len(plugins)
+            phase.total = 0  # computed incrementally per plugin
             self.on_progress(self.state)
 
             for plugin_cls in plugins:
+                scope_size = len(scope)
+                phase.total += scope_size
+
                 # Skip plugins with unmet capability requirements
                 if self._should_skip_plugin(plugin_cls):
-                    phase.completed += len(scope)
+                    phase.completed += scope_size
                     self.on_progress(self.state)
                     continue
 
                 plugin = plugin_cls()
                 await plugin.setup(self.ctx)
 
-                targets = list(scope)
+                all_targets = list(scope)
 
                 # Skip already completed targets (resume support)
                 if self.completed_pairs:
                     targets = [
-                        t for t in targets
+                        t for t in all_targets
                         if (plugin.meta.name, t.host) not in self.completed_pairs
                     ]
+                else:
+                    targets = all_targets
+
+                skipped_count = scope_size - len(targets)
 
                 if not targets:
-                    phase.completed += len(list(scope))
+                    phase.completed += scope_size
                     self.on_progress(self.state)
                     await plugin.teardown()
                     continue
@@ -176,7 +183,7 @@ class Pipeline:
                                 Target.subdomain(sub, parent=result.target)
                             )
 
-                phase.completed += len(results)
+                phase.completed += len(results) + skipped_count
                 self.on_progress(self.state)
 
                 await plugin.teardown()
@@ -224,7 +231,11 @@ class Pipeline:
                             )
                             scheme_map[host] = scheme
                             return
-                        except Exception:
+                        except Exception as e:
+                            logger.debug(
+                                "HTTP check %s://%s (%s) failed: %s",
+                                scheme, host, method, e,
+                            )
                             continue
                 scheme_map[host] = None
 
@@ -312,7 +323,7 @@ class Pipeline:
                 else:
                     logger.warning("Auth failed for %s", target.host)
             except Exception:
-                logger.debug("Auth error for %s", target.host)
+                logger.warning("Auth error for %s", target.host, exc_info=True)
 
     def _check_quality_gate(self, phase_name: str) -> None:
         """Warn if too many findings in this phase lack evidence."""

@@ -58,7 +58,8 @@ class NetUtils:
             finally:
                 writer.close()
                 await writer.wait_closed()
-        except Exception:
+        except Exception as e:
+            logger.debug("Banner grab %s:%d failed: %s", host, port, e)
             return ""
 
     @staticmethod

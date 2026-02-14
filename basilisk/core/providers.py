@@ -174,8 +174,8 @@ class ProviderPool:
                             for t in remaining:
                                 t.cancel()
                             return result
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Provider race for %s failed: %s", provides, e)
         finally:
             for t in tasks:
                 if not t.done():

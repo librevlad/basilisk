@@ -30,11 +30,24 @@ class TestTarget:
         t2 = Target.domain("other.com")
         assert t1 != t2
 
+    def test_inequality_different_type_same_host(self):
+        """Domain and subdomain with same host must NOT be equal."""
+        domain = Target.domain("api.example.com")
+        sub = Target.subdomain("api.example.com", parent="example.com")
+        assert domain != sub
+
     def test_hash(self):
         t1 = Target.domain("example.com")
         t2 = Target.domain("example.com")
         assert hash(t1) == hash(t2)
         assert len({t1, t2}) == 1
+
+    def test_hash_differs_by_type(self):
+        """Same host with different type must have different hash."""
+        domain = Target.domain("api.example.com")
+        sub = Target.subdomain("api.example.com", parent="example.com")
+        assert hash(domain) != hash(sub)
+        assert len({domain, sub}) == 2
 
     def test_default_fields(self):
         t = Target.domain("example.com")
@@ -55,6 +68,13 @@ class TestTargetScope:
         scope.add(Target.domain("a.com"))
         assert not scope.add(Target.domain("a.com"))
         assert len(scope) == 1
+
+    def test_add_same_host_different_type(self):
+        """Domain and subdomain with same host are distinct targets."""
+        scope = TargetScope()
+        scope.add(Target.domain("api.example.com"))
+        assert scope.add(Target.subdomain("api.example.com", parent="example.com"))
+        assert len(scope) == 2
 
     def test_add_many(self):
         scope = TargetScope()

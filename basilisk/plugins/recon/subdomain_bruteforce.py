@@ -8,13 +8,16 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import re
 import secrets
 from typing import ClassVar
 
 from basilisk.core.plugin import BasePlugin, PluginCategory, PluginMeta
 from basilisk.models.result import Finding, PluginResult
-from basilisk.models.target import Target
+from basilisk.models.target import Target, TargetType
+
+logger = logging.getLogger(__name__)
 
 # Common prefixes for permutation mode
 _PERMUTATION_PREFIXES = [
@@ -41,6 +44,9 @@ class SubdomainBruteforcePlugin(BasePlugin):
         timeout=120.0,
         requires_http=False,
     )
+
+    def accepts(self, target: Target) -> bool:
+        return target.type == TargetType.DOMAIN
 
     async def run(self, target: Target, ctx) -> PluginResult:
         if ctx.dns is None:
@@ -78,7 +84,8 @@ class SubdomainBruteforcePlugin(BasePlugin):
                         if w not in existing:
                             words.append(w)
                             existing.add(w)
-            except Exception:
+            except Exception as e:
+                logger.debug("Dynamic wordlist augmentation failed: %s", e)
                 pass  # dynamic wordlist is best-effort
 
         # --- Phase 3: Permutation mode with known subdomains ---
