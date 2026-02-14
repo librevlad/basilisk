@@ -247,8 +247,8 @@ class CallbackServer:
             )
             writer.write(response)
             await writer.drain()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("HTTP callback handler error: %s", e)
         finally:
             writer.close()
             with contextlib.suppress(Exception):
@@ -280,14 +280,26 @@ class CallbackServer:
                 return None
 
             txn_id = data[:2]
+            data_len = len(data)
             # Skip header, parse question section
             offset = 12
             labels: list[str] = []
-            while offset < len(data):
+            while offset < data_len:
                 length = data[offset]
                 if length == 0:
                     offset += 1
                     break
+                # Pointer compression (0xC0) — not expected in queries, bail out
+                if length & 0xC0:
+                    return None
+                # Bounds check: label must fit within remaining data
+                if offset + 1 + length > data_len:
+                    logger.debug("DNS packet truncated at offset %d", offset)
+                    return None
+                # RFC 1035: label max 63 bytes
+                if length > 63:
+                    logger.debug("DNS label too long (%d) at offset %d", length, offset)
+                    return None
                 offset += 1
                 label = data[offset:offset + length].decode(errors="replace")
                 labels.append(label)
@@ -309,20 +321,21 @@ class CallbackServer:
 
             # Build minimal DNS response (NXDOMAIN)
             response = bytearray(txn_id)
-            # Flags: response, recursion available, NXDOMAIN
-            response += struct.pack(">H", 0x8183)
+            _DNS_FLAGS_NXDOMAIN = 0x8183  # response + recursion available + NXDOMAIN
+            response += struct.pack(">H", _DNS_FLAGS_NXDOMAIN)
             # QDCOUNT=1, ANCOUNT=0, NSCOUNT=0, ARCOUNT=0
             response += struct.pack(">HHHH", 1, 0, 0, 0)
             # Echo back the question section
             response += data[12:offset]
             # QTYPE and QCLASS
-            if offset + 4 <= len(data):
+            if offset + 4 <= data_len:
                 response += data[offset:offset + 4]
             else:
                 response += struct.pack(">HH", 1, 1)  # A record, IN class
 
             return bytes(response)
-        except Exception:
+        except Exception as e:
+            logger.debug("DNS query parsing failed from %s: %s", addr[0], e)
             return None
 
 

@@ -58,3 +58,32 @@ class TestRateLimiter:
         limiter = RateLimiter(rate=1000.0)
         async with limiter as ctx:
             assert ctx is limiter
+
+    async def test_lru_eviction(self):
+        """Per-host limiters are evicted when max_hosts exceeded."""
+        limiter = RateLimiter(rate=1000.0, max_hosts=3)
+        await limiter.acquire("a.com")
+        await limiter.acquire("b.com")
+        await limiter.acquire("c.com")
+        assert len(limiter._hosts) == 3
+
+        # Adding 4th host should evict "a.com" (LRU)
+        await limiter.acquire("d.com")
+        assert len(limiter._hosts) == 3
+        assert "a.com" not in limiter._hosts
+        assert "d.com" in limiter._hosts
+
+    async def test_lru_access_refreshes(self):
+        """Accessing a host moves it to end, preventing eviction."""
+        limiter = RateLimiter(rate=1000.0, max_hosts=3)
+        await limiter.acquire("a.com")
+        await limiter.acquire("b.com")
+        await limiter.acquire("c.com")
+
+        # Re-access "a.com" to refresh it
+        await limiter.acquire("a.com")
+
+        # Now "b.com" is LRU, should be evicted
+        await limiter.acquire("d.com")
+        assert "a.com" in limiter._hosts
+        assert "b.com" not in limiter._hosts

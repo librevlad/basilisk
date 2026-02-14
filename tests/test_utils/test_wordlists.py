@@ -76,6 +76,18 @@ class TestWordlistManager:
         assert "common" in names
         assert "large" in names
         assert "my_words" in names
+        # line_count is now an estimate based on file size
+        for w in available:
+            assert w.line_count >= 1
+
+    async def test_list_available_async(self, manager, wl_dirs):
+        """Async version returns exact line counts."""
+        bundled, _, _ = wl_dirs
+        (bundled / "exact.txt").write_text("one\ntwo\nthree\nfour\nfive\n")
+
+        available = await manager.list_available_async()
+        exact = [w for w in available if w.name == "exact"][0]
+        assert exact.line_count == 5
 
     def test_add_custom(self, manager, wl_dirs, tmp_path):
         source = tmp_path / "source.txt"

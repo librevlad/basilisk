@@ -90,7 +90,11 @@ class WordlistManager:
                 logger.warning("Wordlist '%s' not found, skipping", name)
 
     def list_available(self) -> list[WordlistInfo]:
-        """List all available wordlists across all sources."""
+        """List all available wordlists across all sources.
+
+        Uses file size to estimate line count (avoids blocking I/O
+        from reading entire files). For exact counts use list_available_async().
+        """
         results: list[WordlistInfo] = []
 
         for source, directory in [
@@ -101,12 +105,38 @@ class WordlistManager:
             if not directory.exists():
                 continue
             for path in sorted(directory.glob("*.txt")):
-                line_count = sum(1 for _ in open(path, errors="ignore"))  # noqa: SIM115
+                # Estimate ~20 bytes per line to avoid blocking open()/read
+                size = path.stat().st_size
+                line_count = max(1, size // 20)
                 results.append(WordlistInfo(
                     name=path.stem,
                     path=path,
                     source=source,
                     line_count=line_count,
+                ))
+        return results
+
+    async def list_available_async(self) -> list[WordlistInfo]:
+        """List all available wordlists with exact line counts (async)."""
+        results: list[WordlistInfo] = []
+
+        for source, directory in [
+            ("bundled", self.bundled_dir),
+            ("downloaded", self.downloaded_dir),
+            ("custom", self.custom_dir),
+        ]:
+            if not directory.exists():
+                continue
+            for path in sorted(directory.glob("*.txt")):
+                count = 0
+                async with aiofiles.open(path, errors="ignore") as f:
+                    async for _ in f:
+                        count += 1
+                results.append(WordlistInfo(
+                    name=path.stem,
+                    path=path,
+                    source=source,
+                    line_count=count,
                 ))
         return results
 

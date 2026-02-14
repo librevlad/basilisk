@@ -157,3 +157,32 @@ class TestCallbackServer:
             callback_domain="cb.test.com", http_port=8880,
         )
         assert server.http_url == "http://cb.test.com"
+
+    def test_dns_query_too_short(self):
+        """Packets shorter than 12 bytes must be rejected."""
+        server = CallbackServer()
+        assert server._handle_dns_query(b"\x00" * 5, ("1.1.1.1", 53)) is None
+
+    def test_dns_query_truncated_label(self):
+        """Packet with label length exceeding remaining data must be rejected."""
+        server = CallbackServer()
+        # Header (12 bytes) + label length 50 but only 3 bytes of data
+        packet = b"\x12\x34" + b"\x01\x00" + b"\x00\x01\x00\x00\x00\x00\x00\x00"
+        packet += bytes([50]) + b"abc"
+        assert server._handle_dns_query(packet, ("1.1.1.1", 53)) is None
+
+    def test_dns_query_oversized_label(self):
+        """Label longer than 63 bytes (RFC 1035 limit) must be rejected."""
+        server = CallbackServer()
+        header = b"\x12\x34\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00"
+        # Label length 64 (> 63 max)
+        label_data = b"a" * 64
+        packet = header + bytes([64]) + label_data + b"\x00"
+        assert server._handle_dns_query(packet, ("1.1.1.1", 53)) is None
+
+    def test_dns_query_empty_qname(self):
+        """Query with empty QNAME (just root label) must return None."""
+        server = CallbackServer()
+        header = b"\x12\x34\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00"
+        packet = header + b"\x00" + struct.pack(">HH", 1, 1)
+        assert server._handle_dns_query(packet, ("1.1.1.1", 53)) is None
