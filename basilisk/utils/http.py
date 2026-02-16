@@ -54,6 +54,7 @@ class AsyncHttpClient:
                 connector=self._connector,
                 timeout=self.timeout,
                 headers={"User-Agent": self.user_agent},
+                cookie_jar=aiohttp.CookieJar(unsafe=True),
             )
         return self._session
 
@@ -164,6 +165,13 @@ class AsyncHttpClient:
             result["error"] = str(e)
         return result
 
+    async def set_cookies(self, url: str, cookies: dict[str, str]) -> None:
+        """Inject cookies into the session cookie jar for a URL."""
+        from yarl import URL
+
+        session = await self._ensure_session()
+        session.cookie_jar.update_cookies(cookies, URL(url))
+
     async def close(self) -> None:
         if self._session and not self._session.closed:
             await self._session.close()
@@ -198,10 +206,16 @@ async def resolve_base_url(host: str, ctx: Any) -> str | None:
     for scheme in ("https", "http"):
         try:
             await ctx.http.head(f"{scheme}://{host}/", timeout=5.0)
+            # Cache for subsequent plugins
+            if ctx.state is not None:
+                ctx.state.setdefault("http_scheme", {})[host] = scheme
             return f"{scheme}://{host}"
         except Exception as e:
             logger.debug("resolve_base_url: %s://%s failed: %s", scheme, host, e)
             continue
+    # Cache negative result to avoid re-probing
+    if ctx.state is not None:
+        ctx.state.setdefault("http_scheme", {})[host] = None
     return None
 
 

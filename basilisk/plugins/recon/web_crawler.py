@@ -88,7 +88,42 @@ class WebCrawlerPlugin(BasePlugin):
         links = self._extract_links(page_html, base_url, target.host)
         forms = self._extract_forms(page_html, base_url)
 
-        data["crawled_urls"] = links[:100]
+        # Phase 1b: Follow links (depth 2) to discover parameterized URLs
+        depth2_links: list[str] = []
+        depth2_forms: list[dict] = []
+        visited = {base_url, f"{base_url}/"}
+        follow_targets = [
+            u for u in links
+            if u not in visited
+            and (
+                urlparse(u).path.endswith(
+                    (".php", ".asp", ".aspx", ".jsp", ".cgi", ".html", ".htm", "/")
+                )
+                or "?" in u
+                or "/" in urlparse(u).path.rstrip("/")
+            )
+        ][:40]
+
+        for follow_url in follow_targets:
+            if ctx.should_stop:
+                break
+            visited.add(follow_url)
+            sub_html = await self._fetch_page(ctx, follow_url)
+            if not sub_html:
+                continue
+            sub_links = self._extract_links(sub_html, follow_url, target.host)
+            sub_forms = self._extract_forms(sub_html, follow_url)
+            for sl in sub_links:
+                if sl not in links and sl not in depth2_links:
+                    depth2_links.append(sl)
+            for sf in sub_forms:
+                if sf not in forms and sf not in depth2_forms:
+                    depth2_forms.append(sf)
+
+        links.extend(depth2_links)
+        forms.extend(depth2_forms)
+
+        data["crawled_urls"] = links[:200]
         data["forms"] = forms[:50]
         data["js_files"] = js_files[:50]
 
@@ -215,10 +250,15 @@ class WebCrawlerPlugin(BasePlugin):
             urls.append(src)
         return list(dict.fromkeys(urls))
 
+    # URLs that destroy session state — never follow these
+    _SKIP_PATHS = {"logout", "signout", "sign-out", "log-out", "logoff"}
+
     @staticmethod
     def _extract_links(html: str, base_url: str, host: str) -> list[str]:
         """Extract same-origin links from HTML."""
         link_re = re.compile(r'href=["\']([^"\']+)["\']', re.IGNORECASE)
+        # Strip port from host for comparison (urlparse.hostname excludes port)
+        host_bare = host.split(":")[0] if ":" in host else host
         urls: list[str] = []
         for match in link_re.finditer(html):
             href = match.group(1)
@@ -227,21 +267,42 @@ class WebCrawlerPlugin(BasePlugin):
             if not href.startswith("http"):
                 href = urljoin(base_url, href)
             parsed = urlparse(href)
-            if parsed.hostname and host in parsed.hostname:
-                urls.append(href)
+            if not parsed.hostname or host_bare not in parsed.hostname:
+                continue
+            # Skip logout/signout URLs to preserve session
+            path_lower = (parsed.path or "").lower()
+            path_parts = path_lower.rstrip("/").rsplit("/", 1)[-1].split(".")
+            if path_parts[0] in WebCrawlerPlugin._SKIP_PATHS:
+                continue
+            urls.append(href)
         return list(dict.fromkeys(urls))[:200]
 
     @staticmethod
     def _extract_forms(html: str, base_url: str) -> list[dict]:
-        """Extract form actions and inputs from HTML."""
+        """Extract form actions and inputs (name→value) from HTML."""
         forms: list[dict] = []
         form_re = re.compile(
             r"<form[^>]*>(.*?)</form>", re.IGNORECASE | re.DOTALL,
         )
         action_re = re.compile(r'action=["\']([^"\']*)["\']', re.IGNORECASE)
         method_re = re.compile(r'method=["\']([^"\']*)["\']', re.IGNORECASE)
+        # Extract name + optional value from inputs
         input_re = re.compile(
-            r'<input[^>]*name=["\']([^"\']+)["\']', re.IGNORECASE,
+            r'<input[^>]*?name=["\']([^"\']+)["\']'
+            r'(?:[^>]*?value=["\']([^"\']*)["\'])?',
+            re.IGNORECASE,
+        )
+        # Alternative order: value before name
+        input_re2 = re.compile(
+            r'<input[^>]*?value=["\']([^"\']*)["\']'
+            r'[^>]*?name=["\']([^"\']+)["\']',
+            re.IGNORECASE,
+        )
+        textarea_re = re.compile(
+            r'<textarea[^>]*name=["\']([^"\']+)["\']', re.IGNORECASE,
+        )
+        select_re = re.compile(
+            r'<select[^>]*name=["\']([^"\']+)["\']', re.IGNORECASE,
         )
 
         for fm in form_re.finditer(html):
@@ -252,7 +313,21 @@ class WebCrawlerPlugin(BasePlugin):
                 action = urljoin(base_url, am.group(1))
             mm = method_re.search(form_html)
             method = mm.group(1).upper() if mm else "GET"
-            inputs = input_re.findall(form_html)
+            # Build name→value dict (preserve submit button values)
+            inputs: dict[str, str] = {}
+            for m in input_re.finditer(form_html):
+                name, value = m.group(1), m.group(2) or ""
+                inputs[name] = value
+            for m in input_re2.finditer(form_html):
+                value, name = m.group(1), m.group(2)
+                if name not in inputs:
+                    inputs[name] = value
+            for name in textarea_re.findall(form_html):
+                if name not in inputs:
+                    inputs[name] = ""
+            for name in select_re.findall(form_html):
+                if name not in inputs:
+                    inputs[name] = ""
             forms.append({
                 "action": action,
                 "method": method,
