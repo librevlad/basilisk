@@ -93,14 +93,22 @@ class TestProtocolMutations:
     def test_chunked_randomized_contains_data(self):
         payload = "hello"
         result = _chunked_randomized(payload)
-        # All original chars should be present in chunks
+        # Parse proper chunked encoding: size\r\ndata\r\n repeating
+        parts = result.split("\r\n")
         content = ""
-        for line in result.split("\r\n"):
+        i = 0
+        while i < len(parts):
             try:
-                int(line, 16)
+                size = int(parts[i], 16)
             except ValueError:
-                content += line
-        assert "hello" in content or all(c in content for c in payload)
+                i += 1
+                continue
+            if size == 0:
+                break
+            if i + 1 < len(parts):
+                content += parts[i + 1]
+            i += 2
+        assert content == payload
 
     def test_header_case_variation(self):
         result = _header_case_variation("Content-Type")

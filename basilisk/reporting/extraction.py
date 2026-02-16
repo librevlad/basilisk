@@ -277,6 +277,17 @@ def extract_ssl_details(results: list) -> list[dict]:
                 entry[key] = d[key]
         if entry.keys() - {"target"}:
             details.append(entry)
+
+    # Enrich from ssl_protocols plugin results
+    details_by_target: dict[str, dict] = {d["target"]: d for d in details}
+    for r in results:
+        if r.plugin != "ssl_protocols" or not r.data:
+            continue
+        if r.target in details_by_target:
+            for key in ("protocols", "ciphers", "curves"):
+                if key in r.data:
+                    details_by_target[r.target][key] = r.data[key]
+
     return details
 
 

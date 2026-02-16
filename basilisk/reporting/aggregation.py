@@ -14,7 +14,7 @@ OVERLAP_GROUPS: dict[str, set[str]] = {
     "cors": {"cors_scan", "cors_exploit"},
     "csp": {"http_headers", "csp_analyzer"},
     "path_traversal": {"lfi_check", "path_traversal"},
-    "tls": {"ssl_check", "tls_cipher_scan"},
+    "tls": {"ssl_check", "ssl_protocols", "ssl_compliance", "ssl_vulns", "tls_cipher_scan"},
     "asn": {"asn_lookup", "whois_lookup"},
     "xss": {"xss_basic", "xss_advanced"},
 }

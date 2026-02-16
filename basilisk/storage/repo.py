@@ -330,6 +330,83 @@ class ResultRepository:
         await self.db.commit()
         return cursor.lastrowid  # type: ignore[return-value]
 
+    # === Cache-aware loading ===
+
+    async def load_findings_for_result(
+        self,
+        run_id: int,
+        domain_id: int,
+        plugin: str,
+    ) -> list[Finding]:
+        """Load Finding objects from the findings table."""
+        cursor = await self.db.execute(
+            """SELECT severity, title, description, evidence, remediation, tags
+               FROM findings
+               WHERE run_id = ? AND domain_id = ? AND plugin = ?
+               ORDER BY severity DESC, id""",
+            (run_id, domain_id, plugin),
+        )
+        results = []
+        for row in await cursor.fetchall():
+            row_dict = dict(row)
+            tags = row_dict["tags"]
+            if isinstance(tags, str):
+                tags = json.loads(tags)
+            results.append(Finding(
+                severity=Severity(row_dict["severity"]),
+                title=row_dict["title"],
+                description=row_dict.get("description", ""),
+                evidence=row_dict.get("evidence", ""),
+                remediation=row_dict.get("remediation", ""),
+                tags=tags,
+            ))
+        return results
+
+    async def load_plugin_result(
+        self,
+        plugin: str,
+        host: str,
+        max_age_hours: float,
+    ) -> PluginResult | None:
+        """Load cached plugin result if fresh enough.
+
+        Queries plugin_data + findings tables, reconstructs PluginResult.
+        Returns None if no fresh result exists.
+        """
+        cursor = await self.db.execute(
+            """SELECT pd.*, d.host
+               FROM plugin_data pd
+               JOIN domains d ON pd.domain_id = d.id
+               WHERE pd.plugin = ? AND d.host = ?
+                 AND pd.status IN ('success', 'partial')
+                 AND pd.created_at > datetime('now', ?)
+               ORDER BY pd.id DESC
+               LIMIT 1""",
+            (plugin, host, f"-{max_age_hours} hours"),
+        )
+        pd_row = await cursor.fetchone()
+        if not pd_row:
+            return None
+
+        pd_dict = dict(pd_row)
+        findings = await self.load_findings_for_result(
+            pd_dict["run_id"], pd_dict["domain_id"], plugin,
+        )
+
+        data = pd_dict["data"]
+        if isinstance(data, str):
+            data = json.loads(data)
+
+        return PluginResult(
+            plugin=pd_dict["plugin"],
+            target=pd_dict["host"],
+            status=pd_dict["status"],
+            findings=findings,
+            data=data,
+            duration=pd_dict["duration"],
+            error=pd_dict.get("error"),
+        )
+
     # === Stats ===
 
     async def stats(self, run_id: int | None = None) -> dict[str, Any]:

@@ -1,0 +1,37 @@
+# OWASP Juice Shop scan config
+# Usage: .venv/Scripts/python.exe -m basilisk audit 127.0.0.1:4280 --config config/juiceshop.yaml -v
+# Note: Juice Shop is Node.js/Express — each request takes ~2s, so keep scan_paths minimal.
+
+http:
+  timeout: 15.0
+  verify_ssl: false
+
+rate_limit:
+  requests_per_second: 50.0
+  burst: 10
+
+scan:
+  scan_paths:
+    # Key injectable endpoints (with query params)
+    - /rest/products/search?q=test
+    - /redirect?to=https://owasp.org
+    # REST API (for dir_brute/sensitive_files discovery)
+    - /api/Products
+    - /api/Feedbacks
+    - /api/Users
+    - /api/Challenges
+    - /rest/admin/application-version
+    - /rest/admin/application-configuration
+    - /rest/user/login
+    # File access / info disclosure
+    - /ftp
+    - /encryptionkeys
+    - /support/logs
+    - /metrics
+    - /promotion
+    - /snippets
+    - /profile
+    - /dataerasure
+    - /assets/public/images/uploads/
+
+log_level: DEBUG

@@ -7,6 +7,7 @@ services, parses robots.txt for disallowed paths.
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import ClassVar
 from urllib.parse import parse_qs, urlparse
@@ -15,6 +16,8 @@ from basilisk.core.plugin import BasePlugin, PluginCategory, PluginMeta
 from basilisk.models.result import Finding, PluginResult
 from basilisk.models.target import Target
 from basilisk.utils.http_check import resolve_base_url
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # URL extraction patterns
@@ -370,7 +373,8 @@ class LinkExtractorPlugin(BasePlugin):
 
         try:
             parsed = urlparse(raw_url)
-        except Exception:
+        except Exception as e:
+            logger.debug("link_extractor: URL parse failed: %s", e)
             return
 
         hostname = (parsed.hostname or "").lower().rstrip(".")
@@ -406,7 +410,16 @@ class LinkExtractorPlugin(BasePlugin):
             # Check third-party classification
             for category, indicators in _THIRD_PARTY.items():
                 for indicator in indicators:
-                    if indicator in hostname or indicator in raw_url.lower():
+                    # Domain-like indicators use suffix matching to avoid
+                    # false positives (e.g. "nostripe.com" ≠ "stripe.com")
+                    if "." in indicator:
+                        if (
+                            hostname == indicator
+                            or hostname.endswith(f".{indicator}")
+                        ):
+                            third_party[category].add(hostname)
+                            break
+                    elif indicator in hostname or indicator in raw_url.lower():
                         third_party[category].add(hostname)
                         break
 
@@ -480,7 +493,8 @@ class LinkExtractorPlugin(BasePlugin):
                 if resp.status != 200:
                     return None
                 return await resp.text(encoding="utf-8", errors="replace")
-        except Exception:
+        except Exception as e:
+            logger.debug("link_extractor: fetch %s failed: %s", url, e)
             return None
 
     @staticmethod

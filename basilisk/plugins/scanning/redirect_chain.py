@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from typing import ClassVar
 from urllib.parse import urlparse
 
 from basilisk.core.plugin import BasePlugin, PluginCategory, PluginMeta
 from basilisk.models.result import Finding, PluginResult
 from basilisk.models.target import Target
+
+logger = logging.getLogger(__name__)
 
 
 class RedirectChainPlugin(BasePlugin):
@@ -36,6 +39,8 @@ class RedirectChainPlugin(BasePlugin):
             visited: set[str] = set()
 
             for _step in range(self.MAX_REDIRECTS):
+                if ctx.should_stop:
+                    break
                 if url in visited:
                     findings.append(Finding.medium(
                         "Redirect loop detected",
@@ -90,7 +95,8 @@ class RedirectChainPlugin(BasePlugin):
                             url = location
                         else:
                             break
-                except Exception:
+                except Exception as e:
+                    logger.debug("redirect_chain: request to %s failed: %s", url, e)
                     break
 
         # Check HTTP → HTTPS redirect

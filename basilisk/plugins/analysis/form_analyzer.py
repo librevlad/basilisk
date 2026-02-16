@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import ClassVar
 
 from basilisk.core.plugin import BasePlugin, PluginCategory, PluginMeta
 from basilisk.models.result import Finding, PluginResult
 from basilisk.models.target import Target
+
+logger = logging.getLogger(__name__)
 
 
 class FormAnalyzerPlugin(BasePlugin):
@@ -38,7 +41,8 @@ class FormAnalyzerPlugin(BasePlugin):
                     body = await resp.text(encoding="utf-8", errors="replace")
                     forms = self._parse_forms(body)
                     break
-            except Exception:
+            except Exception as e:
+                logger.debug("form_analyzer: %s fetch failed: %s", scheme, e)
                 continue
 
         for form in forms:
@@ -100,7 +104,7 @@ class FormAnalyzerPlugin(BasePlugin):
             if method_m:
                 method = method_m.group(1)
             autocomplete = ""
-            auto_m = re.search(r'autocomplete\s*=\s*["\']?(\w+)', attrs, re.IGNORECASE)
+            auto_m = re.search(r'autocomplete\s*=\s*["\']?([\w-]+)', attrs, re.IGNORECASE)
             if auto_m:
                 autocomplete = auto_m.group(1)
             has_csrf = bool(re.search(

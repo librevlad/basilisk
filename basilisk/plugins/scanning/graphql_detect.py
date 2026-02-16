@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import ClassVar
 
 from basilisk.core.plugin import BasePlugin, PluginCategory, PluginMeta
 from basilisk.models.result import Finding, PluginResult
 from basilisk.models.target import Target
+
+logger = logging.getLogger(__name__)
 
 
 class GraphqlDetectPlugin(BasePlugin):
@@ -97,8 +100,8 @@ class GraphqlDetectPlugin(BasePlugin):
                             tags=["scanning", "graphql"],
                         ))
                         found = True
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("graphql_detect: POST %s failed: %s", url, e)
 
             # Try GET-based query (some servers only accept GET)
             if not found:
@@ -144,7 +147,8 @@ class GraphqlDetectPlugin(BasePlugin):
                                 "introspection)",
                                 tags=["scanning", "graphql"],
                             ))
-                except Exception:
+                except Exception as e:
+                    logger.debug("graphql_detect: GET %s failed: %s", get_url, e)
                     continue
 
         if not findings:

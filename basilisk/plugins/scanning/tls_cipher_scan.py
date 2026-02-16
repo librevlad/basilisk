@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import ssl
 from typing import ClassVar
 
 from basilisk.core.plugin import BasePlugin, PluginCategory, PluginMeta
 from basilisk.models.result import Finding, PluginResult
 from basilisk.models.target import Target
+
+logger = logging.getLogger(__name__)
 
 # Short names / substrings matched against the negotiated cipher name.
 # Any cipher whose upper-cased name contains one of these tokens is weak.
@@ -95,6 +98,7 @@ class TlsCipherScanPlugin(BasePlugin):
         depends_on=["port_scan"],
         produces=["tls_info"],
         timeout=30.0,
+        default_enabled=False,
     )
 
     async def run(self, target: Target, ctx) -> PluginResult:
@@ -123,7 +127,8 @@ class TlsCipherScanPlugin(BasePlugin):
 
             writer.close()
             await writer.wait_closed()
-        except Exception:
+        except Exception as e:
+            logger.debug("tls_cipher_scan: TLS connection to %s failed: %s", target.host, e)
             return PluginResult.success(
                 self.meta.name, target.host,
                 findings=[Finding.info("Could not establish TLS connection")],

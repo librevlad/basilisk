@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import logging
 import time
 from collections.abc import Callable
@@ -19,6 +20,42 @@ if TYPE_CHECKING:
     from basilisk.storage.cache import ResultCache
 
 logger = logging.getLogger(__name__)
+
+# Plugins that require real domain names — skip for IP/localhost targets
+_DOMAIN_ONLY_PREFIXES = ("subdomain_", "dns_", "ssl_", "tls_")
+_DOMAIN_ONLY_NAMES = frozenset({
+    "whois", "asn_lookup", "reverse_ip", "email_harvest",
+    "github_dorking", "s3_bucket_finder", "cloud_bucket_enum",
+    "shodan_lookup", "dnssec_check", "cdn_detect", "ipv6_scan",
+    "takeover_check",
+})
+
+
+def _is_ip_or_local(host: str) -> bool:
+    """Check if host is an IP address or localhost (with optional port)."""
+    if host in ("localhost", "127.0.0.1", "::1", "[::1]"):
+        return True
+    # Strip port: "127.0.0.1:4280" → "127.0.0.1", but not IPv6 colons
+    h = host
+    if h.startswith("["):
+        # [::1]:8080 → ::1
+        h = h.split("]")[0][1:]
+    elif "." in h and ":" in h:
+        # 127.0.0.1:4280 → 127.0.0.1 (IPv4 with port)
+        h = h.rsplit(":", 1)[0]
+    try:
+        ipaddress.ip_address(h)
+        return True
+    except ValueError:
+        return False
+
+
+def _is_domain_only_plugin(name: str) -> bool:
+    """Check if plugin requires a real domain name."""
+    if any(name.startswith(p) for p in _DOMAIN_ONLY_PREFIXES):
+        return True
+    return name in _DOMAIN_ONLY_NAMES
+
 
 DEFAULT_PHASES = ["recon", "scanning", "analysis", "pentesting"]
 
@@ -61,6 +98,9 @@ class PipelineState:
     results: list[PluginResult] = field(default_factory=list)
     total_findings: int = 0
     status: str = "idle"  # idle, running, completed, failed
+    current_phase: str = ""
+    current_plugin: str = ""
+    skipped_plugins: list[str] = field(default_factory=list)
 
     def init_phases(self, categories: list[str]) -> None:
         for cat in categories:
@@ -102,6 +142,7 @@ class Pipeline:
         self.cache = cache
         self.cache_ttl = cache_ttl or {}
         self.force_phases = force_phases or set()
+        self._all_local = False
 
     async def run(
         self,
@@ -115,6 +156,14 @@ class Pipeline:
         self.state.init_phases(active_phases)
         self.state.status = "running"
         self.on_progress(self.state)
+
+        # Auto-detect IP/localhost targets → skip domain-specific plugins
+        self._all_local = all(_is_ip_or_local(t.host) for t in scope)
+        if self._all_local:
+            logger.info(
+                "All targets are IP/localhost — auto-skipping %d domain-specific plugins",
+                len(_DOMAIN_ONLY_NAMES) + 15,  # approximate: names + prefix matches
+            )
 
         # Run auth phase if auth manager is configured
         if self.ctx.auth:
@@ -151,6 +200,7 @@ class Pipeline:
                 self.state.phases[phase_name].status = "done"
                 continue
 
+            self.state.current_phase = phase_name
             phase = self.state.phases[phase_name]
             phase.status = "running"
             phase.started_at = time.monotonic()
@@ -163,9 +213,13 @@ class Pipeline:
 
                 # Skip plugins with unmet capability requirements
                 if self._should_skip_plugin(plugin_cls):
+                    self.state.skipped_plugins.append(plugin_cls.meta.name)
                     phase.completed += scope_size
                     self.on_progress(self.state)
                     continue
+
+                self.state.current_plugin = plugin_cls.meta.name
+                self.on_progress(self.state)
 
                 plugin = plugin_cls()
                 await plugin.setup(self.ctx)
@@ -241,6 +295,7 @@ class Pipeline:
 
                 await plugin.teardown()
 
+            self.state.current_plugin = ""
             phase.finished_at = time.monotonic()
             phase.status = "done"
             self.on_progress(self.state)
@@ -383,6 +438,10 @@ class Pipeline:
     def _should_skip_plugin(self, plugin_cls: type[BasePlugin]) -> bool:
         """Check if plugin should be skipped due to unmet requirements."""
         meta = plugin_cls.meta
+        # Auto-skip domain-specific plugins for IP/localhost targets
+        if self._all_local and _is_domain_only_plugin(meta.name):
+            logger.debug("Skipping %s: irrelevant for IP/localhost target", meta.name)
+            return True
         if meta.requires_auth and not (
             self.ctx.auth and self.ctx.auth.authenticated_hosts
         ):

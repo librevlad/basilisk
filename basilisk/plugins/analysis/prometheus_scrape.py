@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import ClassVar
 
 from basilisk.core.plugin import BasePlugin, PluginCategory, PluginMeta
 from basilisk.models.result import Finding, PluginResult
 from basilisk.models.target import Target
+
+logger = logging.getLogger(__name__)
 
 # Regex for Prometheus text format: metric_name{labels} value
 _METRIC_RE = re.compile(r'^([a-zA-Z_:][a-zA-Z0-9_:]*)\{([^}]*)\}\s+(\S+)', re.MULTILINE)
@@ -57,7 +60,8 @@ class PrometheusScrapePlugin(BasePlugin):
                             if "text/plain" in ct or "openmetrics" in ct:
                                 metrics_url = test_url
                                 break
-                except Exception:
+                except Exception as e:
+                    logger.debug("prometheus_scrape: %s probe failed: %s", scheme, e)
                     continue
 
         if not metrics_url:
@@ -111,6 +115,8 @@ class PrometheusScrapePlugin(BasePlugin):
         databases: set[str] = set()
 
         for metric_name, labels_str, _value in metrics:
+            if ctx.should_stop:
+                break
             labels = dict(_LABEL_RE.findall(labels_str))
 
             # Extract internal IPs

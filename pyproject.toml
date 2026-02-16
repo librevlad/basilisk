@@ -49,6 +49,23 @@ full = [
 browser = [
     "playwright>=1.40",
 ]
+offensive = [
+    "impacket>=0.12",
+    "asyncssh>=2.14",
+    "ldap3>=2.9",
+    "scapy>=2.5",
+    "pycryptodome>=3.20",
+    "passlib>=1.7",
+]
+crypto = [
+    "pycryptodome>=3.20",
+    "sympy>=1.12",
+]
+forensics = [
+    "scapy>=2.5",
+    "python-magic>=0.4",
+    "pillow>=10.0",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",

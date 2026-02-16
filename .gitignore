@@ -22,6 +22,15 @@ reports/
 projects/
 data/
 *.db
+*.state.json
+
+# Temporary files
+*.tmp
+*.bak
+*.orig
+
+# Large data files (bulk scan datasets)
+examples/git/*.csv
 
 # Claude
 .claude/

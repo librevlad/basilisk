@@ -59,6 +59,10 @@ class Audit:
         self._live_report_path: Path | None = None
         self._credentials: dict[str, tuple[str, str]] = {}
         self._bearer_tokens: dict[str, str] = {}
+        self._exclude_patterns: list[str] = []
+        self._no_cache: bool = False
+        self._cache_ttl_hours: float = 0
+        self._force_phases: list[str] = []
 
     @classmethod
     def targets(cls, target_list: list[str], **kwargs: Any) -> Audit:
@@ -86,8 +90,35 @@ class Audit:
         self._checks = checks
         return self
 
+    def exploit(self) -> Audit:
+        self._phases.append("exploitation")
+        return self
+
+    def post_exploit(self) -> Audit:
+        self._phases.append("post_exploit")
+        return self
+
+    def privesc(self) -> Audit:
+        self._phases.append("privesc")
+        return self
+
+    def lateral(self) -> Audit:
+        self._phases.append("lateral")
+        return self
+
+    def full_offensive(self) -> Audit:
+        """Run all offensive phases (HTB full attack chain)."""
+        from basilisk.core.pipeline import OFFENSIVE_PHASES
+        self._phases = list(OFFENSIVE_PHASES)
+        return self
+
     def plugins(self, *names: str) -> Audit:
         self._plugins = list(names)
+        return self
+
+    def exclude(self, *patterns: str) -> Audit:
+        """Exclude plugins by name or prefix (e.g. 'dns_enum', 'subdomain_')."""
+        self._exclude_patterns = list(patterns)
         return self
 
     def on_progress(self, callback: OnProgressCallback) -> Audit:
@@ -127,6 +158,21 @@ class Audit:
         self._live_report_path = Path(path)
         return self
 
+    def no_cache(self) -> Audit:
+        """Disable result caching — always run all plugins from scratch."""
+        self._no_cache = True
+        return self
+
+    def cache_ttl(self, hours: float) -> Audit:
+        """Override default cache TTL for all phases (hours)."""
+        self._cache_ttl_hours = hours
+        return self
+
+    def force_phases(self, *phases: str) -> Audit:
+        """Force re-run of specific phases, ignoring cache."""
+        self._force_phases = list(phases)
+        return self
+
     def report(self, formats: list[str] | str | None = None) -> Audit:
         if formats:
             self._formats = [formats] if isinstance(formats, str) else formats
@@ -143,8 +189,11 @@ class Audit:
         else:
             db, run_id, completed_pairs = None, None, set()
 
-        pipeline = self._build_pipeline(registry, ctx, settings, completed_pairs)
-        return await self._execute(pipeline, scope, ctx, db, run_id, settings)
+        cache = await self._open_cache(db)
+        pipeline = self._build_pipeline(
+            registry, ctx, settings, completed_pairs, cache,
+        )
+        return await self._execute(pipeline, scope, ctx, db, run_id, settings, cache)
 
     def _build_scope(self, settings: Settings) -> TargetScope:
         """Build target scope from configured targets."""
@@ -234,6 +283,8 @@ class Audit:
                 password=settings.auth.password,
                 login_url=settings.auth.login_url,
             ))
+        if settings.auth.extra_cookies:
+            auth_manager.set_extra_cookies(settings.auth.extra_cookies)
         if settings.auth.bearer_token:
             for t in self._targets:
                 auth_manager.set_bearer(t, settings.auth.bearer_token)
@@ -271,12 +322,27 @@ class Audit:
             user_agent=settings.http.user_agent,
         )
 
+    async def _open_cache(self, project_db: Any) -> Any:
+        """Open result cache. Returns None if caching is disabled."""
+        if self._no_cache:
+            return None
+
+        from basilisk.storage.cache import ResultCache
+
+        if project_db:
+            # For project audits, use the project DB as cache
+            return await ResultCache.from_db(project_db)
+
+        # For non-project audits, use global cache
+        return await ResultCache.open_global()
+
     def _build_pipeline(
         self,
         registry: PluginRegistry,
         ctx: PluginContext,
         settings: Settings,
         completed_pairs: set[tuple[str, str]],
+        cache: Any = None,
     ) -> Pipeline:
         """Build the execution pipeline with progress tracking."""
         executor = AsyncExecutor(max_concurrency=settings.scan.max_concurrency)
@@ -290,10 +356,20 @@ class Audit:
                 original_cb(state)
                 live.update(state)
 
+        # Build cache TTL overrides
+        cache_ttl: dict[str, float] = {}
+        if self._cache_ttl_hours > 0:
+            for phase in ("recon", "scanning", "analysis", "pentesting",
+                          "exploitation", "post_exploit", "privesc", "lateral"):
+                cache_ttl[phase] = self._cache_ttl_hours
+
         return Pipeline(
             registry, executor, ctx,
             on_progress=progress_cb,
             completed_pairs=completed_pairs,
+            cache=cache,
+            cache_ttl=cache_ttl if cache_ttl else None,
+            force_phases=set(self._force_phases) if self._force_phases else None,
         )
 
     async def _execute(
@@ -304,6 +380,7 @@ class Audit:
         db: Any,
         run_id: int | None,
         settings: Settings,
+        cache: Any = None,
     ) -> PipelineState:
         """Run the pipeline with proper startup/shutdown of engines."""
         phases = self._phases or ["recon", "scanning", "analysis", "pentesting"]
@@ -314,7 +391,10 @@ class Audit:
             if ctx.browser:
                 await ctx.browser.start()
 
-            state = await pipeline.run(scope, self._plugins, phases)
+            state = await pipeline.run(
+                scope, self._plugins, phases,
+                exclude_patterns=self._exclude_patterns or None,
+            )
             if ctx.db and run_id:
                 await ctx.db.finish_run(run_id)
 
@@ -329,6 +409,12 @@ class Audit:
                 await ctx.callback.stop()
             if ctx.browser:
                 await ctx.browser.stop()
+            # Close global cache DB (but not project DB used as cache)
+            if cache and not db:
+                try:
+                    await cache.close()
+                except Exception:
+                    pass
             if db:
                 from basilisk.storage.db import close_db
                 await close_db(db)

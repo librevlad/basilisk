@@ -21,14 +21,22 @@ if TYPE_CHECKING:
     from basilisk.models.target import Target
     from basilisk.storage.repo import ResultRepository
     from basilisk.utils.browser import BrowserManager
+    from basilisk.utils.credential_store import CredentialStore
+    from basilisk.utils.crypto_engine import CryptoEngine
     from basilisk.utils.diff import ResponseDiffer
     from basilisk.utils.dns import DnsClient
     from basilisk.utils.dynamic_wordlist import DynamicWordlistGenerator
     from basilisk.utils.http import AsyncHttpClient
+    from basilisk.utils.ldap_client import LdapClient
     from basilisk.utils.net import NetUtils
     from basilisk.utils.oob_verifier import NoopOobVerifier, OobVerifier
     from basilisk.utils.payloads import PayloadEngine
+    from basilisk.utils.pcap_analyzer import PcapAnalyzer
     from basilisk.utils.rate_limiter import RateLimiter
+    from basilisk.utils.shell import ShellManager
+    from basilisk.utils.smb import SmbClient
+    from basilisk.utils.ssh_manager import SshManager
+    from basilisk.utils.subprocess_mgr import SubprocessManager
     from basilisk.utils.waf_bypass import WafBypassEngine
     from basilisk.utils.wordlists import WordlistManager
 
@@ -64,6 +72,14 @@ class PluginContext:
     exploit_chain: ExploitChainEngine | None = None
     dynamic_wordlist: DynamicWordlistGenerator | None = None
     oob: OobVerifier | NoopOobVerifier | None = None
+    shell: ShellManager | None = None
+    creds: CredentialStore | None = None
+    smb: SmbClient | None = None
+    ldap: LdapClient | None = None
+    ssh: SshManager | None = None
+    subprocess_mgr: SubprocessManager | None = None
+    crypto: CryptoEngine | None = None
+    pcap: PcapAnalyzer | None = None
     log: logging.Logger = field(default_factory=lambda: logging.getLogger("basilisk"))
     pipeline: dict[str, PluginResult] = field(default_factory=dict)
     state: dict[str, Any] = field(default_factory=dict)

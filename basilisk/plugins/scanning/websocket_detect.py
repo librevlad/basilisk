@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from typing import ClassVar
 
 from basilisk.core.plugin import BasePlugin, PluginCategory, PluginMeta
 from basilisk.models.result import Finding, PluginResult
 from basilisk.models.target import Target
+
+logger = logging.getLogger(__name__)
 
 
 class WebSocketDetectPlugin(BasePlugin):
@@ -43,7 +46,8 @@ class WebSocketDetectPlugin(BasePlugin):
                     )
                     base_url = f"{scheme}://{target.host}"
                     break
-            except Exception:
+            except Exception as e:
+                logger.debug("websocket_detect: %s probe failed: %s", scheme, e)
                 continue
 
         if not base_url:
@@ -63,8 +67,8 @@ class WebSocketDetectPlugin(BasePlugin):
                         "WebSocket references found in page source",
                         tags=["scanning", "websocket"],
                     ))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("websocket_detect: page source check failed: %s", e)
 
         # Probe known WebSocket paths
         ws_headers = {
@@ -75,6 +79,8 @@ class WebSocketDetectPlugin(BasePlugin):
         }
 
         for path in self.WS_PATHS:
+            if ctx.should_stop:
+                break
             url = f"{base_url}{path}"
             try:
                 async with ctx.rate:
@@ -92,7 +98,8 @@ class WebSocketDetectPlugin(BasePlugin):
                         "upgrade", ""
                     ).lower() == "websocket":
                         ws_endpoints.append({"path": path, "status": resp.status})
-            except Exception:
+            except Exception as e:
+                logger.debug("websocket_detect: WS probe %s failed: %s", url, e)
                 continue
 
         if not findings:

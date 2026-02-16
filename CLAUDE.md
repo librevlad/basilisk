@@ -266,6 +266,9 @@ ctx = PluginContext(config=settings, http=http, dns=dns, net=net, rate=rate, ...
 > **ВАЖНО**: Прочитай `AUDIT_NOTES.md` в корне проекта — там полный журнал аудита,
 > исправленных багов, и детальный план live-тестирования всех 112 плагинов.
 
+> **Приоритет**: серверные уязвимости, не требующие участия жертвы (SQLi, CMDi, SSRF, SSTI, LFI, XXE, etc.)
+> Клиентские уязвимости (XSS, CSRF, Clickjacking) — вторичные.
+
 ### Что сделано (v2.0.0 refactoring)
 - [x] Глубокий аудит всей кодовой базы (3 параллельных ревью)
 - [x] 5 критических багов исправлено (race condition, progress math, etc.)

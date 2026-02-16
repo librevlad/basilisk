@@ -96,6 +96,12 @@ class PluginRegistry:
             PluginCategory.SCANNING: 1,
             PluginCategory.ANALYSIS: 2,
             PluginCategory.PENTESTING: 3,
+            PluginCategory.EXPLOITATION: 4,
+            PluginCategory.POST_EXPLOIT: 5,
+            PluginCategory.PRIVESC: 6,
+            PluginCategory.LATERAL: 7,
+            PluginCategory.CRYPTO: 8,
+            PluginCategory.FORENSICS: 9,
         }
         queue.sort(key=lambda n: category_order.get(plugins[n].meta.category, 99))
 

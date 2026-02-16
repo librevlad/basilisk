@@ -6,6 +6,7 @@ expiry status, canonical URL matching, and HTTPS enforcement.
 
 from __future__ import annotations
 
+import logging
 import re
 from datetime import UTC, datetime, timedelta
 from typing import ClassVar
@@ -14,6 +15,8 @@ from basilisk.core.plugin import BasePlugin, PluginCategory, PluginMeta
 from basilisk.models.result import Finding, PluginResult
 from basilisk.models.target import Target
 from basilisk.utils.http_check import resolve_base_url
+
+logger = logging.getLogger(__name__)
 
 # RFC 9116 field names (case-insensitive matching during parse)
 _KNOWN_FIELDS = frozenset({
@@ -100,7 +103,8 @@ class SecurityTxtPlugin(BasePlugin):
                                 found_url = url
                                 found_via_https = scheme == "https"
                                 break
-                except Exception:
+                except Exception as e:
+                    logger.debug("security_txt: %s fetch failed: %s", url, e)
                     continue
             if found_url:
                 break

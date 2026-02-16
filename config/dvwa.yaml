@@ -1,0 +1,20 @@
+# DVWA (Damn Vulnerable Web Application) scan config
+# Usage: .venv/Scripts/python.exe -m basilisk audit localhost:4280 --config config/dvwa.yaml -v
+
+http:
+  timeout: 15.0
+  verify_ssl: false
+
+rate_limit:
+  requests_per_second: 50.0
+  burst: 10
+
+auth:
+  enabled: true
+  username: admin
+  password: password
+  login_url: /login.php
+  extra_cookies:
+    security: low
+
+log_level: DEBUG

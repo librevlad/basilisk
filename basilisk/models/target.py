@@ -13,6 +13,10 @@ class TargetType(StrEnum):
     SUBDOMAIN = "subdomain"
     IP = "ip"
     URL = "url"
+    SERVICE = "service"      # ip:port/protocol
+    NETWORK = "network"      # CIDR
+    AD_DOMAIN = "ad_domain"  # htb.local
+    FILE = "file"            # file for analysis
 
 
 class Target(BaseModel):
@@ -45,6 +49,28 @@ class Target(BaseModel):
     def ip(cls, addr: str, **kwargs: Any) -> Target:
         return cls(host=addr, type=TargetType.IP, **kwargs)
 
+    @classmethod
+    def service(
+        cls, host: str, port: int, protocol: str = "tcp", **kwargs: Any,
+    ) -> Target:
+        meta = {"protocol": protocol}
+        meta.update(kwargs.pop("meta", {}))
+        return cls(host=host, type=TargetType.SERVICE, ports=[port], meta=meta, **kwargs)
+
+    @classmethod
+    def network(cls, cidr: str, **kwargs: Any) -> Target:
+        return cls(host=cidr, type=TargetType.NETWORK, **kwargs)
+
+    @classmethod
+    def ad_domain(cls, domain: str, dc_ip: str | None = None, **kwargs: Any) -> Target:
+        meta = {"dc_ip": dc_ip} if dc_ip else {}
+        meta.update(kwargs.pop("meta", {}))
+        return cls(host=domain, type=TargetType.AD_DOMAIN, meta=meta, **kwargs)
+
+    @classmethod
+    def file_target(cls, path: str, **kwargs: Any) -> Target:
+        return cls(host=path, type=TargetType.FILE, **kwargs)
+
 
 class TargetScope(BaseModel):
     """Collection of targets for an audit run."""
@@ -58,6 +84,14 @@ class TargetScope(BaseModel):
     @property
     def subdomains(self) -> list[Target]:
         return [t for t in self.targets if t.type == TargetType.SUBDOMAIN]
+
+    @property
+    def services(self) -> list[Target]:
+        return [t for t in self.targets if t.type == TargetType.SERVICE]
+
+    @property
+    def networks(self) -> list[Target]:
+        return [t for t in self.targets if t.type == TargetType.NETWORK]
 
     @property
     def hosts(self) -> list[str]:

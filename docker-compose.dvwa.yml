@@ -1,0 +1,10 @@
+services:
+  dvwa:
+    image: vulnerables/web-dvwa
+    ports:
+      - "4280:80"
+    environment:
+      - RECAPTCHA_PRIV_KEY=''
+      - RECAPTCHA_PUB_KEY=''
+      - SECURITY_LEVEL=low
+      - PHPIDS_ENABLED=0

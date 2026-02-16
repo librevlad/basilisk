@@ -19,6 +19,12 @@ class PluginCategory(StrEnum):
     SCANNING = "scanning"
     ANALYSIS = "analysis"
     PENTESTING = "pentesting"
+    EXPLOITATION = "exploitation"
+    POST_EXPLOIT = "post_exploit"
+    PRIVESC = "privesc"
+    LATERAL = "lateral"
+    CRYPTO = "crypto"
+    FORENSICS = "forensics"
 
 
 class PluginMeta(BaseModel):
@@ -37,6 +43,10 @@ class PluginMeta(BaseModel):
     requires_auth: bool = False     # Skip if no auth session available
     requires_browser: bool = False  # Skip if headless browser unavailable
     requires_callback: bool = False  # Skip if OOB callback server unavailable
+    requires_shell: bool = False        # Needs active shell session
+    requires_credentials: bool = False   # Needs creds from CredentialStore
+    platform: str = "any"               # "linux" / "windows" / "any"
+    risk_level: str = "safe"            # "safe" / "noisy" / "destructive"
 
 
 class BasePlugin(ABC):

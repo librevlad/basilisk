@@ -9,6 +9,7 @@ Deep analysis of HTML pages and JavaScript bundles:
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import ClassVar
 from urllib.parse import urlparse
@@ -17,6 +18,8 @@ from basilisk.core.plugin import BasePlugin, PluginCategory, PluginMeta
 from basilisk.models.result import Finding, PluginResult
 from basilisk.models.target import Target
 from basilisk.utils.secrets import SECRET_REGISTRY, _is_false_positive
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # API endpoint extraction patterns (JS)
@@ -282,8 +285,8 @@ class JsApiExtractPlugin(BasePlugin):
                     )
                     if "webpack" in main_body.lower() or "__webpack" in main_body:
                         webpack_detected = True
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("js_api_extract: main page fetch failed: %s", e)
 
         # ── Multi-page scan: fetch extra pages + deep-parse HTML ──
         for page_path in _EXTRA_PAGES:
@@ -310,7 +313,8 @@ class JsApiExtractPlugin(BasePlugin):
                         framework_configs, all_forms,
                         all_internal_ips, all_internal_urls,
                     )
-            except Exception:
+            except Exception as e:
+                logger.debug("js_api_extract: page %s failed: %s", page_path, e)
                 continue
 
         # ── Manifest autodiscovery ──
@@ -371,7 +375,8 @@ class JsApiExtractPlugin(BasePlugin):
 
                     if "webpack" in content[:2000].lower():
                         webpack_detected = True
-            except Exception:
+            except Exception as e:
+                logger.debug("js_api_extract: JS file %s failed: %s", js_url, e)
                 continue
 
         # ── Common JS bundle paths ──
@@ -419,7 +424,8 @@ class JsApiExtractPlugin(BasePlugin):
                     sm = self._check_source_map(content, full_url)
                     if sm:
                         source_maps.append(sm)
-            except Exception:
+            except Exception as e:
+                logger.debug("js_api_extract: bundle %s failed: %s", bp, e)
                 continue
 
         # ── Source maps — GET and extract paths ──
@@ -437,12 +443,14 @@ class JsApiExtractPlugin(BasePlugin):
                     if "json" in ct or map_url.endswith(".map"):
                         try:
                             data = await resp.json()
-                        except Exception:
+                        except Exception as e:
+                            logger.debug("js_api_extract: sourcemap JSON parse failed: %s", e)
                             continue
                         self._extract_paths_from_sourcemap(
                             data, all_paths,
                         )
-            except Exception:
+            except Exception as e:
+                logger.debug("js_api_extract: sourcemap %s failed: %s", map_url, e)
                 continue
 
         # ══════════════════════════════════════════════════════════
@@ -925,8 +933,8 @@ class JsApiExtractPlugin(BasePlugin):
                     or parsed.hostname.endswith(f".{host}")
                 ):
                     return _normalize_path(parsed.path or "/")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("js_api_extract: URL parse failed for %s: %s", raw[:80], e)
             return None
 
         # Relative path — skip
@@ -973,7 +981,8 @@ class JsApiExtractPlugin(BasePlugin):
                         chunk_urls.extend(
                             _extract_js_from_manifest(data, base_url),
                         )
-                    except Exception:
+                    except Exception as e:
+                        logger.debug("js_api_extract: manifest JSON parse failed: %s", e)
                         text = await resp.text(
                             encoding="utf-8", errors="replace",
                         )
@@ -987,7 +996,8 @@ class JsApiExtractPlugin(BasePlugin):
                                 chunk_urls.append(f"{base_url}{js_ref}")
                             elif not js_ref.startswith("data:"):
                                 chunk_urls.append(f"{base_url}/{js_ref}")
-            except Exception:
+            except Exception as e:
+                logger.debug("js_api_extract: manifest %s failed: %s", path, e)
                 continue
         return chunk_urls
 

@@ -8,6 +8,7 @@ and chain validation (DS to DNSKEY digest match).
 from __future__ import annotations
 
 import hashlib
+import logging
 import struct
 from typing import ClassVar
 
@@ -20,6 +21,8 @@ from basilisk.core.plugin import BasePlugin, PluginCategory, PluginMeta
 from basilisk.models.result import Finding, PluginResult
 from basilisk.models.target import Target
 from basilisk.utils.dns import is_root_domain
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # DNSSEC algorithm registry (RFC 8624)
@@ -161,7 +164,8 @@ class DnssecCheckPlugin(BasePlugin):
         info: dict = {"keys": [], "algorithms": [], "key_sizes": []}
         try:
             answer = await resolver.resolve(domain, dns.rdatatype.DNSKEY)
-        except dns.exception.DNSException:
+        except dns.exception.DNSException as e:
+            logger.debug("dnssec_check: DNSKEY resolve for %s failed: %s", domain, e)
             return info
 
         for rdata in answer:
@@ -252,7 +256,8 @@ class DnssecCheckPlugin(BasePlugin):
         info: dict = {"records": [], "digest_types": []}
         try:
             answer = await resolver.resolve(domain, dns.rdatatype.DS)
-        except dns.exception.DNSException:
+        except dns.exception.DNSException as e:
+            logger.debug("dnssec_check: DS resolve for %s failed: %s", domain, e)
             return info
 
         for rdata in answer:
@@ -307,7 +312,8 @@ class DnssecCheckPlugin(BasePlugin):
         info: dict = {}
         try:
             answer = await resolver.resolve(domain, dns.rdatatype.RRSIG)
-        except dns.exception.DNSException:
+        except dns.exception.DNSException as e:
+            logger.debug("dnssec_check: RRSIG resolve for %s failed: %s", domain, e)
             return info
 
         for rdata in answer:
@@ -407,8 +413,8 @@ class DnssecCheckPlugin(BasePlugin):
                     ))
                     break
                 return info
-        except dns.exception.DNSException:
-            pass
+        except dns.exception.DNSException as e:
+            logger.debug("dnssec_check: NSEC3PARAM resolve for %s failed: %s", domain, e)
 
         # If no NSEC3, probe for NSEC via NXDOMAIN response
         try:
@@ -428,8 +434,8 @@ class DnssecCheckPlugin(BasePlugin):
                 remediation="Switch to NSEC3 to prevent zone enumeration",
                 tags=["scanning", "dns", "dnssec", "nsec"],
             ))
-        except dns.exception.DNSException:
-            pass
+        except dns.exception.DNSException as e:
+            logger.debug("dnssec_check: NSEC probe for %s failed: %s", domain, e)
 
         return info
 
@@ -453,13 +459,15 @@ class DnssecCheckPlugin(BasePlugin):
             dnskey_answer = await resolver.resolve(
                 domain, dns.rdatatype.DNSKEY,
             )
-        except dns.exception.DNSException:
+        except dns.exception.DNSException as e:
+            logger.debug("dnssec_check: chain DNSKEY resolve for %s failed: %s", domain, e)
             return False
 
         try:
             ds_answer = await resolver.resolve(domain, dns.rdatatype.DS)
             ds_records = list(ds_answer)
-        except dns.exception.DNSException:
+        except dns.exception.DNSException as e:
+            logger.debug("dnssec_check: chain DS resolve for %s failed: %s", domain, e)
             return False
 
         chain_valid = False

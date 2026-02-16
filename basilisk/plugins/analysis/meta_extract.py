@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import ClassVar
 
 from basilisk.core.plugin import BasePlugin, PluginCategory, PluginMeta
 from basilisk.models.result import Finding, PluginResult
 from basilisk.models.target import Target
+
+logger = logging.getLogger(__name__)
 
 
 class MetaExtractPlugin(BasePlugin):
@@ -38,7 +41,8 @@ class MetaExtractPlugin(BasePlugin):
                     body = await resp.text(encoding="utf-8", errors="replace")
                     meta_tags = self._parse_meta(body)
                     break
-            except Exception:
+            except Exception as e:
+                logger.debug("meta_extract: %s fetch failed: %s", scheme, e)
                 continue
 
         if not meta_tags:
@@ -65,6 +69,17 @@ class MetaExtractPlugin(BasePlugin):
             findings.append(Finding.info(
                 f"Author: {author}",
                 tags=["analysis", "meta"],
+            ))
+
+        # Check for http-equiv refresh (potential open redirect)
+        refresh = meta_tags.get("http-equiv:refresh", "")
+        if refresh and "url=" in refresh.lower():
+            findings.append(Finding.low(
+                "Meta refresh redirect detected",
+                description="http-equiv refresh may enable open redirect",
+                evidence=f'<meta http-equiv="refresh" content="{refresh}">',
+                remediation="Use server-side redirects instead of meta refresh",
+                tags=["analysis", "meta", "redirect"],
             ))
 
         # Check for robots noindex
@@ -98,10 +113,17 @@ class MetaExtractPlugin(BasePlugin):
             attrs = match.group(1)
             name = ""
             content = ""
-            name_match = re.search(r'(?:name|property)\s*=\s*["\']([^"\']+)', attrs, re.IGNORECASE)
+            name_match = re.search(
+                r'(?:name|property)\s*=\s*["\']([^"\']+)', attrs, re.IGNORECASE,
+            )
+            http_equiv_match = re.search(
+                r'http-equiv\s*=\s*["\']([^"\']+)', attrs, re.IGNORECASE,
+            )
             content_match = re.search(r'content\s*=\s*["\']([^"\']*)', attrs, re.IGNORECASE)
             if name_match:
                 name = name_match.group(1).lower()
+            elif http_equiv_match:
+                name = f"http-equiv:{http_equiv_match.group(1).lower()}"
             if content_match:
                 content = content_match.group(1)
             if name and content:

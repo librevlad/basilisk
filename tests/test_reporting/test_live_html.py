@@ -124,8 +124,7 @@ class TestLiveHtmlRenderer:
     def test_init(self, tmp_path):
         path = tmp_path / "report.html"
         renderer = LiveHtmlRenderer(path)
-        assert renderer.output_path == path
-        assert renderer.refresh_interval == 3
+        assert renderer.html_path == path
 
     def test_update_creates_file(self, tmp_path):
         path = tmp_path / "report.html"
@@ -163,9 +162,9 @@ class TestLiveHtmlRenderer:
         content = path.read_text(encoding="utf-8")
         assert "Test Finding" in content
 
-    def test_update_running_has_refresh(self, tmp_path):
+    def test_update_running(self, tmp_path):
         path = tmp_path / "report.html"
-        renderer = LiveHtmlRenderer(path, refresh_interval=5)
+        renderer = LiveHtmlRenderer(path)
 
         state = MagicMock()
         state.status = "running"
@@ -176,3 +175,38 @@ class TestLiveHtmlRenderer:
         renderer.update(state)
         assert path.exists()
         assert path.read_text(encoding="utf-8")
+
+
+class TestLiveReportEngine:
+    def test_creates_both_files(self, tmp_path):
+        from basilisk.reporting.live_html import LiveReportEngine
+
+        engine = LiveReportEngine(tmp_path)
+
+        state = MagicMock()
+        state.status = "completed"
+        state.total_findings = 0
+        state.results = []
+        state.phases = {}
+
+        engine.update(state)
+        assert engine.html_path.exists()
+        assert engine.json_path.exists()
+
+    def test_json_has_status(self, tmp_path):
+        import json
+
+        from basilisk.reporting.live_html import LiveReportEngine
+
+        engine = LiveReportEngine(tmp_path)
+
+        state = MagicMock()
+        state.status = "running"
+        state.total_findings = 5
+        state.results = []
+        state.phases = {}
+
+        engine.update(state)
+        data = json.loads(engine.json_path.read_text(encoding="utf-8"))
+        assert data["status"] == "running"
+        assert data["total_findings"] == 5

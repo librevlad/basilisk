@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from typing import ClassVar
 from urllib.parse import quote
 
 from basilisk.core.plugin import BasePlugin, PluginCategory, PluginMeta
 from basilisk.models.result import Finding, PluginResult
 from basilisk.models.target import Target
+
+logger = logging.getLogger(__name__)
 
 # Baseline payload that any WAF should block
 BLOCKED_PAYLOAD = "' OR 1=1--"
@@ -133,7 +136,8 @@ class WafBypassPlugin(BasePlugin):
                     await ctx.http.head(f"{scheme}://{target.host}/", timeout=5.0)
                     base_url = f"{scheme}://{target.host}"
                     break
-            except Exception:
+            except Exception as e:
+                logger.debug("waf_bypass: %s probe failed: %s", scheme, e)
                 continue
 
         if not base_url:
@@ -143,15 +147,26 @@ class WafBypassPlugin(BasePlugin):
                 data={"bypass_techniques": [], "waf_type": waf_type},
             )
 
-        # Send baseline blocked payload
-        blocked_status = await self._send_payload(
-            ctx, base_url, quote(BLOCKED_PAYLOAD), {},
-        )
+        # Try multiple paths to find one that the WAF blocks
+        test_paths = ["/search", "/", "/login", "/api"]
+        blocked_status: int | None = None
+        test_path = "/search"
 
-        # If baseline isn't blocked, WAF may not filter this path
-        if blocked_status and blocked_status < 400:
+        for tp in test_paths:
+            if ctx.should_stop:
+                break
+            status = await self._send_payload(
+                ctx, base_url, quote(BLOCKED_PAYLOAD), {}, path=tp,
+            )
+            if status and status >= 400:
+                blocked_status = status
+                test_path = tp
+                break
+
+        # If baseline isn't blocked on any path, WAF may not filter
+        if not blocked_status or blocked_status < 400:
             findings.append(Finding.info(
-                f"WAF ({waf_type}) did not block baseline payload on /",
+                f"WAF ({waf_type}) did not block baseline payload",
                 tags=["analysis", "waf"],
             ))
             return PluginResult.success(
@@ -165,7 +180,9 @@ class WafBypassPlugin(BasePlugin):
             if ctx.should_stop:
                 break
 
-            status = await self._send_payload(ctx, base_url, payload, headers)
+            status = await self._send_payload(
+                ctx, base_url, payload, headers, path=test_path,
+            )
             if status is None:
                 continue
 
@@ -201,15 +218,21 @@ class WafBypassPlugin(BasePlugin):
 
     @staticmethod
     async def _send_payload(
-        ctx, base_url: str, payload: str, extra_headers: dict[str, str],
+        ctx,
+        base_url: str,
+        payload: str,
+        extra_headers: dict[str, str],
+        *,
+        path: str = "/search",
     ) -> int | None:
         """Send payload to target, return HTTP status or None on error."""
-        url = f"{base_url}/search?q={payload}"
+        url = f"{base_url}{path}?q={payload}"
         try:
             async with ctx.rate:
                 resp = await ctx.http.get(
                     url, headers=extra_headers or None, timeout=8.0,
                 )
                 return resp.status
-        except Exception:
+        except Exception as e:
+            logger.debug("waf_bypass: payload send failed: %s", e)
             return None

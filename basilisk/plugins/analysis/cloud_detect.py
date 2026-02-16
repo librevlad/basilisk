@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from typing import ClassVar
 
 from basilisk.core.plugin import BasePlugin, PluginCategory, PluginMeta
 from basilisk.models.result import Finding, PluginResult
 from basilisk.models.target import Target
+
+logger = logging.getLogger(__name__)
 
 # Common cloud provider IP range prefixes and header signatures
 CLOUD_SIGNATURES = {
@@ -185,15 +188,19 @@ class CloudDetectPlugin(BasePlugin):
                     )
                     headers = {k.lower(): v for k, v in resp.headers.items()}
                     break
-            except Exception:
+            except Exception as e:
+                logger.debug("cloud_detect: %s request failed: %s", scheme, e)
                 continue
 
         # Check CNAME
         cname = ""
         if ctx.dns:
-            cname_records = await ctx.dns.resolve(target.host, "CNAME")
-            if cname_records:
-                cname = cname_records[0].value.lower()
+            try:
+                cname_records = await ctx.dns.resolve(target.host, "CNAME")
+                if cname_records:
+                    cname = cname_records[0].value.lower().rstrip(".")
+            except Exception as e:
+                logger.debug("cloud_detect: DNS CNAME resolve failed: %s", e)
 
         for provider, sigs in CLOUD_SIGNATURES.items():
             matched = False
@@ -203,7 +210,7 @@ class CloudDetectPlugin(BasePlugin):
                     break
             if not matched and cname:
                 for c in sigs["cname"]:
-                    if c in cname:
+                    if cname == c or cname.endswith(f".{c}"):
                         matched = True
                         break
             if matched:

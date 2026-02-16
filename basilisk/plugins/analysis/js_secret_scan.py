@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import ClassVar
 
@@ -9,6 +10,8 @@ from basilisk.core.plugin import BasePlugin, PluginCategory, PluginMeta
 from basilisk.models.result import Finding, PluginResult
 from basilisk.models.target import Target
 from basilisk.utils.secrets import SECRET_REGISTRY
+
+logger = logging.getLogger(__name__)
 
 
 class JsSecretScanPlugin(BasePlugin):
@@ -58,18 +61,24 @@ class JsSecretScanPlugin(BasePlugin):
                         elif src.startswith("http"):
                             js_urls.append(src)
                     break
-            except Exception:
+            except Exception as e:
+                logger.debug("js_secret_scan: %s fetch failed: %s", scheme, e)
                 continue
 
         # Scan external JS files (limit to 15)
+        js_files_scanned = 0
         for js_url in js_urls[:15]:
+            if ctx.should_stop:
+                break
             try:
                 async with ctx.rate:
                     resp = await ctx.http.get(js_url, timeout=8.0)
                     if resp.status == 200:
+                        js_files_scanned += 1
                         content = await resp.text(encoding="utf-8", errors="replace")
                         self._scan_content(content, js_url, secrets_found)
-            except Exception:
+            except Exception as e:
+                logger.debug("js_secret_scan: %s failed: %s", js_url, e)
                 continue
 
         for secret in secrets_found:
@@ -86,14 +95,14 @@ class JsSecretScanPlugin(BasePlugin):
 
         if not findings:
             findings.append(Finding.info(
-                f"No secrets found in {len(js_urls) + 1} JS sources",
+                f"No secrets found in {js_files_scanned + 1} JS sources",
                 tags=["analysis", "secret"],
             ))
 
         return PluginResult.success(
             self.meta.name, target.host,
             findings=findings,
-            data={"secrets": secrets_found, "js_files_scanned": len(js_urls)},
+            data={"secrets": secrets_found, "js_files_scanned": js_files_scanned},
         )
 
     def _scan_content(

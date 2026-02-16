@@ -33,7 +33,11 @@ def _setup_logging(verbose: bool = False) -> None:
 @app.command()
 def audit(
     target: str = typer.Argument(help="Target domain to audit"),
-    plugins: str | None = typer.Option(None, help="Comma-separated plugin names"),
+    plugins: str | None = typer.Option(None, help="Comma-separated plugin names (whitelist)"),
+    exclude: str | None = typer.Option(
+        None, "--exclude", "-x",
+        help="Exclude plugins by name or prefix, e.g.: dns_enum,subdomain_,whois,asn_",
+    ),
     format: str = typer.Option("json", help="Output formats: json,csv,html"),  # noqa: A002
     config: str | None = typer.Option(None, help="Path to config YAML"),
     output: str = typer.Option("reports", help="Output directory"),
@@ -45,6 +49,15 @@ def audit(
     project_name: str | None = typer.Option(
         None, "--project", "-p", help="Save to project (auto-create, resume)",
     ),
+    phases: str | None = typer.Option(
+        None, "--phases", help="Comma-separated phases to run (default: all). "
+        "E.g.: scanning,analysis,pentesting",
+    ),
+    no_cache: bool = typer.Option(False, "--no-cache", help="Ignore cached results"),
+    cache_ttl: int = typer.Option(0, "--cache-ttl", help="Cache TTL in hours (0=default per phase)"),
+    force: str | None = typer.Option(
+        None, "--force", help="Force re-run phases, e.g.: recon,pentesting",
+    ),
 ):
     """Run a full audit against a target domain."""
     _setup_logging(verbose)
@@ -54,10 +67,6 @@ def audit(
         return
 
     from basilisk.core.facade import Audit
-    from basilisk.reporting.csv import CsvRenderer
-    from basilisk.reporting.engine import ReportEngine
-    from basilisk.reporting.html import HtmlRenderer
-    from basilisk.reporting.json import JsonRenderer
 
     console.print(f"[bold blue]Basilisk v{__version__}[/] — Auditing [bold]{target}[/]")
 
@@ -66,58 +75,95 @@ def audit(
         audit_builder = audit_builder.with_config(config)
     if plugins:
         audit_builder = audit_builder.plugins(*plugins.split(","))
+    if exclude:
+        audit_builder = audit_builder.exclude(*exclude.split(","))
     if wordlist:
         audit_builder = audit_builder.wordlists(*wordlist.split(","))
+    if no_cache:
+        audit_builder = audit_builder.no_cache()
+    if cache_ttl > 0:
+        audit_builder = audit_builder.cache_ttl(cache_ttl)
+    if force:
+        audit_builder = audit_builder.force_phases(*force.split(","))
     project_obj = None
     if project_name:
         audit_builder, project_obj = _attach_project(audit_builder, project_name, target)
 
-    audit_builder = audit_builder.discover().scan().analyze().pentest()
+    phase_methods = {
+        "recon": "discover", "scanning": "scan",
+        "analysis": "analyze", "pentesting": "pentest",
+    }
+    if phases:
+        for p in phases.split(","):
+            p = p.strip()
+            if p not in phase_methods:
+                console.print(f"[red]Unknown phase: {p}[/]")
+                raise typer.Exit(1)
+            audit_builder = getattr(audit_builder, phase_methods[p])()
+    else:
+        audit_builder = audit_builder.discover().scan().analyze().pentest()
 
     # Build scan output directory: target_YYYYMMDD_HHMMSS
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     safe_target = target.replace(":", "_").replace("/", "_")
     base_reports = project_obj.reports_dir if project_obj else Path(output)
     scan_dir = base_reports / f"{safe_target}_{timestamp}"
-    scan_dir.mkdir(parents=True, exist_ok=True)
 
-    # Setup live HTML report in scan directory
-    from basilisk.reporting.live_html import LiveHtmlRenderer
+    # Unified live report engine — writes both HTML and JSON from the start
+    from basilisk.reporting.live_html import LiveReportEngine
 
-    live_report_path = scan_dir / "live_report.html"
-    live_renderer = LiveHtmlRenderer(live_report_path)
+    report_engine = LiveReportEngine(scan_dir)
+    console.print(f"  Reports: {scan_dir} (updating live)")
+
+    _last_plugin = {"name": ""}
 
     def on_progress(state):
-        live_renderer.update(state)
-        if state.status == "running":
+        report_engine.update(state)
+        if state.status == "running" and state.current_plugin:
+            plugin = state.current_plugin
+            if plugin != _last_plugin["name"]:
+                _last_plugin["name"] = plugin
+                phase = state.current_phase
+                phase_info = state.phases.get(phase)
+                progress = ""
+                if phase_info and phase_info.total:
+                    progress = f" [{phase_info.completed}/{phase_info.total}]"
+                elapsed = ""
+                if phase_info and phase_info.elapsed > 0:
+                    elapsed = f" ({phase_info.elapsed:.0f}s)"
+                console.print(
+                    f"  [dim]{phase}{progress}{elapsed}[/] >> [cyan]{plugin}[/]"
+                )
+        elif state.status == "running":
             for name, phase in state.phases.items():
-                if phase.status == "running":
+                if phase.status == "done" and name == state.current_phase:
                     console.print(
-                        f"  [dim]{name}:[/] {phase.completed}/{phase.total}",
-                        end="\r",
+                        f"  [green]OK {name}[/] done ({phase.elapsed:.0f}s, "
+                        f"{phase.completed} tasks)"
                     )
 
     audit_builder = audit_builder.on_progress(on_progress)
 
     state = asyncio.run(audit_builder.run())
 
-    # Generate reports — always include json + html
-    formats = format.split(",")
-    for required in ("json", "html"):
-        if required not in formats:
-            formats.append(required)
+    # CSV is optional — only generate if explicitly requested
+    if "csv" in format.split(","):
+        from basilisk.reporting.csv import CsvRenderer
+        from basilisk.reporting.engine import ReportEngine
 
-    engine = ReportEngine()
-    engine.register("json", JsonRenderer())
-    engine.register("csv", CsvRenderer())
-    engine.register("html", HtmlRenderer())
-
-    paths = engine.generate(state, scan_dir, formats)
+        csv_engine = ReportEngine()
+        csv_engine.register("csv", CsvRenderer())
+        csv_engine.generate(state, scan_dir, ["csv"])
 
     console.print(f"\n[bold green]Audit complete![/] {state.total_findings} findings")
+    if state.skipped_plugins:
+        console.print(f"  [dim]Skipped {len(state.skipped_plugins)} irrelevant plugins[/]")
+    for name, phase in state.phases.items():
+        if phase.total > 0:
+            console.print(f"  [dim]{name}: {phase.completed} tasks in {phase.elapsed:.0f}s[/]")
     console.print(f"  Reports: {scan_dir}")
-    for p in paths:
-        console.print(f"  - {p.name}")
+    console.print(f"  - {report_engine.html_path.name}")
+    console.print(f"  - {report_engine.json_path.name}")
 
 
 def _attach_project(audit_builder, name: str, target: str) -> tuple:
@@ -284,6 +330,75 @@ def project(
 
     else:
         console.print(f"[red]Unknown action: {action}[/]")
+
+
+@app.command()
+def htb(
+    target: str = typer.Argument(help="Target IP (e.g. 10.10.10.1)"),
+    mode: str = typer.Option("full", help="Attack mode: full, web, ad, recon"),
+    verbose: bool = typer.Option(False, "-v", "--verbose"),
+    output: str = typer.Option("reports", help="Output directory"),
+):
+    """Full HTB attack chain — automated offensive pipeline."""
+    _setup_logging(verbose)
+
+    from basilisk.core.facade import Audit
+
+    console.print(f"[bold red]Basilisk v{__version__}[/] — HTB Attack Mode: [bold]{mode}[/]")
+    console.print(f"  Target: [bold]{target}[/]")
+
+    audit_builder = Audit(target)
+
+    if mode == "full":
+        audit_builder = audit_builder.full_offensive()
+    elif mode == "web":
+        audit_builder = audit_builder.discover().scan().analyze().pentest()
+    elif mode == "ad":
+        audit_builder = audit_builder.discover().scan().exploit().lateral()
+    elif mode == "recon":
+        audit_builder = audit_builder.discover().scan().analyze()
+    else:
+        console.print(f"[red]Unknown mode: {mode}[/]")
+        raise typer.Exit(1)
+
+    from basilisk.reporting.live_html import LiveReportEngine
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_target = target.replace(":", "_").replace("/", "_")
+    scan_dir = Path(output) / f"htb_{safe_target}_{timestamp}"
+
+    report_engine = LiveReportEngine(scan_dir)
+    audit_builder = audit_builder.on_progress(report_engine.update)
+
+    state = asyncio.run(audit_builder.run())
+
+    console.print(f"\n[bold green]Attack complete![/] {state.total_findings} findings")
+    console.print(f"  - {report_engine.html_path.name}")
+    console.print(f"  - {report_engine.json_path.name}")
+
+
+@app.command()
+def crack(
+    hash_value: str = typer.Argument(help="Hash to identify and crack"),
+    wordlist: str | None = typer.Option(None, "-w", "--wordlist", help="Custom wordlist"),
+):
+    """Identify and crack a hash."""
+    try:
+        from basilisk.utils.crypto_engine import CryptoEngine
+    except ImportError:
+        console.print("[red]CryptoEngine requires pycryptodome[/]")
+        raise typer.Exit(1) from None
+
+    crypto = CryptoEngine()
+    hash_type = crypto.identify_hash(hash_value)
+    console.print(f"Hash type: [bold]{hash_type}[/]")
+
+    result = crypto.crack_hash(hash_value)
+    if result and result.cracked:
+        console.print(f"[bold green]Cracked![/] {result.password}")
+    else:
+        console.print("[yellow]Not cracked with built-in wordlist[/]")
+        console.print("Try: hashcat -m <mode> hash.txt wordlist.txt")
 
 
 @app.command()

@@ -354,8 +354,8 @@ class OpenApiParserPlugin(BasePlugin):
                                 "(install PyYAML to parse)",
                                 tags=["analysis", "api", "openapi"],
                             ))
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.debug("openapi_parser: YAML parse failed at %s: %s", path, e)
                         continue
 
                     # Check for Swagger UI HTML page — extract spec URL
@@ -370,7 +370,8 @@ class OpenApiParserPlugin(BasePlugin):
                             if result:
                                 return result, spec_ref
 
-            except Exception:
+            except Exception as e:
+                logger.debug("openapi_parser: spec probe %s failed: %s", path, e)
                 continue
 
         return None, ""
@@ -418,8 +419,8 @@ class OpenApiParserPlugin(BasePlugin):
                 parsed = json.loads(body)
                 if self._is_openapi_spec(parsed):
                     return parsed
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("openapi_parser: spec fetch from %s failed: %s", url, e)
         return None
 
     # ------------------------------------------------------------------

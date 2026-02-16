@@ -28,6 +28,9 @@ PLUGIN_PRESETS = {
     "scanning": [
         ("port_scan", "Port Scan", True),
         ("ssl_check", "SSL/TLS Check", True),
+        ("ssl_protocols", "SSL Protocols & Ciphers", True),
+        ("ssl_vulns", "SSL Vulnerabilities", True),
+        ("ssl_compliance", "TLS Compliance", True),
         ("service_detect", "Service Detection", True),
     ],
     "analysis": [

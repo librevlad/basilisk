@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from typing import ClassVar
 
 from basilisk.core.plugin import BasePlugin, PluginCategory, PluginMeta
 from basilisk.models.result import Finding, PluginResult
 from basilisk.models.target import Target
+
+logger = logging.getLogger(__name__)
 
 
 class ApiDetectPlugin(BasePlugin):
@@ -50,7 +53,8 @@ class ApiDetectPlugin(BasePlugin):
                     )
                     base_url = f"{scheme}://{target.host}"
                     break
-            except Exception:
+            except Exception as e:
+                logger.debug("api_detect: %s probe failed: %s", scheme, e)
                 continue
 
         if not base_url:
@@ -71,15 +75,17 @@ class ApiDetectPlugin(BasePlugin):
                     spa_baseline = await r.text(
                         encoding="utf-8", errors="replace",
                     )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("api_detect: SPA baseline fetch failed: %s", e)
 
         for path in self.API_PATHS:
+            if ctx.should_stop:
+                break
             url = f"{base_url}{path}"
             try:
                 async with ctx.rate:
                     resp = await ctx.http.get(url, timeout=5.0)
-                    if resp.status in (200, 301, 302):
+                    if resp.status in (200, 301, 302, 401, 403):
                         body = await resp.text(encoding="utf-8", errors="replace")
                         content_type = resp.headers.get("Content-Type", "")
 
@@ -97,6 +103,12 @@ class ApiDetectPlugin(BasePlugin):
                             "status": resp.status,
                             "content_type": content_type,
                         }
+
+                        # Auth-required endpoints
+                        if resp.status in (401, 403):
+                            endpoint["auth_required"] = True
+                            discovered.append(endpoint)
+                            continue
 
                         # Swagger/OpenAPI documentation
                         if (
@@ -133,7 +145,8 @@ class ApiDetectPlugin(BasePlugin):
                         if resp.status == 200 and "json" in content_type:
                             discovered.append(endpoint)
 
-            except Exception:
+            except Exception as e:
+                logger.debug("api_detect: %s failed: %s", path, e)
                 continue
 
         if discovered and not findings:

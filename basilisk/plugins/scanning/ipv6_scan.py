@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import ipaddress
+import logging
 from typing import ClassVar
 
 from basilisk.core.plugin import BasePlugin, PluginCategory, PluginMeta
 from basilisk.models.result import Finding, PluginResult
 from basilisk.models.target import Target
+
+logger = logging.getLogger(__name__)
 
 # Well-known 6to4 prefix (2002::/16) — deprecated, security risk (RFC 7526)
 _6TO4_PREFIX = ipaddress.IPv6Network("2002::/16")
@@ -71,15 +74,15 @@ class Ipv6ScanPlugin(BasePlugin):
         try:
             aaaa_records = await ctx.dns.resolve(target.host, "AAAA")
             ipv6_addrs = [r.value for r in aaaa_records] if aaaa_records else []
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("ipv6_scan: AAAA resolve for %s failed: %s", target.host, e)
 
         # ── Resolve A records for comparison ──────────────────────────
         try:
             a_records = await ctx.dns.resolve(target.host, "A")
             ipv4_addrs = [r.value for r in a_records] if a_records else []
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("ipv6_scan: A resolve for %s failed: %s", target.host, e)
 
         has_ipv6 = bool(ipv6_addrs)
         dual_stack = bool(ipv6_addrs and ipv4_addrs)
@@ -216,8 +219,8 @@ class Ipv6ScanPlugin(BasePlugin):
                     if result.state.value == "open":
                         reachable_ports.append(port)
                         ipv6_reachable = True
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("ipv6_scan: port check %s:%d failed: %s", test_addr, port, e)
 
             if ipv6_reachable:
                 findings.append(Finding.info(
@@ -290,7 +293,8 @@ class Ipv6ScanPlugin(BasePlugin):
                     body = await resp.text(encoding="utf-8", errors="replace")
                     ipv4_body_len = len(body)
                     break
-            except Exception:
+            except Exception as e:
+                logger.debug("ipv6_scan: IPv4 fetch %s failed: %s", scheme, e)
                 continue
 
         # Fetch via IPv6 literal with Host header
@@ -309,7 +313,8 @@ class Ipv6ScanPlugin(BasePlugin):
                     body = await resp.text(encoding="utf-8", errors="replace")
                     ipv6_body_len = len(body)
                     break
-            except Exception:
+            except Exception as e:
+                logger.debug("ipv6_scan: IPv6 fetch %s failed: %s", scheme, e)
                 continue
 
         if ipv4_status is None or ipv6_status is None:
