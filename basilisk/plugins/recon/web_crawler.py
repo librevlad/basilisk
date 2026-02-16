@@ -88,6 +88,15 @@ class WebCrawlerPlugin(BasePlugin):
         links = self._extract_links(page_html, base_url, target.host)
         forms = self._extract_forms(page_html, base_url)
 
+        # Merge config scan_paths as seed URLs to crawl
+        scan_paths = ctx.config.scan.scan_paths if ctx.config else []
+        for sp in scan_paths:
+            if not sp.startswith("/"):
+                sp = f"/{sp}"
+            full = f"{base_url}{sp}"
+            if full not in links:
+                links.append(full)
+
         # Phase 1b: Follow links (depth 2) to discover parameterized URLs
         depth2_links: list[str] = []
         depth2_forms: list[dict] = []
@@ -102,7 +111,7 @@ class WebCrawlerPlugin(BasePlugin):
                 or "?" in u
                 or "/" in urlparse(u).path.rstrip("/")
             )
-        ][:40]
+        ][: max(40, len(scan_paths) + 20)]
 
         for follow_url in follow_targets:
             if ctx.should_stop:

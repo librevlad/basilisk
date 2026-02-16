@@ -83,13 +83,15 @@ def collect_injection_points(
     points: list[InjectionPoint] = []
     seen: set[str] = set()
 
-    def _add(point: InjectionPoint) -> bool:
+    def _add(point: InjectionPoint, *, skip_filter: bool = False) -> bool:
         """Add point if not duplicate. Returns True if added."""
         key = f"{point.method}:{point.path}:{sorted(point.params.keys())}"
         if key in seen or len(points) >= max_points:
             return False
-        # Apply param filter if specified
-        if param_filter and not any(p in param_filter for p in point.params):
+        # Apply param filter only to hardcoded/api points, not crawled/form
+        if param_filter and not skip_filter and not any(
+            p in param_filter for p in point.params
+        ):
             return False
         seen.add(key)
         points.append(point)
@@ -106,7 +108,7 @@ def collect_injection_points(
         for k, v_list in parse_qs(parsed.query, keep_blank_values=True).items():
             params[k] = v_list[0] if v_list else ""
         if params:
-            _add(InjectionPoint(path=path, params=params, source="crawled"))
+            _add(InjectionPoint(path=path, params=params, source="crawled"), skip_filter=True)
 
     # Also add crawled URLs without params as paths for hardcoded param testing
     crawled_paths: list[str] = []
@@ -139,7 +141,7 @@ def collect_injection_points(
                 params = inputs
             else:
                 params = {inp: "" for inp in inputs}
-            _add(InjectionPoint(path=path, params=params, method=method, source="form"))
+            _add(InjectionPoint(path=path, params=params, method=method, source="form"), skip_filter=True)
 
     # ── 3. API paths from analysis plugins ───────────────────────────
     api_paths = state.get("discovered_api_paths", {}).get(host, [])

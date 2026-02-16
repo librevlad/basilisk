@@ -57,6 +57,10 @@ class ScanSettings(BaseSettings):
     )
     port_timeout: float = 3.0
     max_concurrency: int = 50
+    scan_paths: list[str] = Field(
+        default_factory=list,
+        description="Additional paths to include in pentesting (merged with crawled URLs)",
+    )
 
 
 class RateLimitSettings(BaseSettings):
@@ -82,6 +86,7 @@ class AuthSettings(BaseSettings):
     victim_username: str = ""
     victim_password: str = ""
     victim_bearer_token: str = ""
+    extra_cookies: dict[str, str] = Field(default_factory=dict)
 
 
 class BrowserSettings(BaseSettings):

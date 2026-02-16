@@ -111,14 +111,22 @@ class FormLoginStrategy(LoginStrategy):
         u_field = self.username_field or self._guess_username_field(body)
         p_field = self.password_field or self._guess_password_field(body)
         action = self._extract_form_action(body, login_url)
+        submit = self._extract_submit_button(body)
 
-        # Build POST data
-        post_data: dict[str, str] = {
-            u_field: self.username,
-            p_field: self.password,
-        }
+        # Build POST data — start with all form fields (hidden, select defaults)
+        post_data = self._extract_form_defaults(body)
+        # Override with auth-specific values
+        post_data[u_field] = self.username
+        post_data[p_field] = self.password
         if csrf_token:
             post_data[csrf_token[0]] = csrf_token[1]
+        if submit:
+            post_data[submit[0]] = submit[1]
+        # Apply extra_cookies as form field overrides (e.g. security_level=0)
+        if hasattr(ctx, "auth") and ctx.auth and ctx.auth._extra_cookies:
+            for k, v in ctx.auth._extra_cookies.items():
+                if k in post_data:
+                    post_data[k] = v
 
         # Submit login form
         try:
@@ -138,7 +146,8 @@ class FormLoginStrategy(LoginStrategy):
                 location = resp.headers.get("Location", "")
                 if resp.status in (301, 302, 303) and location:
                     if not location.startswith("http"):
-                        location = f"{base_url}{location}"
+                        from urllib.parse import urljoin
+                        location = urljoin(action, location)
                     redirect_headers = session.inject_headers({})
                     async with ctx.rate:
                         resp2 = await ctx.http.get(
@@ -218,6 +227,7 @@ class FormLoginStrategy(LoginStrategy):
             "csrf_token", "_token", "csrfmiddlewaretoken",
             "authenticity_token", "__RequestVerificationToken",
             "_csrf", "csrf", "CSRF_TOKEN", "nonce",
+            "user_token",  # DVWA
         ]
         for name in csrf_names:
             pattern = (
@@ -258,7 +268,88 @@ class FormLoginStrategy(LoginStrategy):
         return "password"
 
     @staticmethod
+    def _extract_submit_button(html: str) -> tuple[str, str] | None:
+        """Extract submit button name/value from login form."""
+        # Try <input type="submit"> first
+        match = re.search(
+            r'<input[^>]*type\s*=\s*["\']submit["\'][^>]*>',
+            html, re.IGNORECASE,
+        )
+        if match:
+            tag = match.group(0)
+            name_m = re.search(r'name\s*=\s*["\']([^"\']+)["\']', tag, re.IGNORECASE)
+            value_m = re.search(r'value\s*=\s*["\']([^"\']*)["\']', tag, re.IGNORECASE)
+            if name_m:
+                return (name_m.group(1), value_m.group(1) if value_m else "")
+        # Try <button type="submit"> (bWAPP, modern frameworks)
+        match = re.search(
+            r'<button[^>]*type\s*=\s*["\']submit["\'][^>]*>',
+            html, re.IGNORECASE,
+        )
+        if match:
+            tag = match.group(0)
+            name_m = re.search(r'name\s*=\s*["\']([^"\']+)["\']', tag, re.IGNORECASE)
+            value_m = re.search(r'value\s*=\s*["\']([^"\']*)["\']', tag, re.IGNORECASE)
+            if name_m:
+                return (name_m.group(1), value_m.group(1) if value_m else "")
+        return None
+
+    @staticmethod
+    def _extract_form_defaults(html: str) -> dict[str, str]:
+        """Extract all form fields with their default values.
+
+        Captures hidden inputs, select defaults, and other pre-filled fields
+        so the login POST includes all required parameters (e.g. security_level).
+        """
+        defaults: dict[str, str] = {}
+        # Find login form (first POST form, or first form)
+        form_match = re.search(
+            r'<form[^>]*method\s*=\s*["\']POST["\'][^>]*>(.*?)</form>',
+            html, re.IGNORECASE | re.DOTALL,
+        )
+        if not form_match:
+            form_match = re.search(
+                r'<form[^>]*>(.*?)</form>',
+                html, re.IGNORECASE | re.DOTALL,
+            )
+        if not form_match:
+            return defaults
+        form_html = form_match.group(1)
+
+        # Hidden inputs
+        for m in re.finditer(
+            r'<input[^>]*type\s*=\s*["\']hidden["\'][^>]*>', form_html, re.IGNORECASE,
+        ):
+            tag = m.group(0)
+            name_m = re.search(r'name\s*=\s*["\']([^"\']+)["\']', tag, re.IGNORECASE)
+            value_m = re.search(r'value\s*=\s*["\']([^"\']*)["\']', tag, re.IGNORECASE)
+            if name_m:
+                defaults[name_m.group(1)] = value_m.group(1) if value_m else ""
+
+        # Select fields — use first option value as default
+        for m in re.finditer(
+            r'<select[^>]*name\s*=\s*["\']([^"\']+)["\'][^>]*>(.*?)</select>',
+            form_html, re.IGNORECASE | re.DOTALL,
+        ):
+            name = m.group(1)
+            # Try selected option first, then first option
+            sel_opt = re.search(
+                r'<option[^>]*selected[^>]*value\s*=\s*["\']([^"\']*)["\']',
+                m.group(2), re.IGNORECASE,
+            )
+            if not sel_opt:
+                sel_opt = re.search(
+                    r'<option[^>]*value\s*=\s*["\']([^"\']*)["\']',
+                    m.group(2), re.IGNORECASE,
+                )
+            defaults[name] = sel_opt.group(1) if sel_opt else "0"
+
+        return defaults
+
+    @staticmethod
     def _extract_form_action(html: str, fallback_url: str) -> str:
+        from urllib.parse import urljoin
+
         match = re.search(
             r'<form[^>]*action\s*=\s*["\']([^"\']*)["\']',
             html, re.IGNORECASE,
@@ -266,6 +357,9 @@ class FormLoginStrategy(LoginStrategy):
         if match:
             action = match.group(1)
             if action and action != "#":
+                # Resolve relative URLs against the login page URL
+                if not action.startswith("http"):
+                    return urljoin(fallback_url, action)
                 return action
         return fallback_url
 
@@ -280,6 +374,12 @@ class FormLoginStrategy(LoginStrategy):
         )
         if any(ind in lower for ind in failure_indicators):
             return False
+        # Login form still visible = auth failed (page re-rendered)
+        login_form_indicators = (
+            'type="password"', "type='password'",
+            'name="password"', "name='password'",
+        )
+        has_login_form = any(ind in body for ind in login_form_indicators)
         success_indicators = (
             "logout", "sign out", "log out", "my account",
             "dashboard", "profile", "welcome", "выйти",
@@ -287,7 +387,9 @@ class FormLoginStrategy(LoginStrategy):
         )
         if any(ind in lower for ind in success_indicators):
             return True
-        # 200 with session cookie likely = success
+        # If the page still has a login form, auth likely failed
+        if has_login_form:
+            return False
         return status == 200
 
 
@@ -350,10 +452,15 @@ class AuthManager:
         self._strategies: list[LoginStrategy] = []
         self._credentials: dict[str, dict[str, str]] = {}
         self._named_sessions: dict[str, dict[str, AuthSession]] = {}
+        self._extra_cookies: dict[str, str] = {}
 
     def add_strategy(self, strategy: LoginStrategy) -> None:
         """Register a login strategy."""
         self._strategies.append(strategy)
+
+    def set_extra_cookies(self, cookies: dict[str, str]) -> None:
+        """Set extra cookies to inject into all auth sessions (e.g. security=low)."""
+        self._extra_cookies.update(cookies)
 
     def set_credentials(
         self, host: str, username: str, password: str,
@@ -382,6 +489,8 @@ class AuthManager:
                 try:
                     session = await strategy.login(host, ctx)
                     if session.is_authenticated:
+                        if self._extra_cookies:
+                            session.cookies.update(self._extra_cookies)
                         self._sessions[host] = session
                         return session
                 except Exception as e:

@@ -16,9 +16,16 @@ from basilisk.models.result import PluginResult
 from basilisk.models.target import Target, TargetScope
 
 if TYPE_CHECKING:
-    pass
+    from basilisk.storage.cache import ResultCache
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_PHASES = ["recon", "scanning", "analysis", "pentesting"]
+
+OFFENSIVE_PHASES = [
+    "recon", "scanning", "analysis", "pentesting",
+    "exploitation", "post_exploit", "privesc", "lateral",
+]
 
 
 @dataclass
@@ -82,6 +89,9 @@ class Pipeline:
         ctx: PluginContext,
         on_progress: OnProgressCallback = _noop_progress,
         completed_pairs: set[tuple[str, str]] | None = None,
+        cache: ResultCache | None = None,
+        cache_ttl: dict[str, float] | None = None,
+        force_phases: set[str] | None = None,
     ):
         self.registry = registry
         self.executor = executor
@@ -89,15 +99,19 @@ class Pipeline:
         self.on_progress = on_progress
         self.state = PipelineState()
         self.completed_pairs = completed_pairs or set()
+        self.cache = cache
+        self.cache_ttl = cache_ttl or {}
+        self.force_phases = force_phases or set()
 
     async def run(
         self,
         scope: TargetScope,
         plugin_names: list[str] | None = None,
         phases: list[str] | None = None,
+        exclude_patterns: list[str] | None = None,
     ) -> PipelineState:
         """Run the full audit pipeline."""
-        active_phases = phases or ["recon", "scanning", "analysis", "pentesting"]
+        active_phases = phases or DEFAULT_PHASES
         self.state.init_phases(active_phases)
         self.state.status = "running"
         self.on_progress(self.state)
@@ -108,6 +122,20 @@ class Pipeline:
 
         # Resolve execution order
         ordered = self.registry.resolve_order(plugin_names)
+
+        # Apply exclude patterns (name match or prefix match)
+        if exclude_patterns:
+            def _excluded(name: str) -> bool:
+                return any(
+                    name == pat or name.startswith(pat)
+                    for pat in exclude_patterns
+                )
+            before = len(ordered)
+            ordered = [p for p in ordered if not _excluded(p.meta.name)]
+            logger.info(
+                "Excluded %d plugins via patterns: %s",
+                before - len(ordered), exclude_patterns,
+            )
 
         # Group by category
         by_phase: dict[str, list[type[BasePlugin]]] = {p: [] for p in active_phases}
@@ -153,7 +181,29 @@ class Pipeline:
                 else:
                     targets = all_targets
 
-                skipped_count = scope_size - len(targets)
+                # Try cache for remaining targets (unless phase is forced)
+                cache_hits: list[PluginResult] = []
+                if self.cache and phase_name not in self.force_phases:
+                    ttl = self._get_cache_ttl(phase_name)
+                    targets, cache_hits = await self._check_cache(
+                        plugin.meta.name, targets, ttl,
+                    )
+
+                skipped_count = scope_size - len(targets) - len(cache_hits)
+
+                # Inject cache hits into pipeline context
+                for cached in cache_hits:
+                    key = f"{cached.plugin}:{cached.target}"
+                    self.ctx.pipeline[key] = cached
+                    self.state.results.append(cached)
+                    self.state.total_findings += len(cached.findings)
+
+                    if phase_name == "recon" and cached.ok:
+                        new_subs = cached.data.get("subdomains", [])
+                        for sub in new_subs:
+                            scope.add(
+                                Target.subdomain(sub, parent=cached.target)
+                            )
 
                 if not targets:
                     phase.completed += scope_size
@@ -175,6 +225,9 @@ class Pipeline:
                     # Incremental persist to DB
                     await self._persist_one(result)
 
+                    # Write to cache
+                    await self._cache_put(result)
+
                     # Recon plugins can expand scope
                     if phase_name == "recon" and result.ok:
                         new_subs = result.data.get("subdomains", [])
@@ -183,7 +236,7 @@ class Pipeline:
                                 Target.subdomain(sub, parent=result.target)
                             )
 
-                phase.completed += len(results) + skipped_count
+                phase.completed += len(results) + skipped_count + len(cache_hits)
                 self.on_progress(self.state)
 
                 await plugin.teardown()
@@ -202,6 +255,12 @@ class Pipeline:
             elif phase_name == "analysis":
                 self._inject_waf_data(scope)
                 self._inject_api_paths(scope)
+            elif phase_name == "exploitation":
+                self._inject_exploitation_data()
+            elif phase_name == "post_exploit":
+                self._inject_post_exploit_data()
+            elif phase_name == "privesc":
+                self._inject_privesc_data()
 
         self.state.status = "completed"
         self.on_progress(self.state)
@@ -287,10 +346,39 @@ class Pipeline:
             if result and result.ok:
                 crawled_urls[t.host] = result.data.get("crawled_urls", [])
                 discovered_forms[t.host] = result.data.get("forms", [])
+
+        # Merge config scan_paths into crawled_urls
+        scan_paths = self.ctx.config.scan.scan_paths
+        if scan_paths:
+            for t in scope:
+                scheme_map = self.ctx.state.get("http_scheme", {})
+                scheme = scheme_map.get(t.host, "http")
+                if scheme is None:
+                    continue
+                base = f"{scheme}://{t.host}"
+                existing = set(crawled_urls.get(t.host, []))
+                host_urls = list(crawled_urls.get(t.host, []))
+                for sp in scan_paths:
+                    if not sp.startswith("/"):
+                        sp = f"/{sp}"
+                    full = f"{base}{sp}"
+                    if full not in existing:
+                        host_urls.append(full)
+                        existing.add(full)
+                crawled_urls[t.host] = host_urls
+
         if crawled_urls:
             self.ctx.state["crawled_urls"] = crawled_urls
+            for host, urls in crawled_urls.items():
+                logger.info(
+                    "Injected %d crawled URLs for %s (with params: %d)",
+                    len(urls), host,
+                    sum(1 for u in urls if "?" in u),
+                )
         if discovered_forms:
             self.ctx.state["discovered_forms"] = discovered_forms
+            for host, forms in discovered_forms.items():
+                logger.info("Injected %d forms for %s", len(forms), host)
 
     def _should_skip_plugin(self, plugin_cls: type[BasePlugin]) -> bool:
         """Check if plugin should be skipped due to unmet requirements."""
@@ -308,6 +396,12 @@ class Pipeline:
         if meta.requires_callback and self.ctx.callback is None:
             logger.debug("Skipping %s: requires callback server", meta.name)
             return True
+        if meta.requires_shell and not self.ctx.state.get("active_shells"):
+            logger.debug("Skipping %s: requires shell session", meta.name)
+            return True
+        if meta.requires_credentials and not self.ctx.state.get("credentials"):
+            logger.debug("Skipping %s: requires credentials", meta.name)
+            return True
         return False
 
     async def _run_auth_phase(self, scope: TargetScope) -> None:
@@ -320,10 +414,52 @@ class Pipeline:
                 session = await self.ctx.auth.login(target.host, self.ctx)
                 if session.is_authenticated:
                     logger.info("Authenticated to %s", target.host)
+                    # Resolve scheme: use cached value, or probe fresh
+                    scheme = self.ctx.state.get("http_scheme", {}).get(
+                        target.host
+                    )
+                    if not scheme:
+                        scheme = await self._probe_scheme(target.host)
+                        self.ctx.state.setdefault("http_scheme", {})[
+                            target.host
+                        ] = scheme
+                    base = f"{scheme}://{target.host}"
+                    # Inject auth cookies into HTTP session so ALL plugins
+                    # send them automatically via ctx.http
+                    if self.ctx.http and session.cookies:
+                        await self.ctx.http.set_cookies(base, session.cookies)
+                        logger.info(
+                            "Injected %d auth cookies for %s",
+                            len(session.cookies), target.host,
+                        )
+                    # Inject extra_cookies from config (e.g. security=low for DVWA)
+                    extra = self.ctx.config.auth.extra_cookies
+                    if self.ctx.http and extra:
+                        session.cookies.update(extra)
+                        await self.ctx.http.set_cookies(base, extra)
+                        logger.info(
+                            "Injected %d extra cookies for %s",
+                            len(extra), target.host,
+                        )
                 else:
                     logger.warning("Auth failed for %s", target.host)
             except Exception:
                 logger.warning("Auth error for %s", target.host, exc_info=True)
+
+    async def _probe_scheme(self, host: str) -> str:
+        """Quick probe to determine if host uses HTTPS or HTTP."""
+        if self.ctx.http is None:
+            return "http"
+        for scheme in ("https", "http"):
+            try:
+                await asyncio.wait_for(
+                    self.ctx.http.head(f"{scheme}://{host}/"),
+                    timeout=5.0,
+                )
+                return scheme
+            except Exception:
+                continue
+        return "http"
 
     def _check_quality_gate(self, phase_name: str) -> None:
         """Warn if too many findings in this phase lack evidence."""
@@ -346,6 +482,90 @@ class Pipeline:
                     "Quality gate [%s]: %d/%d (%.0f%%) MEDIUM+ findings lack evidence",
                     phase_name, no_evidence, len(non_info), pct * 100,
                 )
+
+    def _inject_exploitation_data(self) -> None:
+        """After exploitation phase, collect shells and access into ctx.state."""
+        shells: list[dict] = []
+        for result in self.state.results:
+            if result.ok and result.data.get("shell_session"):
+                shells.append(result.data["shell_session"])
+            if result.ok and result.data.get("credentials"):
+                creds = self.ctx.state.setdefault("credentials", [])
+                creds.extend(result.data["credentials"])
+        if shells:
+            self.ctx.state["active_shells"] = shells
+            logger.info("Exploitation yielded %d shell sessions", len(shells))
+
+    def _inject_post_exploit_data(self) -> None:
+        """After post_exploit phase, collect harvested creds and enum data."""
+        for result in self.state.results:
+            if not result.ok:
+                continue
+            if result.data.get("credentials"):
+                creds = self.ctx.state.setdefault("credentials", [])
+                creds.extend(result.data["credentials"])
+            if result.data.get("users"):
+                users = self.ctx.state.setdefault("discovered_users", [])
+                users.extend(result.data["users"])
+            if result.data.get("network_info"):
+                self.ctx.state.setdefault("network_info", {}).update(
+                    result.data["network_info"]
+                )
+
+    def _inject_privesc_data(self) -> None:
+        """After privesc phase, collect elevated shells."""
+        elevated: list[dict] = []
+        for result in self.state.results:
+            if result.ok and result.data.get("elevated_shell"):
+                elevated.append(result.data["elevated_shell"])
+        if elevated:
+            self.ctx.state["elevated_shells"] = elevated
+            logger.info("PrivEsc yielded %d elevated shells", len(elevated))
+
+    def _get_cache_ttl(self, phase_name: str) -> float:
+        """Get cache TTL for a phase (user override or default)."""
+        if phase_name in self.cache_ttl:
+            return self.cache_ttl[phase_name]
+        from basilisk.storage.cache import DEFAULT_TTL
+        return DEFAULT_TTL.get(phase_name, 12.0)
+
+    async def _check_cache(
+        self,
+        plugin_name: str,
+        targets: list[Target],
+        ttl_hours: float,
+    ) -> tuple[list[Target], list[PluginResult]]:
+        """Check cache for each target. Returns (uncached_targets, cached_results)."""
+        if not self.cache:
+            return targets, []
+
+        uncached: list[Target] = []
+        hits: list[PluginResult] = []
+        for t in targets:
+            try:
+                cached = await self.cache.get_cached(plugin_name, t.host, ttl_hours)
+            except Exception:
+                logger.debug("Cache read error for %s:%s", plugin_name, t.host, exc_info=True)
+                cached = None
+            if cached:
+                hits.append(cached)
+                logger.info(
+                    "Cache hit: %s:%s (%d findings)",
+                    plugin_name, t.host, len(cached.findings),
+                )
+            else:
+                uncached.append(t)
+        return uncached, hits
+
+    async def _cache_put(self, result: PluginResult) -> None:
+        """Write a result to cache (best-effort)."""
+        if not self.cache:
+            return
+        try:
+            run_id = self.ctx.state.get("run_id")
+            await self.cache.put(result.target, result, run_id=run_id)
+        except Exception:
+            logger.debug("Cache write error for %s:%s", result.plugin, result.target, exc_info=True)
 
     async def _persist_one(self, result: PluginResult) -> None:
         """Save a single plugin result to DB incrementally."""
