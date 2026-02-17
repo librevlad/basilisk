@@ -51,6 +51,7 @@ class FormAnalyzerPlugin(BasePlugin):
                 findings.append(Finding.medium(
                     f"POST form without CSRF token: {form['action'] or '/'}",
                     description="Form submits POST without anti-CSRF token",
+                    evidence=f"POST {form['action'] or '/'} (no csrf/token hidden field)",
                     remediation="Add CSRF token to all POST forms",
                     tags=["analysis", "form", "csrf"],
                 ))

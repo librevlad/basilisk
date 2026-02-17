@@ -36,6 +36,11 @@ class PrometheusScrapePlugin(BasePlugin):
     )
 
     async def run(self, target: Target, ctx) -> PluginResult:
+        if ctx.http is None:
+            return PluginResult.fail(
+                self.meta.name, target.host, error="HTTP client not available"
+            )
+
         # Check if debug_endpoints found /metrics
         dep_key = f"debug_endpoints:{target.host}"
         dep_result = ctx.pipeline.get(dep_key)
@@ -69,11 +74,6 @@ class PrometheusScrapePlugin(BasePlugin):
                 self.meta.name, target.host,
                 findings=[Finding.info("No Prometheus /metrics endpoint found")],
                 data={},
-            )
-
-        if ctx.http is None:
-            return PluginResult.fail(
-                self.meta.name, target.host, error="HTTP client not available"
             )
 
         # Fetch metrics

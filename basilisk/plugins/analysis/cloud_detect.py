@@ -165,7 +165,6 @@ class CloudDetectPlugin(BasePlugin):
         display_name="Cloud Provider Detection",
         category=PluginCategory.ANALYSIS,
         description="Identifies cloud hosting provider (AWS, GCP, Azure, etc.)",
-        depends_on=["dns_enum"],
         produces=["cloud_info"],
         timeout=10.0,
     )

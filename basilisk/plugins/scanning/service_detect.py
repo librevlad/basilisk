@@ -85,6 +85,28 @@ _PROBES: dict[str, tuple[bytes, bool, str]] = {
     ),
     # RabbitMQ AMQP
     "amqp": (b"AMQP\x00\x00\x09\x01", False, "AMQP protocol header"),
+    # SMB — NetBIOS session + SMB1 negotiate
+    "smb": (
+        # NetBIOS session request (4 bytes) + SMB1 Negotiate Protocol Request
+        b"\x00\x00\x00\x2f"  # NetBIOS: session message, length 47
+        b"\xff\x53\x4d\x42"  # SMB header magic: 0xFF S M B
+        b"\x72"              # Command: Negotiate (0x72)
+        b"\x00\x00\x00\x00"  # Status: SUCCESS
+        b"\x00"              # Flags
+        b"\x00\x00"          # Flags2
+        b"\x00\x00"          # PID High
+        b"\x00\x00\x00\x00\x00\x00\x00\x00"  # Signature
+        b"\x00\x00"          # Reserved
+        b"\x00\x00"          # TID
+        b"\x00\x00"          # PID Low
+        b"\x00\x00"          # UID
+        b"\x00\x00"          # MID
+        b"\x00"              # Word count: 0
+        b"\x0c\x00"          # Byte count: 12
+        b"\x02NT LM 0.12\x00",  # Dialect: NT LM 0.12
+        False,
+        "SMB negotiate",
+    ),
 }
 
 # Port-to-probe mapping
@@ -105,6 +127,7 @@ _PORT_PROBES: dict[int, list[str]] = {
     9200: ["elasticsearch"],
     5672: ["amqp"],
     15672: ["elasticsearch"],  # RabbitMQ management uses HTTP
+    445: ["smb"],
 }
 
 # STARTTLS-capable protocols and their commands
@@ -256,6 +279,29 @@ class ServiceDetectPlugin(BasePlugin):
                         )
                 except Exception:
                     pass
+
+            # ---- 2b. Try SMB probe on unidentified ports ----
+            if not banner and service_name == "unknown":
+                smb_probe, _, _ = _PROBES.get("smb", (b"", True, ""))
+                if smb_probe:
+                    try:
+                        async with ctx.rate:
+                            smb_result = await self._run_probe(
+                                host, port, smb_probe, False, timeout=3.0,
+                            )
+                            # SMB response: \xffSMB (SMB1) or \xfeSMB (SMB2)
+                            # After utf-8 decode with replace, \xff/\xfe become
+                            # replacement chars but "SMB" text remains
+                            if smb_result and (
+                                "SMB" in smb_result
+                                or "Samba" in smb_result
+                            ):
+                                service_name = "smb"
+                                banner = f"SMB service on port {port}"
+                                probe_results["smb"] = smb_result
+                                probes_used.append("smb")
+                    except Exception:
+                        pass
 
             # ---- 3. HTTP/HTTPS banner (Server header) ----
             if port in (80, 443, 8080, 8443, 9090, 8000, 8888, 3000, 5000):

@@ -1,6 +1,6 @@
 # OWASP Juice Shop scan config
-# Usage: .venv/Scripts/python.exe -m basilisk audit 127.0.0.1:4280 --config config/juiceshop.yaml -v
-# Note: Juice Shop is Node.js/Express — each request takes ~2s, so keep scan_paths minimal.
+# Usage: .venv/Scripts/python.exe -m basilisk audit 127.0.0.1:3000 --config config/juiceshop.yaml -v
+# Docker: docker-compose -f docker-compose.juiceshop.yml up -d
 
 http:
   timeout: 15.0
@@ -12,26 +12,70 @@ rate_limit:
 
 scan:
   scan_paths:
-    # Key injectable endpoints (with query params)
+    # ── SQLi targets ─────────────────────────────────────────────────
     - /rest/products/search?q=test
+    - /rest/user/login
+
+    # ── XSS targets ──────────────────────────────────────────────────
+    - /rest/track-order/test
+    - /#/track-result?id=test
+
+    # ── NoSQL injection ──────────────────────────────────────────────
+    - /rest/products/reviews
+
+    # ── Open redirect ────────────────────────────────────────────────
     - /redirect?to=https://owasp.org
-    # REST API (for dir_brute/sensitive_files discovery)
+
+    # ── REST API (access control, info disclosure) ───────────────────
     - /api/Products
     - /api/Feedbacks
     - /api/Users
     - /api/Challenges
+    - /api/Quantitys
+    - /api/SecurityQuestions
+    - /api/SecurityAnswers
+    - /api/Complaints
+    - /api/Recycles
+    - /api/Deliverys
+    - /api/Cards
+    - /api/Addresss
+
+    # ── Admin / auth endpoints ───────────────────────────────────────
     - /rest/admin/application-version
     - /rest/admin/application-configuration
-    - /rest/user/login
-    # File access / info disclosure
+
+    # ── IDOR / business logic ────────────────────────────────────────
+    - /rest/basket/1
+    - /rest/saveLoginIp
+    - /rest/deluxe-membership
+
+    # ── File access / info disclosure ────────────────────────────────
     - /ftp
     - /encryptionkeys
     - /support/logs
-    - /metrics
-    - /promotion
-    - /snippets
-    - /profile
-    - /dataerasure
     - /assets/public/images/uploads/
+
+    # ── Debug / API docs / monitoring ────────────────────────────────
+    - /metrics
+    - /api-docs
+    - /snippets
+    - /snippet
+
+    # ── SSRF / file upload ───────────────────────────────────────────
+    - /profile
+    - /file-upload
+    - /rest/memories
+    - /video
+
+    # ── XXE ──────────────────────────────────────────────────────────
+    - /b2b/v2/orders
+
+    # ── Chatbot ──────────────────────────────────────────────────────
+    - /rest/chatbot/status
+    - /rest/chatbot/respond
+
+    # ── Misc ─────────────────────────────────────────────────────────
+    - /promotion
+    - /dataerasure
 
 log_level: DEBUG

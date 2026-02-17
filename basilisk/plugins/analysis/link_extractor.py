@@ -140,6 +140,7 @@ class LinkExtractorPlugin(BasePlugin):
         ws_urls: set[str] = set()
 
         findings: list[Finding] = []
+        sitemap_urls: list[str] = []
 
         # Collect pages to check
         paths = list(_DEFAULT_PATHS)

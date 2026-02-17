@@ -1,0 +1,26 @@
+# Vulnerable services stack scan config
+# Target: 127.0.0.1 with 9 exposed services
+# Usage: .venv/Scripts/python.exe -m basilisk audit 127.0.0.1 --config config/vulnstack.yaml -v
+
+http:
+  timeout: 10.0
+  verify_ssl: false
+
+rate_limit:
+  requests_per_second: 100.0
+  burst: 20
+
+scan:
+  default_ports:
+    - 21      # FTP (vsftpd, anonymous)
+    - 44500   # SMB/Samba (admin:admin, open share) — mapped from 445
+    - 2222    # SSH (admin:admin)
+    - 3306    # MySQL (root:root)
+    - 5432    # PostgreSQL (postgres:postgres)
+    - 6379    # Redis (no auth)
+    - 9200    # Elasticsearch (no auth)
+    - 11211   # Memcached (no auth)
+    - 27017   # MongoDB (no auth)
+  port_timeout: 5.0
+
+log_level: DEBUG

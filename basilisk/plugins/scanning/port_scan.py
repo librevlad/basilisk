@@ -182,7 +182,7 @@ class PortScanPlugin(BasePlugin):
         display_name="Port Scanner",
         category=PluginCategory.SCANNING,
         description="Async TCP port scanner with service detection and UDP probes",
-        depends_on=["dns_enum"],
+        depends_on=[],
         produces=["open_ports"],
         timeout=90.0,
         requires_http=False,

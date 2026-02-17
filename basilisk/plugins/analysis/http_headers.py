@@ -164,7 +164,6 @@ class HttpHeadersPlugin(BasePlugin):
             "Checks 15+ security headers, validates values, "
             "detects info disclosure, and assigns an A-F grade"
         ),
-        depends_on=["dns_enum"],
         produces=["http_info"],
         timeout=20.0,
     )

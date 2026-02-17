@@ -1,0 +1,107 @@
+# Vulnerable Services Stack — server-side attack surface for Basilisk testing
+#
+# 9 services, 12+ known vulnerabilities. All with NO or WEAK auth.
+#
+# Usage:
+#   docker-compose -f docker-compose.vulnstack.yml up -d
+#   .venv/Scripts/python.exe -m basilisk audit 127.0.0.1 --config config/vulnstack.yaml -v
+#   docker-compose -f docker-compose.vulnstack.yml down
+#
+# Expected vulnerabilities (what Basilisk MUST find):
+# ┌─────┬────────────────┬──────────┬──────────────────────────────────────────┐
+# │ #   │ Service        │ Port     │ Vulnerability                            │
+# ├─────┼────────────────┼──────────┼──────────────────────────────────────────┤
+# │  1  │ Redis          │ 6379     │ No auth — RCE via Lua scripts            │
+# │  2  │ MongoDB        │ 27017    │ No auth — full DB access                 │
+# │  3  │ Elasticsearch  │ 9200     │ No auth — all indices readable           │
+# │  4  │ Memcached      │ 11211    │ No auth — DDoS amplification             │
+# │  5  │ MySQL          │ 3306     │ Weak root password (root:root)           │
+# │  6  │ PostgreSQL     │ 5432     │ Weak password (postgres:postgres)        │
+# │  7  │ FTP (vsftpd)   │ 21       │ Anonymous access enabled                 │
+# │  8  │ SSH (OpenSSH)  │ 2222     │ Weak password (admin:admin)              │
+# │  9  │ Samba (SMB)    │ 445      │ Open share, weak password (admin:admin)  │
+# └─────┴────────────────┴──────────┴──────────────────────────────────────────┘
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    # No --requirepass → open to all
+
+  mongodb:
+    image: mongo:6
+    ports:
+      - "27017:27017"
+    environment:
+      # No MONGO_INITDB_ROOT_USERNAME/PASSWORD → no auth
+      MONGO_INITDB_DATABASE: testdb
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.27
+    ports:
+      - "9200:9200"
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms256m -Xmx256m"
+
+  memcached:
+    image: memcached:1-alpine
+    ports:
+      - "11211:11211"
+
+  mysql:
+    image: mysql:8.0
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: testdb
+
+  postgres:
+    image: postgres:15-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: testdb
+
+  ftp:
+    image: fauria/vsftpd
+    ports:
+      - "21:21"
+      - "21100-21110:21100-21110"
+    environment:
+      FTP_USER: admin
+      FTP_PASS: admin
+      PASV_MIN_PORT: 21100
+      PASV_MAX_PORT: 21110
+    # fauria/vsftpd ignores ANONYMOUS_ENABLE env var — patch config at startup
+    command:
+      - /bin/sh
+      - -c
+      - |
+        sed -i 's/anonymous_enable=NO/anonymous_enable=YES/' /etc/vsftpd/vsftpd.conf
+        echo "anon_root=/var/ftp" >> /etc/vsftpd/vsftpd.conf
+        echo "no_anon_password=YES" >> /etc/vsftpd/vsftpd.conf
+        mkdir -p /var/ftp/pub
+        echo "VULNERABLE" > /var/ftp/pub/readme.txt
+        /usr/sbin/vsftpd /etc/vsftpd/vsftpd.conf
+
+  ssh:
+    image: lscr.io/linuxserver/openssh-server:latest
+    ports:
+      - "2222:2222"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - PASSWORD_ACCESS=true
+      - USER_PASSWORD=admin
+      - USER_NAME=admin
+
+  samba:
+    image: dperson/samba
+    ports:
+      - "44500:445"
+    command: '-u "admin;admin" -s "share;/data;yes;no;yes"'

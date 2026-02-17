@@ -84,9 +84,9 @@ class SslCertChainPlugin(BasePlugin):
                 remediation="Fix certificate chain issues",
                 tags=["analysis", "ssl"],
             ))
-        except Exception:
+        except (OSError, asyncio.TimeoutError) as e:
             findings.append(Finding.info(
-                "Could not analyze SSL certificate chain",
+                f"Could not analyze SSL certificate chain: {e}",
                 tags=["analysis", "ssl"],
             ))
 

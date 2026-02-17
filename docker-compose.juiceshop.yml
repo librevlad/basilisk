@@ -1,0 +1,14 @@
+# OWASP Juice Shop — intentionally vulnerable web app for Basilisk testing
+#
+# Usage:
+#   docker-compose -f docker-compose.juiceshop.yml up -d
+#   .venv/Scripts/python.exe -m basilisk audit 127.0.0.1:3000 --config config/juiceshop.yaml -v
+#   docker-compose -f docker-compose.juiceshop.yml down
+
+services:
+  juice-shop:
+    image: bkimminich/juice-shop:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=unsafe

@@ -20,7 +20,7 @@ class TestPluginMeta:
     def test_port_scan_meta(self):
         assert PortScanPlugin.meta.name == "port_scan"
         assert PortScanPlugin.meta.category == PluginCategory.SCANNING
-        assert "dns_enum" in PortScanPlugin.meta.depends_on
+        assert PortScanPlugin.meta.depends_on == []
 
     def test_ssl_check_meta(self):
         assert SslCheckPlugin.meta.name == "ssl_check"
