@@ -1,5 +1,5 @@
 # OWASP Juice Shop scan config
-# Usage: .venv/Scripts/python.exe -m basilisk audit 127.0.0.1:3000 --config config/juiceshop.yaml -v
+# Usage: .venv/Scripts/python.exe -m basilisk audit 127.0.0.1:4280 --config config/juiceshop.yaml -v
 # Docker: docker-compose -f docker-compose.juiceshop.yml up -d
 
 http:

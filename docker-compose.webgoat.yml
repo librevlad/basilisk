@@ -1,0 +1,10 @@
+services:
+  webgoat:
+    image: webgoat/webgoat
+    container_name: webgoat
+    ports:
+      - "8080:8080"
+      - "9090:9090"
+    environment:
+      - TZ=UTC
+    restart: unless-stopped

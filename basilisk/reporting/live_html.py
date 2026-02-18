@@ -255,8 +255,10 @@ class LiveReportEngine:
             ],
         }
 
+        from basilisk.storage.repo import _SafeEncoder
+
         self.json_path.write_text(
-            json.dumps(data, indent=2, ensure_ascii=False),
+            json.dumps(data, indent=2, ensure_ascii=False, cls=_SafeEncoder),
             encoding="utf-8",
         )
 

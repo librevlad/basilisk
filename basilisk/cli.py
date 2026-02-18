@@ -21,8 +21,13 @@ app = typer.Typer(
 console = Console()
 
 
-def _setup_logging(verbose: bool = False) -> None:
-    level = logging.DEBUG if verbose else logging.INFO
+def _setup_logging(verbose: bool = False, config_level: str | None = None) -> None:
+    if verbose:
+        level = logging.DEBUG
+    elif config_level:
+        level = getattr(logging, config_level.upper(), logging.INFO)
+    else:
+        level = logging.INFO
     logging.basicConfig(
         level=level,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -54,13 +59,24 @@ def audit(
         "E.g.: scanning,analysis,pentesting",
     ),
     no_cache: bool = typer.Option(False, "--no-cache", help="Ignore cached results"),
-    cache_ttl: int = typer.Option(0, "--cache-ttl", help="Cache TTL in hours (0=default per phase)"),
+    cache_ttl: int = typer.Option(
+        0, "--cache-ttl", help="Cache TTL in hours (0=default per phase)",
+    ),
     force: str | None = typer.Option(
         None, "--force", help="Force re-run phases, e.g.: recon,pentesting",
     ),
 ):
     """Run a full audit against a target domain."""
-    _setup_logging(verbose)
+    # Load config early to get log_level
+    config_log_level = None
+    if config:
+        from basilisk.config import Settings
+        try:
+            cfg = Settings.load(config)
+            config_log_level = cfg.log_level
+        except Exception:
+            pass
+    _setup_logging(verbose, config_level=config_log_level)
 
     if interactive:
         _run_tui_audit(target, plugins, config, wordlist, project_name)

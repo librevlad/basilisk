@@ -1,0 +1,109 @@
+# OWASP WebGoat scan config
+# Usage: .venv/Scripts/python.exe -m basilisk audit 127.0.0.1:8080 --config config/webgoat.yaml -v
+# Docker: docker-compose -f docker-compose.webgoat.yml up -d
+
+http:
+  timeout: 15.0
+  verify_ssl: false
+
+rate_limit:
+  requests_per_second: 50.0
+  burst: 10
+
+auth:
+  enabled: true
+  username: basilisk
+  password: basilisk1
+  login_url: /WebGoat/login
+
+scan:
+  scan_paths:
+    # ── SQL Injection (POST-only, with actual param names) ─────────
+    - /WebGoat/SqlInjection/assignment5a?account=test&operator=test&injection=test
+    - /WebGoat/SqlInjection/assignment5b?login_count=0&userid=0
+    - /WebGoat/SqlInjectionAdvanced/challenge?username_reg=test&email_reg=test&password_reg=test&confirm_password_reg=test
+    - /WebGoat/SqlInjectionAdvanced/challenge_Login?username_login=test&password_login=test
+    - /WebGoat/SqlInjectionMitigations/attack10a?action_string=test
+    - /WebGoat/SqlInjectionMitigations/attack10b?name=test&auth_tan=test
+    - /WebGoat/SqlInjectionMitigations/attack12a?ip=test
+
+    # ── XSS (POST-only) ───────────────────────────────────────────
+    - /WebGoat/CrossSiteScripting/attack5a?QTY1=1&QTY2=1&QTY3=1&QTY4=1&field1=4128+3214+0002+1999&field2=111
+    - /WebGoat/CrossSiteScripting/attack5b?DOMTestRoute=test
+    - /WebGoat/CrossSiteScripting/phone-home-xss?phoneHome=test
+    - /WebGoat/CrossSiteScriptingStored/stored-xss?comment=test
+    - /WebGoat/CrossSiteScriptingMitigation/attack1?editor=test
+
+    # ── XXE (POST XML bodies — bare paths for xxe_check) ──────────
+    - /WebGoat/xxe/simple
+    - /WebGoat/xxe/content-type
+    - /WebGoat/xxe/blind
+
+    # ── Path Traversal (POST-only) ────────────────────────────────
+    - /WebGoat/PathTraversal/random?fullName=test
+    - /WebGoat/PathTraversal/random-picture?id=test
+    - /WebGoat/PathTraversal/profile-upload?fullName=test
+    - /WebGoat/PathTraversal/profile-upload-fix?fullName=test
+    - /WebGoat/PathTraversal/profile-upload-remove-user-input?fullName=test
+
+    # ── SSRF (POST-only) ──────────────────────────────────────────
+    - /WebGoat/SSRF/task1?url=test
+    - /WebGoat/SSRF/task2?url=test
+
+    # ── JWT ────────────────────────────────────────────────────────
+    - /WebGoat/JWT/secret/gettoken
+    - /WebGoat/JWT/votings
+    - /WebGoat/JWT/refresh/login?user=test&password=test
+    - /WebGoat/JWT/refresh/newToken
+    - /WebGoat/JWT/secret
+
+    # ── Authentication / Session ──────────────────────────────────
+    - /WebGoat/auth-bypass/verify-account?secQuestion0=test&secQuestion1=test&jsEnabled=1&verifyMethod=SEC_QUESTIONS&userId=12309746
+    - /WebGoat/HijackSession/login?username=test&password=test
+    - /WebGoat/InsecureLogin/task
+    - /WebGoat/SpoofCookie/login?username=test&password=test
+    - /WebGoat/PasswordReset/ForgotPassword/create-password-reset-link?email=test@test.com
+
+    # ── IDOR / Access Control ─────────────────────────────────────
+    - /WebGoat/IDOR/profile
+    - /WebGoat/IDOR/profile/2342384
+    - /WebGoat/access-control/users
+    - /WebGoat/access-control/users-admin-fix
+
+    # ── CSRF ──────────────────────────────────────────────────────
+    - /WebGoat/csrf/basic-get-flag
+    - /WebGoat/csrf/review?reviewText=test&stars=5&validateReq=test
+    - /WebGoat/csrf/feedback/message?name=test&email=test@test.com&subject=test&message=test
+
+    # ── Insecure Deserialization ──────────────────────────────────
+    - /WebGoat/InsecureDeserialization/task?token=test
+
+    # ── Crypto ────────────────────────────────────────────────────
+    - /WebGoat/crypto/hashing?answer=test&question=test
+    - /WebGoat/crypto/encoding/basic?answer_pwd1=test
+
+    # ── Log Spoofing ──────────────────────────────────────────────
+    - /WebGoat/LogSpoofing/log-spoofing?userName=test
+
+    # ── Vulnerable Components ─────────────────────────────────────
+    - /WebGoat/VulnerableComponents/attack1?payload=test
+
+    # ── Client-side ───────────────────────────────────────────────
+    - /WebGoat/BypassRestrictions/FieldRestrictions?select=test&radio=test&checkbox=test&shortInput=test&readOnlyInput=test
+    - /WebGoat/BypassRestrictions/SeriousFieldRestrictions?select=test&radio=test&checkbox=test&shortInput=test&readOnlyInput=test
+    - /WebGoat/ClientSideFiltering/attack1?answer=test
+    - /WebGoat/HtmlTampering/task?QTY=1&Total=1
+
+    # ── Challenges ────────────────────────────────────────────────
+    - /WebGoat/challenge/flag?flag=test
+
+    # ── Service endpoints ─────────────────────────────────────────
+    - /WebGoat/service/lessonmenu.mvc
+    - /WebGoat/service/labels.mvc
+    - /WebGoat/start.mvc
+    # NOTE: /WebGoat/login and /WebGoat/logout removed — logout invalidates
+    # the auth session; login is already handled by auth pipeline.
+    - /WebGoat/register.mvc
+    - /WebGoat/registration
+
+log_level: DEBUG

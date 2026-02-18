@@ -62,8 +62,8 @@ def collect_injection_points(
     """Collect injection points from all pipeline sources.
 
     Priority order (highest first):
-    1. Crawled URLs with query parameters (most likely to be real endpoints)
-    2. Discovered forms with input names
+    1. Discovered forms with input names (most accurate — real method + params)
+    2. Crawled URLs with query parameters
     3. API paths from js_api_extract / api_detect
     4. Hardcoded fallback paths × params
 
@@ -97,31 +97,9 @@ def collect_injection_points(
         points.append(point)
         return True
 
-    # ── 1. Crawled URLs (full path + actual query params) ────────────
-    crawled_urls = state.get("crawled_urls", {}).get(host, [])
-    for url in crawled_urls:
-        parsed = urlparse(url)
-        if not parsed.query:
-            continue
-        path = parsed.path or "/"
-        params = {}
-        for k, v_list in parse_qs(parsed.query, keep_blank_values=True).items():
-            params[k] = v_list[0] if v_list else ""
-        if params:
-            _add(InjectionPoint(path=path, params=params, source="crawled"), skip_filter=True)
-
-    # Also add crawled URLs without params as paths for hardcoded param testing
-    crawled_paths: list[str] = []
-    for url in crawled_urls:
-        parsed = urlparse(url)
-        path = parsed.path or "/"
-        if path not in crawled_paths and (
-            path.endswith((".php", ".asp", ".aspx", ".jsp", ".cgi"))
-            or "." not in path.rsplit("/", 1)[-1]  # extensionless = likely dynamic
-        ):
-            crawled_paths.append(path)
-
-    # ── 2. Discovered forms (action + input names/values) ────────────
+    # ── 1. Discovered forms (action + input names/values) ────────────
+    # Forms are highest priority: they have the correct method and
+    # accurate param names from HTML parsing (form_analyzer).
     forms = state.get("discovered_forms", {}).get(host, [])
     for form in forms:
         action = form.get("action", "")
@@ -142,6 +120,37 @@ def collect_injection_points(
             else:
                 params = {inp: "" for inp in inputs}
             _add(InjectionPoint(path=path, params=params, method=method, source="form"), skip_filter=True)
+
+    # ── 2. Crawled URLs (full path + actual query params) ────────────
+    crawled_urls = state.get("crawled_urls", {}).get(host, [])
+    for url in crawled_urls:
+        parsed = urlparse(url)
+        if not parsed.query:
+            continue
+        path = parsed.path or "/"
+        params = {}
+        for k, v_list in parse_qs(parsed.query, keep_blank_values=True).items():
+            params[k] = v_list[0] if v_list else ""
+        if params:
+            _add(InjectionPoint(path=path, params=params, source="crawled"), skip_filter=True)
+            # Also create POST variant for extensionless paths (likely API endpoints)
+            last_seg = path.rsplit("/", 1)[-1]
+            if "." not in last_seg:
+                _add(
+                    InjectionPoint(path=path, params=params, method="POST", source="crawled"),
+                    skip_filter=True,
+                )
+
+    # Also add crawled URLs without params as paths for hardcoded param testing
+    crawled_paths: list[str] = []
+    for url in crawled_urls:
+        parsed = urlparse(url)
+        path = parsed.path or "/"
+        if path not in crawled_paths and (
+            path.endswith((".php", ".asp", ".aspx", ".jsp", ".cgi"))
+            or "." not in path.rsplit("/", 1)[-1]  # extensionless = likely dynamic
+        ):
+            crawled_paths.append(path)
 
     # ── 3. API paths from analysis plugins ───────────────────────────
     api_paths = state.get("discovered_api_paths", {}).get(host, [])
