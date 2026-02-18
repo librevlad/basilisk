@@ -144,7 +144,9 @@ class LinkExtractorPlugin(BasePlugin):
 
         # Collect pages to check
         paths = list(_DEFAULT_PATHS)
-        crawled = ctx.state.get("crawled_urls", [])
+        crawled = ctx.state.get("crawled_urls", {})
+        if isinstance(crawled, dict):
+            crawled = crawled.get(host, [])
         for curl in crawled:
             if isinstance(curl, str) and curl.startswith(base_url):
                 path = curl[len(base_url):]
@@ -472,10 +474,17 @@ class LinkExtractorPlugin(BasePlugin):
                         path = "/" + path
                     disallowed.append(path)
             elif lower.startswith("sitemap:"):
-                url = line.split(":", 1)[1].strip()
-                # Reconstruct: "sitemap:" consumed first colon
-                if not url.startswith("http"):
-                    url = line.split(" ", 1)[1].strip() if " " in line else ""
+                # "Sitemap: https://..." → split on first space or re-join after ':'
+                raw = line.split(":", 1)[1].strip()
+                if raw.startswith("//"):
+                    # "Sitemap:https://..." → colon split consumed scheme colon
+                    url = "https:" + raw
+                elif raw.startswith("http"):
+                    url = raw
+                elif " " in line:
+                    url = line.split(" ", 1)[1].strip()
+                else:
+                    url = ""
                 if url.startswith("http"):
                     sitemaps.append(url)
 

@@ -106,6 +106,14 @@ class Audit:
         self._phases.append("lateral")
         return self
 
+    def crypto(self) -> Audit:
+        self._phases.append("crypto")
+        return self
+
+    def forensics(self) -> Audit:
+        self._phases.append("forensics")
+        return self
+
     def full_offensive(self) -> Audit:
         """Run all offensive phases (HTB full attack chain)."""
         from basilisk.core.pipeline import OFFENSIVE_PHASES
@@ -360,7 +368,8 @@ class Audit:
         cache_ttl: dict[str, float] = {}
         if self._cache_ttl_hours > 0:
             for phase in ("recon", "scanning", "analysis", "pentesting",
-                          "exploitation", "post_exploit", "privesc", "lateral"):
+                          "exploitation", "post_exploit", "privesc", "lateral",
+                          "crypto", "forensics"):
                 cache_ttl[phase] = self._cache_ttl_hours
 
         return Pipeline(

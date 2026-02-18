@@ -69,6 +69,7 @@ class HtmlRenderer:
                     "tags": finding.tags,
                     "confidence": finding.confidence,
                     "verified": finding.verified,
+                    "false_positive_risk": finding.false_positive_risk,
                 })
 
         all_findings.sort(
@@ -170,6 +171,7 @@ class HtmlRenderer:
             port_findings=port_findings,
             remediation_priority=remediation_priority,
             quality_metrics=quality_metrics,
+            skipped_plugins=state.skipped_plugins,
         )
 
         output_path.write_text(html, encoding="utf-8")

@@ -179,6 +179,7 @@ class CloudDetectPlugin(BasePlugin):
         detected: list[str] = []
 
         headers: dict = {}
+        http_reachable = False
         for scheme in ("https", "http"):
             try:
                 async with ctx.rate:
@@ -186,6 +187,7 @@ class CloudDetectPlugin(BasePlugin):
                         f"{scheme}://{target.host}/", timeout=8.0,
                     )
                     headers = {k.lower(): v for k, v in resp.headers.items()}
+                    http_reachable = True
                     break
             except Exception as e:
                 logger.debug("cloud_detect: %s request failed: %s", scheme, e)
@@ -219,6 +221,11 @@ class CloudDetectPlugin(BasePlugin):
             findings.append(Finding.info(
                 f"Cloud provider: {', '.join(detected)}",
                 evidence=f"CNAME: {cname}" if cname else "Detected via headers",
+                tags=["analysis", "cloud"],
+            ))
+        elif not http_reachable and not cname:
+            findings.append(Finding.info(
+                "Cloud detection skipped: host unreachable via HTTP and no CNAME",
                 tags=["analysis", "cloud"],
             ))
         else:

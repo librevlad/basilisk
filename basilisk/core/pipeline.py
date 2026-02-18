@@ -62,6 +62,7 @@ DEFAULT_PHASES = ["recon", "scanning", "analysis", "pentesting"]
 OFFENSIVE_PHASES = [
     "recon", "scanning", "analysis", "pentesting",
     "exploitation", "post_exploit", "privesc", "lateral",
+    "crypto", "forensics",
 ]
 
 
@@ -545,12 +546,28 @@ class Pipeline:
     def _inject_exploitation_data(self) -> None:
         """After exploitation phase, collect shells and access into ctx.state."""
         shells: list[dict] = []
+        existing_creds = self.ctx.state.get("credentials", [])
+        existing_set = {
+            (c.get("username", ""), c.get("password", ""), c.get("source", ""))
+            for c in existing_creds
+        }
+        new_creds: list[dict] = []
         for result in self.state.results:
             if result.ok and result.data.get("shell_session"):
                 shells.append(result.data["shell_session"])
             if result.ok and result.data.get("credentials"):
-                creds = self.ctx.state.setdefault("credentials", [])
-                creds.extend(result.data["credentials"])
+                for cred in result.data["credentials"]:
+                    key = (
+                        cred.get("username", ""),
+                        cred.get("password", ""),
+                        cred.get("source", ""),
+                    )
+                    if key not in existing_set:
+                        existing_set.add(key)
+                        new_creds.append(cred)
+        if new_creds:
+            creds = self.ctx.state.setdefault("credentials", [])
+            creds.extend(new_creds)
         if shells:
             self.ctx.state["active_shells"] = shells
             logger.info("Exploitation yielded %d shell sessions", len(shells))

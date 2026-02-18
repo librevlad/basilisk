@@ -99,6 +99,9 @@ class LiveReportEngine:
                     "tags": finding.tags,
                     "confidence": getattr(finding, "confidence", None),
                     "verified": getattr(finding, "verified", None),
+                    "false_positive_risk": getattr(
+                        finding, "false_positive_risk", "low"
+                    ),
                 })
 
         all_findings.sort(
@@ -212,6 +215,7 @@ class LiveReportEngine:
             port_findings=port_findings,
             remediation_priority=remediation_priority,
             quality_metrics=quality_metrics,
+            skipped_plugins=state.skipped_plugins,
         )
 
         self.html_path.write_text(html, encoding="utf-8")

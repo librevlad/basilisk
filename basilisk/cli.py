@@ -108,6 +108,9 @@ def audit(
     phase_methods = {
         "recon": "discover", "scanning": "scan",
         "analysis": "analyze", "pentesting": "pentest",
+        "exploitation": "exploit", "post_exploit": "post_exploit",
+        "privesc": "privesc", "lateral": "lateral",
+        "crypto": "crypto", "forensics": "forensics",
     }
     if phases:
         for p in phases.split(","):
