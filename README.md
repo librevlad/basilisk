@@ -2,7 +2,7 @@
 
 Professional modular security audit framework for domain reconnaissance, analysis, and pentesting.
 
-173 auto-discovered plugins across 10 categories. Async pipeline with real-time HTML/JSON reports. TUI dashboard. SQLite storage for large-scale scans.
+175 auto-discovered plugins across 10 categories. Two execution modes: classic sequential pipeline and **autonomous state-driven engine** with knowledge graph. Async execution with real-time HTML/JSON reports. TUI dashboard. SQLite storage for large-scale scans.
 
 ## Quick Start
 
@@ -10,8 +10,11 @@ Professional modular security audit framework for domain reconnaissance, analysi
 # Install
 uv sync && uv pip install -e ".[dev]"
 
-# Full audit
+# Full audit (classic pipeline)
 basilisk audit example.com
+
+# Autonomous mode (v3.0) — inspects, plans, executes, repeats
+basilisk audit example.com --autonomous --max-steps 50
 
 # Single plugin
 basilisk run ssl_check example.com
@@ -25,8 +28,10 @@ basilisk plugins
 
 ## Features
 
-- **173 plugins** in 10 categories, auto-discovered at startup
-- **Async pipeline** — recon, scanning, analysis, pentesting phases
+- **175 plugins** in 10 categories, auto-discovered at startup
+- **Autonomous engine (v3.0)** — knowledge graph-driven loop: find gaps, match capabilities, score, execute, learn, repeat
+- **Classic pipeline** — sequential recon, scanning, analysis, pentesting phases
+- **Knowledge graph** — typed entities with deterministic IDs, confidence merging, relation indexes, SQLite persistence
 - **Live HTML reports** with auto-refresh during scan, static when complete
 - **Fluent API** for programmatic use
 - **TUI dashboard** (Textual) with phase progress, finding feed, stats
@@ -35,6 +40,39 @@ basilisk plugins
 - **Rate limiting** — global + per-host token bucket
 - **Plugin dependency resolution** via topological sort (Kahn's algorithm)
 - **YAML config** with form-based auth, scan paths, custom wordlists
+
+## Autonomous Mode (v3.0)
+
+The autonomous engine replaces the fixed pipeline with a state-driven loop:
+
+1. **Inspect** — examine the knowledge graph for missing information
+2. **Plan** — identify knowledge gaps (host without services, HTTP without tech, endpoints without testing, etc.)
+3. **Match** — find capabilities that can fill each gap
+4. **Score** — rank candidates by `(novelty * knowledge_gain) / (cost + noise + repetition_penalty)`
+5. **Execute** — run a batch of plugins concurrently
+6. **Learn** — convert results to observations, merge into knowledge graph
+7. **Repeat** — until no gaps remain or limits are reached
+
+```bash
+# Autonomous audit with step limit
+basilisk audit example.com --autonomous --max-steps 100
+
+# Programmatic
+from basilisk.core.facade import Audit
+state = await Audit("example.com").autonomous(max_steps=50).run()
+```
+
+### Knowledge Graph Entities
+
+| Entity | Description | Example |
+|--------|-------------|---------|
+| Host | Domain or IP | `example.com`, `192.168.1.1` |
+| Service | Port + protocol | `443/https`, `22/ssh` |
+| Endpoint | URL path | `/api/v1/users` |
+| Technology | Software + version | `nginx/1.24`, `jQuery/3.6.0` |
+| Credential | Username + password | `admin:admin123` |
+| Finding | Security issue | `Missing HSTS header` |
+| Vulnerability | Known CVE | `CVE-2023-1234` |
 
 ## Plugin Categories
 
@@ -58,6 +96,9 @@ basilisk plugins
 ```bash
 # Basic audit (all 4 phases)
 basilisk audit example.com
+
+# Autonomous mode
+basilisk audit example.com --autonomous --max-steps 50
 
 # With custom config
 basilisk audit example.com --config config/target.yaml -v
@@ -89,8 +130,11 @@ basilisk run sqli_basic target.local:8080 -v
 ```python
 from basilisk.core.facade import Audit
 
-# Full pipeline
+# Classic pipeline
 state = await Audit("example.com").discover().scan().analyze().pentest().run()
+
+# Autonomous mode
+state = await Audit("example.com").autonomous(max_steps=50).run()
 
 # Single plugin
 results = await Audit.run_plugin("ssl_check", ["example.com"])
@@ -126,11 +170,17 @@ basilisk/
 ├── config.py              # Pydantic Settings + YAML
 ├── models/                # Pydantic v2 contracts (Target, Finding, PluginResult)
 ├── core/                  # Engine: pipeline, executor, registry, auth, facade
+├── knowledge/             # [v3] Knowledge graph: entities, relations, store
+├── observations/          # [v3] PluginResult → Observation adapter
+├── capabilities/          # [v3] Plugin capability mapping (175 plugins)
+├── scoring/               # [v3] Priority scoring engine
+├── orchestrator/          # [v3] Autonomous loop: planner, selector, executor
+├── events/                # [v3] Async event bus
 ├── utils/                 # HTTP client, DNS, rate limiter, payloads, WAF bypass
 ├── storage/               # SQLite WAL (async, bulk ops)
 ├── tui/                   # Textual dashboard (5 screens, 4 widgets)
 ├── reporting/             # HTML/JSON/CSV renderers, live reports
-└── plugins/               # 173 plugins (auto-discovered)
+└── plugins/               # 175 plugins (auto-discovered)
     ├── recon/        (23)
     ├── scanning/     (16)
     ├── analysis/     (21)
@@ -202,7 +252,7 @@ Drop the file into `basilisk/plugins/<category>/` and it will be auto-discovered
 ## Development
 
 ```bash
-# Run tests (1017 tests)
+# Run tests (1382 tests)
 pytest tests/ -v
 
 # Quick check (stop on first failure)
