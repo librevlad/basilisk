@@ -956,12 +956,13 @@ class OpenApiParserPlugin(BasePlugin):
                     or (isinstance(flows, str) and flows == "implicit")
                 )
                 if uses_implicit:
-                    findings.append(Finding.medium(
+                    findings.append(Finding.high(
                         f"OAuth2 implicit flow used: {name}",
                         description=(
                             "The implicit grant type is deprecated in "
                             "OAuth 2.1 due to token exposure risks"
                         ),
+                        evidence=f"Security scheme '{name}' uses implicit grant flow",
                         remediation=(
                             "Use Authorization Code flow with PKCE "
                             "instead of implicit flow"

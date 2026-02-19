@@ -62,6 +62,7 @@ DEFAULT_PHASES = ["recon", "scanning", "analysis", "pentesting"]
 OFFENSIVE_PHASES = [
     "recon", "scanning", "analysis", "pentesting",
     "exploitation", "post_exploit", "privesc", "lateral",
+    "crypto", "forensics",
 ]
 
 
@@ -101,6 +102,7 @@ class PipelineState:
     current_phase: str = ""
     current_plugin: str = ""
     skipped_plugins: list[str] = field(default_factory=list)
+    http_schemes: dict[str, str | None] = field(default_factory=dict)
 
     def init_phases(self, categories: list[str]) -> None:
         for cat in categories:
@@ -356,6 +358,7 @@ class Pipeline:
         hosts = list({t.host for t in scope})
         await asyncio.gather(*[check_one(h) for h in hosts])
         self.ctx.state["http_scheme"] = scheme_map
+        self.state.http_schemes = scheme_map
 
         reachable = sum(1 for v in scheme_map.values() if v is not None)
         logger.info(
@@ -522,12 +525,13 @@ class Pipeline:
 
     def _check_quality_gate(self, phase_name: str) -> None:
         """Warn if too many findings in this phase lack evidence."""
+        phase_plugins = {
+            p.meta.name for p in self.registry.all()
+            if p.meta.category == phase_name
+        }
         phase_results = [
             r for r in self.state.results
-            if r.plugin in {
-                p.meta.name for p in self.registry.all()
-                if p.meta.category == phase_name
-            }
+            if r.plugin in phase_plugins
         ]
         non_info = [
             f for r in phase_results for f in r.findings
@@ -545,12 +549,28 @@ class Pipeline:
     def _inject_exploitation_data(self) -> None:
         """After exploitation phase, collect shells and access into ctx.state."""
         shells: list[dict] = []
+        existing_creds = self.ctx.state.get("credentials", [])
+        existing_set = {
+            (c.get("username", ""), c.get("password", ""), c.get("source", ""))
+            for c in existing_creds
+        }
+        new_creds: list[dict] = []
         for result in self.state.results:
             if result.ok and result.data.get("shell_session"):
                 shells.append(result.data["shell_session"])
             if result.ok and result.data.get("credentials"):
-                creds = self.ctx.state.setdefault("credentials", [])
-                creds.extend(result.data["credentials"])
+                for cred in result.data["credentials"]:
+                    key = (
+                        cred.get("username", ""),
+                        cred.get("password", ""),
+                        cred.get("source", ""),
+                    )
+                    if key not in existing_set:
+                        existing_set.add(key)
+                        new_creds.append(cred)
+        if new_creds:
+            creds = self.ctx.state.setdefault("credentials", [])
+            creds.extend(new_creds)
         if shells:
             self.ctx.state["active_shells"] = shells
             logger.info("Exploitation yielded %d shell sessions", len(shells))

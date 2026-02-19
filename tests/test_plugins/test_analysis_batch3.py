@@ -12,7 +12,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 from basilisk.models.target import Target
 
-
 # =====================================================================
 # Helpers
 # =====================================================================
@@ -735,3 +734,161 @@ class TestFormAnalyzerAutocomplete:
         forms = result.data["forms"]
         assert len(forms) == 1
         assert forms[0]["autocomplete"] == "new-password"
+
+
+# =====================================================================
+# Regression tests for Batch 3 bug fixes
+# =====================================================================
+
+
+class TestLinkExtractorCrawledUrlsDictBug:
+    """Regression: crawled_urls is dict[str, list[str]], not list[str]."""
+
+    async def test_crawled_urls_as_dict(self, mock_ctx):
+        from basilisk.plugins.analysis.link_extractor import LinkExtractorPlugin
+
+        target = Target.domain("example.com")
+        html = '<html><body><a href="/page1">P1</a></body></html>'
+        page_html = '<html><body><a href="/page2">P2</a></body></html>'
+
+        def get_side_effect(url, **kwargs):
+            if "/extra" in url:
+                return _make_resp(200, page_html)
+            if url.endswith("example.com/") or url.endswith("example.com"):
+                return _make_resp(200, html)
+            return _make_resp(404, "")
+
+        mock_ctx.http.get = AsyncMock(side_effect=get_side_effect)
+        mock_ctx.http.head = AsyncMock(return_value=_make_resp(200, ""))
+        mock_ctx.state["http_scheme"] = {"example.com": "https"}
+        # Pipeline injects crawled_urls as dict, not list
+        mock_ctx.state["crawled_urls"] = {
+            "example.com": [
+                "https://example.com/extra",
+                "https://example.com/other",
+            ],
+        }
+
+        plugin = LinkExtractorPlugin()
+        result = await plugin.run(target, mock_ctx)
+        assert result.ok
+
+    async def test_crawled_urls_empty_dict(self, mock_ctx):
+        from basilisk.plugins.analysis.link_extractor import LinkExtractorPlugin
+
+        target = Target.domain("example.com")
+        html = '<html><body>Hello</body></html>'
+        mock_ctx.http.get = AsyncMock(return_value=_make_resp(200, html))
+        mock_ctx.http.head = AsyncMock(return_value=_make_resp(200, ""))
+        mock_ctx.state["http_scheme"] = {"example.com": "https"}
+        mock_ctx.state["crawled_urls"] = {}
+
+        plugin = LinkExtractorPlugin()
+        result = await plugin.run(target, mock_ctx)
+        assert result.ok
+
+
+class TestRobotsSitemapParsing:
+    """Regression: sitemap URL parsing with various formats."""
+
+    async def test_sitemap_with_space(self, mock_ctx):
+        from basilisk.plugins.analysis.link_extractor import LinkExtractorPlugin
+
+        target = Target.domain("example.com")
+        html = '<html><body>Hello</body></html>'
+        robots = (
+            "User-agent: *\n"
+            "Disallow: /admin/\n"
+            "Sitemap: https://example.com/sitemap.xml\n"
+        )
+        sitemap = '<urlset><url><loc>https://example.com/p1</loc></url></urlset>'
+
+        def get_side_effect(url, **kwargs):
+            if url.endswith("example.com/"):
+                return _make_resp(200, html)
+            if "robots.txt" in url:
+                return _make_resp(200, robots)
+            if "sitemap" in url:
+                return _make_resp(200, sitemap)
+            return _make_resp(404, "")
+
+        mock_ctx.http.get = AsyncMock(side_effect=get_side_effect)
+        mock_ctx.http.head = AsyncMock(return_value=_make_resp(200, ""))
+        mock_ctx.state["http_scheme"] = {"example.com": "https"}
+
+        plugin = LinkExtractorPlugin()
+        result = await plugin.run(target, mock_ctx)
+        assert result.ok
+
+    async def test_sitemap_no_space(self, mock_ctx):
+        from basilisk.plugins.analysis.link_extractor import LinkExtractorPlugin
+
+        target = Target.domain("example.com")
+        html = '<html><body>Hello</body></html>'
+        # No space after "Sitemap:" — colon split consumes scheme colon
+        robots = "Sitemap:https://example.com/sitemap.xml\n"
+
+        def get_side_effect(url, **kwargs):
+            if url.endswith("example.com/"):
+                return _make_resp(200, html)
+            if "robots.txt" in url:
+                return _make_resp(200, robots)
+            if "sitemap" in url:
+                return _make_resp(200, '<urlset></urlset>')
+            return _make_resp(404, "")
+
+        mock_ctx.http.get = AsyncMock(side_effect=get_side_effect)
+        mock_ctx.http.head = AsyncMock(return_value=_make_resp(200, ""))
+        mock_ctx.state["http_scheme"] = {"example.com": "https"}
+
+        plugin = LinkExtractorPlugin()
+        result = await plugin.run(target, mock_ctx)
+        assert result.ok
+
+
+class TestCloudDetectUnreachable:
+    """Regression: distinguish unreachable from no-cloud-detected."""
+
+    async def test_http_unreachable_message(self, mock_ctx):
+        from basilisk.plugins.analysis.cloud_detect import CloudDetectPlugin
+
+        target = Target.domain("unreachable.example.com")
+        mock_ctx.http.get = AsyncMock(side_effect=Exception("Connection refused"))
+        mock_ctx.dns.resolve = AsyncMock(return_value=[])
+
+        plugin = CloudDetectPlugin()
+        result = await plugin.run(target, mock_ctx)
+        assert result.ok
+        assert any("unreachable" in f.title.lower() or "skipped" in f.title.lower()
+                    for f in result.findings)
+
+
+class TestPrometheusScrapeNoDependency:
+    """Regression: prometheus_scrape should not depend on debug_endpoints."""
+
+    def test_no_depends_on(self):
+        from basilisk.plugins.analysis.prometheus_scrape import PrometheusScrapePlugin
+        assert "debug_endpoints" not in PrometheusScrapePlugin.meta.depends_on
+
+    async def test_direct_probe(self, mock_ctx):
+        from basilisk.plugins.analysis.prometheus_scrape import PrometheusScrapePlugin
+
+        target = Target.domain("example.com")
+        mock_ctx.pipeline = {}  # No debug_endpoints result
+        metrics = (
+            '# HELP http_requests_total Total requests\n'
+            '# TYPE http_requests_total counter\n'
+            'http_requests_total{method="GET"} 1234\n'
+        )
+        resp = _make_resp(200, metrics, content_type="text/plain")
+
+        def get_side_effect(url, **kwargs):
+            if "/metrics" in url:
+                return resp
+            return _make_resp(404, "")
+
+        mock_ctx.http.get = AsyncMock(side_effect=get_side_effect)
+
+        plugin = PrometheusScrapePlugin()
+        result = await plugin.run(target, mock_ctx)
+        assert result.ok

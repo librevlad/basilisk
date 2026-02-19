@@ -37,7 +37,6 @@ async def batch_head_check(
     """
     sem = asyncio.Semaphore(concurrency)
     results: list[tuple[str, int, int]] = []
-    lock = asyncio.Lock()
 
     async def _check_one(url: str) -> None:
         if deadline and time.monotonic() >= deadline - 1.0:
@@ -51,11 +50,9 @@ async def batch_head_check(
                     size = int(cl) if cl.isdigit() else 0
                     if valid_statuses is not None:
                         if status in valid_statuses:
-                            async with lock:
-                                results.append((url, status, size))
-                    elif status == 200 and size > 0:
-                        async with lock:
                             results.append((url, status, size))
+                    elif status == 200 and size > 0:
+                        results.append((url, status, size))
             except Exception:
                 pass
 

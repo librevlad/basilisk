@@ -30,7 +30,7 @@ class PrometheusScrapePlugin(BasePlugin):
         display_name="Prometheus Metrics Intelligence",
         category=PluginCategory.ANALYSIS,
         description="Extracts internal infrastructure info from exposed Prometheus /metrics",
-        depends_on=["debug_endpoints"],
+        depends_on=[],
         produces=["prometheus_intel"],
         timeout=30.0,
     )

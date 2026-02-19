@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
     from basilisk.core.executor import PluginContext
-    from basilisk.models.result import Finding, PluginResult, Severity
+    from basilisk.models.result import PluginResult
     from basilisk.models.target import Target
 
 
@@ -70,42 +70,6 @@ class BasePlugin(ABC):
 
     async def teardown(self) -> None:  # noqa: B027
         """Called once after all targets are processed."""
-
-    @staticmethod
-    def make_finding(
-        title: str,
-        severity: Severity,
-        *,
-        evidence: str,
-        description: str = "",
-        remediation: str = "",
-        confidence: float = 1.0,
-        verified: bool = False,
-        false_positive_risk: str = "low",
-        tags: list[str] | None = None,
-    ) -> Finding:
-        """Factory for findings with mandatory evidence for HIGH/CRITICAL.
-
-        Use this instead of Finding.high/critical directly to ensure quality.
-        """
-        from basilisk.models.result import Finding as _Finding
-        from basilisk.models.result import Severity as _Sev
-
-        if severity >= _Sev.HIGH and not evidence:
-            raise ValueError(
-                f"Evidence is required for HIGH/CRITICAL findings: {title}"
-            )
-        return _Finding(
-            title=title,
-            severity=severity,
-            evidence=evidence,
-            description=description,
-            remediation=remediation,
-            confidence=confidence,
-            verified=verified,
-            false_positive_risk=false_positive_risk,
-            tags=tags or [],
-        )
 
     def __repr__(self) -> str:
         return f"<Plugin {self.meta.name}>"

@@ -118,72 +118,46 @@ def aggregate_findings(findings: list[dict]) -> list[dict]:
 # Exploit chain detection
 # ---------------------------------------------------------------------------
 def detect_exploit_chains(aggregated_findings: list[dict]) -> list[dict]:
-    """Detect potential exploit chains from finding combinations."""
-    chains: list[dict] = []
+    """Detect exploit chains via attack graph analysis.
 
-    disclosures = [f for f in aggregated_findings if f["severity"] in ("LOW", "MEDIUM")
-                   and any(k in f["title"].lower() for k in ("exposed", "disclosure", "version",
-                           "backup", "git", "debug", "server header", "error"))]
-    injections = [f for f in aggregated_findings if f["severity"] in ("HIGH", "CRITICAL")
-                  and any(k in f["title"].lower() for k in ("injection", "sqli", "xss",
-                          "ssti", "xxe", "command", "lfi", "rfi", "deserialization"))]
+    Reconstructs minimal ``PluginResult`` objects from aggregated finding dicts,
+    builds an :class:`~basilisk.core.attack_graph.AttackGraph`, and returns
+    paths in the ``{"name", "risk", "steps"}`` format the report templates expect.
+    """
+    from basilisk.core.attack_graph import AttackGraph
+    from basilisk.models.result import Finding, PluginResult, Severity
 
-    if disclosures and injections:
-        chains.append({
-            "name": "Recon-to-Exploit",
-            "risk": "CRITICAL",
-            "steps": [
-                {"label": "Information Disclosure", "count": len(disclosures),
-                 "detail": disclosures[0]["title"]},
-                {"label": "Vulnerability Exploitation", "count": len(injections),
-                 "detail": injections[0]["title"]},
-                {"label": "Potential Data Breach", "count": 0,
-                 "detail": "Impact assessment needed"},
-            ],
-        })
+    # Group aggregated finding dicts by (plugin, target) → PluginResult
+    sev_map = {s.label: s for s in Severity}
+    groups: dict[tuple[str, str], list[Finding]] = defaultdict(list)
+    data_by_plugin: dict[str, dict] = defaultdict(dict)
 
-    misconfigs = [f for f in aggregated_findings
-                  if any(k in f["title"].lower() for k in ("cors", "csp", "header", "hsts",
-                         "cookie", "http method"))]
-    auth_issues = [f for f in aggregated_findings
-                   if any(k in f["title"].lower() for k in ("auth", "password", "session",
-                          "jwt", "token", "credential", "brute", "csrf", "idor"))]
+    for f in aggregated_findings:
+        plugin = f.get("plugin", "")
+        fallback = f.get("affected_targets", [""])[0] if "affected_targets" in f else ""
+        target = f.get("target", fallback)
+        sev = sev_map.get(f.get("severity", "INFO"), Severity.INFO)
+        tags = f.get("tags", [])
+        groups[(plugin, target)].append(Finding(
+            severity=sev,
+            title=f.get("title", ""),
+            evidence=f.get("evidence", ""),
+            tags=tags if isinstance(tags, list) else [],
+        ))
+        if f.get("data"):
+            data_by_plugin[plugin].update(f["data"])
 
-    if misconfigs and auth_issues:
-        chains.append({
-            "name": "Misconfig-to-Takeover",
-            "risk": "HIGH",
-            "steps": [
-                {"label": "Security Misconfiguration", "count": len(misconfigs),
-                 "detail": misconfigs[0]["title"]},
-                {"label": "Auth/Session Weakness", "count": len(auth_issues),
-                 "detail": auth_issues[0]["title"]},
-                {"label": "Account Takeover Risk", "count": 0,
-                 "detail": "Manual verification needed"},
-            ],
-        })
+    results: list[PluginResult] = []
+    for (plugin, target), findings in groups.items():
+        results.append(PluginResult.success(
+            plugin=plugin,
+            target=target,
+            findings=findings,
+            data=data_by_plugin.get(plugin, {}),
+        ))
 
-    ssrf_or_redirect = [f for f in aggregated_findings
-                        if any(k in f["title"].lower() for k in ("ssrf", "redirect", "smuggling"))]
-    sensitive_endpoints = [f for f in aggregated_findings
-                          if any(k in f["title"].lower() for k in ("admin", "api", "internal",
-                                 "actuator", "metadata", "cloud"))]
-
-    if ssrf_or_redirect and sensitive_endpoints:
-        chains.append({
-            "name": "SSRF-to-Internal",
-            "risk": "CRITICAL",
-            "steps": [
-                {"label": "Request Manipulation", "count": len(ssrf_or_redirect),
-                 "detail": ssrf_or_redirect[0]["title"]},
-                {"label": "Internal Service Access", "count": len(sensitive_endpoints),
-                 "detail": sensitive_endpoints[0]["title"]},
-                {"label": "Infrastructure Compromise", "count": 0,
-                 "detail": "Cloud metadata / internal APIs at risk"},
-            ],
-        })
-
-    return chains
+    graph = AttackGraph.from_results(results)
+    return graph.to_report_chains()
 
 
 # ---------------------------------------------------------------------------

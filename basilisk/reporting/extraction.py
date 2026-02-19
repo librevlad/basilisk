@@ -2,12 +2,20 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import TYPE_CHECKING
 
 from basilisk.reporting.filtering import url_to_path
 
 logger = logging.getLogger(__name__)
+
+
+def _hashable(item: object) -> str:
+    """Create a hashable key from a dict or other value for O(1) dedup."""
+    if isinstance(item, dict):
+        return json.dumps(item, sort_keys=True, default=str)
+    return str(item)
 
 if TYPE_CHECKING:
     from basilisk.models.result import PluginResult
@@ -62,53 +70,55 @@ def extract_attack_surface(results: list) -> dict:
     }
 
     all_subdomains: set[str] = set()
+    email_set: set[str] = set()
+
+    # Per-host dedup sets keyed by field name
+    host_list_fields = (
+        "ports", "services", "tech", "paths", "admin_panels",
+        "exposed_files", "backup_files", "api_endpoints",
+        "methods", "waf", "cms", "cloud", "dns_records",
+        "forms", "internal_ips",
+    )
+    seen: dict[str, dict[str, set[str]]] = {}  # host → field → set of hashable keys
+
+    def _ensure_host(host: str) -> dict:
+        if host not in surface["hosts"]:
+            surface["hosts"][host] = {f: [] for f in host_list_fields}
+            seen[host] = {f: set() for f in host_list_fields}
+        return surface["hosts"][host]
+
+    def _add(h: dict, host: str, field: str, entry: object) -> None:
+        key = _hashable(entry)
+        s = seen[host][field]
+        if key not in s:
+            s.add(key)
+            h[field].append(entry)
 
     for result in results:
         host = result.target
         data = result.data
-
-        if host not in surface["hosts"]:
-            surface["hosts"][host] = {
-                "ports": [],
-                "services": [],
-                "tech": [],
-                "paths": [],
-                "admin_panels": [],
-                "exposed_files": [],
-                "backup_files": [],
-                "api_endpoints": [],
-                "methods": [],
-                "waf": [],
-                "cms": [],
-                "cloud": [],
-                "dns_records": [],
-                "forms": [],
-                "internal_ips": [],
-            }
-
-        h = surface["hosts"][host]
+        h = _ensure_host(host)
 
         # Ports & services
         if data.get("open_ports"):
             for p in data["open_ports"]:
-                if isinstance(p, dict) and p not in h["ports"]:
-                    h["ports"].append(p)
+                if isinstance(p, dict):
+                    _add(h, host, "ports", p)
         if data.get("services"):
             for s in data["services"]:
-                if isinstance(s, dict) and s not in h["services"]:
-                    h["services"].append(s)
+                if isinstance(s, dict):
+                    _add(h, host, "services", s)
 
         # Technologies
         if data.get("technologies"):
             for t in data["technologies"]:
-                if t not in h["tech"]:
-                    h["tech"].append(t)
+                _add(h, host, "tech", t)
 
         # CMS
         if data.get("cms"):
             for c in data["cms"]:
-                if isinstance(c, dict) and c not in h["cms"]:
-                    h["cms"].append(c)
+                if isinstance(c, dict):
+                    _add(h, host, "cms", c)
 
         # Paths (dir_brute)
         if data.get("found_paths"):
@@ -116,106 +126,91 @@ def extract_attack_surface(results: list) -> dict:
                 if isinstance(p, dict):
                     entry = dict(p)
                     entry.setdefault("source", "brute")
-                    if entry not in h["paths"]:
-                        h["paths"].append(entry)
+                    _add(h, host, "paths", entry)
 
         # Crawled URLs (web_crawler)
         if data.get("crawled_urls"):
             for url in data["crawled_urls"]:
                 path = url_to_path(url, host)
                 if path:
-                    entry = {"path": path, "status": 200, "source": "crawler"}
-                    if entry not in h["paths"]:
-                        h["paths"].append(entry)
+                    _add(h, host, "paths", {"path": path, "status": 200, "source": "crawler"})
 
         # Disallowed paths (robots_parser)
         if data.get("disallow_paths"):
             for dp in data["disallow_paths"]:
                 path = dp if isinstance(dp, str) else str(dp)
-                entry = {"path": path, "status": 0, "source": "robots"}
-                if entry not in h["paths"]:
-                    h["paths"].append(entry)
+                _add(h, host, "paths", {"path": path, "status": 0, "source": "robots"})
 
         # Sitemap URLs (sitemap_parser)
         if data.get("urls") and result.plugin in ("sitemap_parser", "sitemap"):
             for url in data["urls"]:
                 path = url_to_path(url, host)
                 if path:
-                    entry = {"path": path, "status": 200, "source": "sitemap"}
-                    if entry not in h["paths"]:
-                        h["paths"].append(entry)
+                    _add(h, host, "paths", {"path": path, "status": 200, "source": "sitemap"})
 
         # Internal links (link_extractor)
         if data.get("internal_links"):
             for url in data["internal_links"]:
                 path = url_to_path(url, host)
                 if path:
-                    entry = {"path": path, "status": 0, "source": "links"}
-                    if entry not in h["paths"]:
-                        h["paths"].append(entry)
+                    _add(h, host, "paths", {"path": path, "status": 0, "source": "links"})
 
         # Admin panels
         if data.get("admin_panels"):
             for a in data["admin_panels"]:
-                if isinstance(a, dict) and a not in h["admin_panels"]:
-                    h["admin_panels"].append(a)
+                if isinstance(a, dict):
+                    _add(h, host, "admin_panels", a)
 
         # Git / sensitive files
         for data_key in ("exposed_files", "sensitive_files"):
             if data.get(data_key):
                 for f in data[data_key]:
                     entry = f if isinstance(f, dict) else {"path": f}
-                    if entry not in h["exposed_files"]:
-                        h["exposed_files"].append(entry)
+                    _add(h, host, "exposed_files", entry)
 
         # Backups
         if data.get("backup_files"):
             for b in data["backup_files"]:
-                if isinstance(b, dict) and b not in h["backup_files"]:
-                    h["backup_files"].append(b)
+                if isinstance(b, dict):
+                    _add(h, host, "backup_files", b)
 
         # API endpoints
         if data.get("api_endpoints"):
             for e in data["api_endpoints"]:
                 entry = e if isinstance(e, dict) else {"path": e, "status": 200}
-                if entry not in h["api_endpoints"]:
-                    h["api_endpoints"].append(entry)
+                _add(h, host, "api_endpoints", entry)
 
         # HTTP methods
         if data.get("methods"):
             for m in data["methods"]:
-                if m not in h["methods"]:
-                    h["methods"].append(m)
+                _add(h, host, "methods", m)
 
         # WAF
         if data.get("waf"):
             for w in data["waf"]:
-                if w not in h["waf"]:
-                    h["waf"].append(w)
+                _add(h, host, "waf", w)
 
         # Cloud
         if data.get("cloud_providers"):
             for c in data["cloud_providers"]:
-                if c not in h["cloud"]:
-                    h["cloud"].append(c)
+                _add(h, host, "cloud", c)
 
         # DNS
         if data.get("records"):
             for r in data["records"]:
-                if isinstance(r, dict) and r not in h["dns_records"]:
-                    h["dns_records"].append(r)
+                if isinstance(r, dict):
+                    _add(h, host, "dns_records", r)
 
         # Forms (js_api_extract, form_analyzer)
         if data.get("forms"):
             for form in data["forms"]:
-                if isinstance(form, dict) and form not in h["forms"]:
-                    h["forms"].append(form)
+                if isinstance(form, dict):
+                    _add(h, host, "forms", form)
 
         # Internal IPs (js_api_extract)
         if data.get("internal_ips"):
             for ip in data["internal_ips"]:
-                if ip not in h["internal_ips"]:
-                    h["internal_ips"].append(ip)
+                _add(h, host, "internal_ips", ip)
 
         # Subdomains
         if data.get("subdomains"):
@@ -226,7 +221,8 @@ def extract_attack_surface(results: list) -> dict:
         for key in ("domain_emails", "other_emails"):
             if data.get(key):
                 for e in data[key]:
-                    if e not in surface["emails"]:
+                    if e not in email_set:
+                        email_set.add(e)
                         surface["emails"].append(e)
 
     surface["subdomains"] = sorted(all_subdomains)
@@ -328,6 +324,9 @@ def extract_js_intelligence(results: list) -> dict:
     source_maps: list[str] = []
     graphql_endpoints: list[str] = []
     websocket_urls: list[str] = []
+    _sm_set: set[str] = set()
+    _gql_set: set[str] = set()
+    _ws_set: set[str] = set()
     total_js_files = 0
     total_paths = 0
     total_secrets = 0
@@ -364,15 +363,18 @@ def extract_js_intelligence(results: list) -> dict:
             internal_ips_by_host[r.target] = ips
 
         for sm in d.get("source_maps", []):
-            if sm not in source_maps:
+            if sm not in _sm_set:
+                _sm_set.add(sm)
                 source_maps.append(sm)
 
         for ep in d.get("graphql_endpoints", []):
-            if ep not in graphql_endpoints:
+            if ep not in _gql_set:
+                _gql_set.add(ep)
                 graphql_endpoints.append(ep)
 
         for ws in d.get("websocket_urls", []):
-            if ws not in websocket_urls:
+            if ws not in _ws_set:
+                _ws_set.add(ws)
                 websocket_urls.append(ws)
 
         total_js_files += d.get("js_files_scanned", 0)

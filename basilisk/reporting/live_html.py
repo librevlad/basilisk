@@ -99,6 +99,9 @@ class LiveReportEngine:
                     "tags": finding.tags,
                     "confidence": getattr(finding, "confidence", None),
                     "verified": getattr(finding, "verified", None),
+                    "false_positive_risk": getattr(
+                        finding, "false_positive_risk", "low"
+                    ),
                 })
 
         all_findings.sort(
@@ -176,6 +179,20 @@ class LiveReportEngine:
 
         is_running = state.status not in ("completed", "done", "error")
 
+        # Build host→scheme map for correct link generation
+        host_schemes = dict(state.http_schemes) if state.http_schemes else {}
+        tls_ports = {443, 8443, 9443, 4443}
+        for t in targets:
+            if t not in host_schemes or host_schemes[t] is None:
+                if ":" in t:
+                    try:
+                        port = int(t.rsplit(":", 1)[1])
+                        host_schemes[t] = "https" if port in tls_ports else "http"
+                    except ValueError:
+                        host_schemes[t] = "https"
+                else:
+                    host_schemes[t] = "https"
+
         html = template.render(
             title="Basilisk Security Audit Report",
             timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -212,6 +229,8 @@ class LiveReportEngine:
             port_findings=port_findings,
             remediation_priority=remediation_priority,
             quality_metrics=quality_metrics,
+            skipped_plugins=state.skipped_plugins,
+            host_schemes=host_schemes,
         )
 
         self.html_path.write_text(html, encoding="utf-8")
