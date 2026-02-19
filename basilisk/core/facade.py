@@ -290,7 +290,13 @@ class Audit:
                 history_path = self._project.db_path.parent / "decision_history.json"
                 result.history.save(history_path)
 
-            return self._loop_result_to_pipeline_state(result)
+            state = self._loop_result_to_pipeline_state(result)
+
+            # Fire progress callback with final state so LiveReportEngine writes files
+            if self._on_progress:
+                self._on_progress(state)
+
+            return state
         finally:
             if db:
                 await db.close()
