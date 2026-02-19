@@ -23,6 +23,7 @@ class EventType(StrEnum):
     PLUGIN_FINISHED = "plugin_finished"
     GAP_DETECTED = "gap_detected"
     STEP_COMPLETED = "step_completed"
+    DECISION_MADE = "decision_made"
 
 
 @dataclass

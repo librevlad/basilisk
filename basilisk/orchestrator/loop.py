@@ -10,15 +10,17 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from basilisk.decisions.decision import Decision, EvaluatedOption
 from basilisk.events.bus import Event, EventBus, EventType
 from basilisk.knowledge.entities import Entity, EntityType
 from basilisk.knowledge.graph import KnowledgeGraph
+from basilisk.knowledge.state import KnowledgeState
 from basilisk.observations.observation import Observation
 from basilisk.orchestrator.planner import Planner
 from basilisk.orchestrator.safety import SafetyLimits
 from basilisk.orchestrator.selector import Selector
 from basilisk.orchestrator.timeline import Timeline
-from basilisk.scoring.scorer import Scorer
+from basilisk.scoring.scorer import ScoredCapability, Scorer
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +36,8 @@ class LoopResult:
     termination_reason: str = ""
     results: dict[str, Any] = field(default_factory=dict)
     plugin_results: dict[str, Any] = field(default_factory=dict)
+    decisions: list[Decision] = field(default_factory=list)
+    history: Any = None  # History | None
 
 
 class AutonomousLoop:
@@ -44,8 +48,8 @@ class AutonomousLoop:
     2. Match capabilities to gaps
     3. Score and rank candidates
     4. Select a batch
-    5. Execute concurrently
-    6. Apply observations to the graph
+    5. Execute concurrently (with decision tracing)
+    6. Apply observations to the graph via KnowledgeState
     7. Repeat until no gaps remain or limits are reached
     """
 
@@ -59,6 +63,7 @@ class AutonomousLoop:
         bus: EventBus,
         safety: SafetyLimits,
         on_progress: Callable | None = None,
+        history: Any = None,  # History | None
     ) -> None:
         self.graph = graph
         self.planner = planner
@@ -69,6 +74,8 @@ class AutonomousLoop:
         self.safety = safety
         self.on_progress = on_progress
         self.timeline = Timeline()
+        self._history = history
+        self._state = KnowledgeState(graph, planner)
 
     async def run(self, initial_targets: list) -> LoopResult:
         """Main autonomous loop."""
@@ -80,6 +87,7 @@ class AutonomousLoop:
         step = 0
         total_obs = 0
         termination_reason = "completed"
+        all_decisions: list[Decision] = []
 
         while True:
             step += 1
@@ -93,7 +101,7 @@ class AutonomousLoop:
                 break
 
             # 2. Find gaps
-            gaps = self.planner.find_gaps(self.graph)
+            gaps = self._state.find_gaps()
             if not gaps:
                 termination_reason = "no_gaps"
                 logger.info("Autonomous loop: no knowledge gaps remain")
@@ -117,19 +125,45 @@ class AutonomousLoop:
                 termination_reason = "no_candidates"
                 break
 
-            # 6. Execute batch concurrently
+            # 6. Execute batch concurrently with decision tracing
             tasks = []
+            step_decisions: list[Decision] = []
             for sc in chosen:
                 fingerprint = self._fingerprint(sc)
+
+                # Check cooldown
+                if not self.safety.is_cooled_down(fingerprint):
+                    continue
+
                 if self.graph.was_executed(fingerprint):
                     continue
+
+                # Build decision BEFORE execution
+                decision = self._build_decision(step, sc, scored, gaps)
+                step_decisions.append(decision)
+                all_decisions.append(decision)
+
+                if self._history is not None:
+                    self._history.record(decision)
+
+                self.bus.emit(Event(EventType.DECISION_MADE, {
+                    "decision_id": decision.id,
+                    "plugin": sc.capability.name,
+                    "target": sc.target_entity.data.get("host", ""),
+                    "step": step,
+                    "score": sc.score,
+                    "reasoning": decision.reasoning_trace,
+                }))
+
                 self.graph.record_execution(fingerprint)
+                self.safety.record_run(fingerprint)
+
                 self.bus.emit(Event(EventType.PLUGIN_STARTED, {
                     "plugin": sc.capability.name,
                     "target": sc.target_entity.data.get("host", ""),
                     "step": step,
                 }))
-                tasks.append(self._execute_one(sc, step))
+                tasks.append(self._execute_one(sc, step, decision))
 
             if not tasks:
                 termination_reason = "all_executed"
@@ -140,15 +174,49 @@ class AutonomousLoop:
 
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
-            # 7. Apply observations
+            # 7. Apply observations via KnowledgeState (captures deltas)
             step_obs_count = 0
-            for obs_list in results:
+            for idx, obs_list in enumerate(results):
                 if isinstance(obs_list, BaseException):
                     logger.warning("Execution error in step %d: %s", step, obs_list)
                     continue
+
+                decision = step_decisions[idx] if idx < len(step_decisions) else None
+                obs_count = 0
+                new_entities = 0
+                total_confidence_delta = 0.0
+
                 for obs in obs_list:
-                    self._apply_observation(obs)
-                    step_obs_count += 1
+                    outcome = self._state.apply_observation(obs)
+                    self.bus.emit(Event(
+                        EventType.ENTITY_UPDATED if not outcome.was_new
+                        else EventType.ENTITY_CREATED,
+                        {"entity_id": outcome.entity_id},
+                    ))
+                    obs_count += 1
+                    if outcome.was_new:
+                        new_entities += 1
+                    total_confidence_delta += outcome.confidence_delta
+
+                step_obs_count += obs_count
+
+                # Update decision outcome
+                if decision:
+                    decision.outcome_observations = obs_count
+                    decision.outcome_new_entities = new_entities
+                    decision.outcome_confidence_delta = total_confidence_delta
+                    decision.outcome_duration = decision.outcome_duration  # set by _execute_one
+                    decision.was_productive = (
+                        new_entities > 0 or total_confidence_delta > 0.01
+                    )
+                    if self._history is not None:
+                        self._history.update_outcome(
+                            decision.id,
+                            observations=obs_count,
+                            new_entities=new_entities,
+                            confidence_delta=total_confidence_delta,
+                            duration=decision.outcome_duration,
+                        )
 
             total_obs += step_obs_count
 
@@ -180,6 +248,8 @@ class AutonomousLoop:
             termination_reason=termination_reason,
             results=self._collect_results(),
             plugin_results=dict(self.executor.ctx.pipeline),
+            decisions=all_decisions,
+            history=self._history,
         )
 
     def _seed_targets(self, targets: list) -> None:
@@ -196,7 +266,9 @@ class AutonomousLoop:
             self.graph.add_entity(entity)
             self.bus.emit(Event(EventType.ENTITY_CREATED, {"entity_id": entity.id}))
 
-    async def _execute_one(self, sc: Any, step: int) -> list[Observation]:
+    async def _execute_one(
+        self, sc: ScoredCapability, step: int, decision: Decision,
+    ) -> list[Observation]:
         """Execute a single scored capability."""
         start = time.monotonic()
         try:
@@ -208,6 +280,7 @@ class AutonomousLoop:
             return []
         finally:
             duration = time.monotonic() - start
+            decision.outcome_duration = duration
             self.bus.emit(Event(EventType.PLUGIN_FINISHED, {
                 "plugin": sc.capability.name,
                 "target": sc.target_entity.data.get("host", ""),
@@ -215,41 +288,82 @@ class AutonomousLoop:
                 "step": step,
             }))
 
-        # Record result in timeline
+        # Record result in timeline with real confidence delta (computed later)
         new_ids = [obs.key_fields.get("host", "") for obs in observations[:5]]
         self.timeline.record_result(
             sc.capability.name,
             sc.target_entity.data.get("host", sc.target_entity.id[:8]),
             new_ids,
-            confidence_delta=0.0,
+            confidence_delta=0.0,  # updated after observation application
             duration=duration,
         )
 
         return observations
 
-    def _apply_observation(self, obs: Observation) -> None:
-        """Apply a single observation to the knowledge graph."""
-        entity_id = Entity.make_id(obs.entity_type, **obs.key_fields)
+    def _build_decision(
+        self,
+        step: int,
+        chosen: ScoredCapability,
+        all_scored: list[ScoredCapability],
+        gaps: list,
+    ) -> Decision:
+        """Build a Decision record BEFORE execution."""
         now = datetime.now(UTC)
+        target_host = chosen.target_entity.data.get("host", chosen.target_entity.id[:8])
 
-        entity = Entity(
-            id=entity_id,
-            type=obs.entity_type,
-            data=obs.entity_data,
-            confidence=obs.confidence,
-            evidence=[obs.evidence] if obs.evidence else [],
-            first_seen=now,
-            last_seen=now,
+        # Find matching gap for the chosen entity
+        matching_gap = None
+        for gap in gaps:
+            if gap.entity.id == chosen.target_entity.id:
+                matching_gap = gap
+                break
+
+        # Build evaluated options (cap at 20)
+        evaluated = []
+        for sc in all_scored[:20]:
+            evaluated.append(EvaluatedOption(
+                capability_name=sc.capability.name,
+                plugin_name=sc.capability.plugin_name,
+                target_entity_id=sc.target_entity.id,
+                target_host=sc.target_entity.data.get("host", sc.target_entity.id[:8]),
+                score=sc.score,
+                score_breakdown=sc.score_breakdown,
+                reason=sc.reason,
+                was_chosen=(
+                    sc.capability.name == chosen.capability.name
+                    and sc.target_entity.id == chosen.target_entity.id
+                ),
+            ))
+
+        # Build reasoning trace
+        gap_desc = matching_gap.description if matching_gap else "unknown gap"
+        reasoning = (
+            f"Gap: {gap_desc}. "
+            f"Selected {chosen.capability.name} (score={chosen.score:.3f}) "
+            f"from {len(all_scored)} candidates. "
+            f"{chosen.reason}"
         )
 
-        existing = self.graph.get(entity_id)
-        self.graph.add_entity(entity)
+        context = self._state.snapshot(
+            step, self.safety.elapsed, len(gaps),
+        )
 
-        event_type = EventType.ENTITY_UPDATED if existing else EventType.ENTITY_CREATED
-        self.bus.emit(Event(event_type, {"entity_id": entity_id}))
-
-        if obs.relation:
-            self.graph.add_relation(obs.relation)
+        return Decision(
+            id=Decision.make_id(step, now, chosen.capability.plugin_name, target_host),
+            timestamp=now,
+            step=step,
+            goal=matching_gap.missing if matching_gap else "",
+            goal_description=gap_desc,
+            goal_priority=matching_gap.priority if matching_gap else 0.0,
+            triggering_entity_id=chosen.target_entity.id,
+            context=context,
+            evaluated_options=evaluated,
+            chosen_capability=chosen.capability.name,
+            chosen_plugin=chosen.capability.plugin_name,
+            chosen_target=target_host,
+            chosen_score=chosen.score,
+            reasoning_trace=reasoning,
+        )
 
     @staticmethod
     def _fingerprint(sc: Any) -> str:

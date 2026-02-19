@@ -5,9 +5,10 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 from basilisk.capabilities.capability import Capability
-from basilisk.events.bus import EventBus
+from basilisk.events.bus import EventBus, EventType
 from basilisk.knowledge.entities import Entity, EntityType
 from basilisk.knowledge.graph import KnowledgeGraph
+from basilisk.memory.history import History
 from basilisk.models.target import Target
 from basilisk.observations.observation import Observation
 from basilisk.orchestrator.loop import AutonomousLoop
@@ -22,6 +23,7 @@ def _make_loop(
     max_steps: int = 10,
     gaps: list[KnowledgeGap] | None = None,
     observations: list[Observation] | None = None,
+    history: History | None = None,
 ) -> tuple[AutonomousLoop, KnowledgeGraph]:
     graph = KnowledgeGraph()
 
@@ -38,7 +40,7 @@ def _make_loop(
         cost_score=2.0, noise_score=1.0,
     )
     selector = Selector({"test_cap": cap})
-    scorer = Scorer(graph)
+    scorer = Scorer(graph, history=history)
 
     executor = AsyncMock()
     executor.execute.return_value = observations or []
@@ -56,6 +58,7 @@ def _make_loop(
         executor=executor,
         bus=bus,
         safety=safety,
+        history=history,
     )
 
     return loop, graph
@@ -97,7 +100,8 @@ class TestLoopTermination:
 
         result = await loop.run([Target.domain("test.com")])
         # Should stop after max_steps
-        assert "limit_reached" in result.termination_reason or "all_executed" in result.termination_reason
+        reason = result.termination_reason
+        assert "limit_reached" in reason or "all_executed" in reason
 
 
 class TestLoopSeedTargets:
@@ -171,3 +175,113 @@ class TestLoopResult:
         result = await loop.run([Target.domain("r.com")])
         assert "hosts" in result.results
         assert "entities" in result.results
+
+
+class TestLoopDecisions:
+    async def test_decisions_in_result(self):
+        host_entity = Entity.host("dec.com")
+        gap = KnowledgeGap(
+            entity=host_entity, missing="services", priority=10.0, description="need scan",
+        )
+        loop, graph = _make_loop(gaps=[gap])
+        result = await loop.run([Target.domain("dec.com")])
+        assert len(result.decisions) >= 1
+
+    async def test_decision_has_reasoning_trace(self):
+        host_entity = Entity.host("trace.com")
+        gap = KnowledgeGap(
+            entity=host_entity, missing="services", priority=10.0, description="need scan",
+        )
+        loop, graph = _make_loop(gaps=[gap])
+        result = await loop.run([Target.domain("trace.com")])
+        if result.decisions:
+            assert result.decisions[0].reasoning_trace != ""
+            assert "Gap" in result.decisions[0].reasoning_trace
+
+    async def test_decision_has_context_snapshot(self):
+        host_entity = Entity.host("snap.com")
+        gap = KnowledgeGap(
+            entity=host_entity, missing="services", priority=10.0, description="need scan",
+        )
+        loop, graph = _make_loop(gaps=[gap])
+        result = await loop.run([Target.domain("snap.com")])
+        if result.decisions:
+            ctx = result.decisions[0].context
+            assert ctx.host_count >= 1
+            assert ctx.step >= 1
+
+    async def test_decision_evaluated_options(self):
+        host_entity = Entity.host("opts.com")
+        gap = KnowledgeGap(
+            entity=host_entity, missing="services", priority=10.0, description="need scan",
+        )
+        loop, graph = _make_loop(gaps=[gap])
+        result = await loop.run([Target.domain("opts.com")])
+        if result.decisions:
+            assert len(result.decisions[0].evaluated_options) >= 1
+            chosen = [o for o in result.decisions[0].evaluated_options if o.was_chosen]
+            assert len(chosen) == 1
+
+    async def test_decision_confidence_delta_with_observations(self):
+        host_entity = Entity.host("delta.com")
+        obs = Observation(
+            entity_type=EntityType.SERVICE,
+            entity_data={"host": "delta.com", "port": 443, "protocol": "tcp"},
+            key_fields={"host": "delta.com", "port": "443", "protocol": "tcp"},
+            confidence=0.9,
+            source_plugin="test",
+        )
+        gap = KnowledgeGap(
+            entity=host_entity, missing="services", priority=10.0, description="need scan",
+        )
+        loop, graph = _make_loop(gaps=[gap], observations=[obs])
+        result = await loop.run([Target.domain("delta.com")])
+        if result.decisions:
+            # With new entities produced, confidence_delta should be > 0
+            d = result.decisions[0]
+            assert d.outcome_new_entities >= 1
+            assert d.was_productive is True
+
+    async def test_decision_made_event_emitted(self):
+        events = []
+        host_entity = Entity.host("event.com")
+        gap = KnowledgeGap(
+            entity=host_entity, missing="services", priority=10.0, description="test",
+        )
+        loop, graph = _make_loop(gaps=[gap])
+        loop.bus.subscribe(
+            EventType.DECISION_MADE, lambda e: events.append(e),
+        )
+        await loop.run([Target.domain("event.com")])
+        assert len(events) >= 1
+        assert "decision_id" in events[0].data
+        assert "reasoning" in events[0].data
+
+
+class TestLoopWithHistory:
+    async def test_history_recorded(self):
+        history = History()
+        host_entity = Entity.host("hist.com")
+        gap = KnowledgeGap(
+            entity=host_entity, missing="services", priority=10.0, description="need scan",
+        )
+        loop, graph = _make_loop(gaps=[gap], history=history)
+        result = await loop.run([Target.domain("hist.com")])
+        assert len(history) >= 1
+        assert result.history is history
+
+    async def test_history_outcome_updated(self):
+        history = History()
+        host_entity = Entity.host("out.com")
+        obs = Observation(
+            entity_type=EntityType.SERVICE,
+            entity_data={"host": "out.com", "port": 80, "protocol": "tcp"},
+            key_fields={"host": "out.com", "port": "80", "protocol": "tcp"},
+            source_plugin="test",
+        )
+        gap = KnowledgeGap(
+            entity=host_entity, missing="services", priority=10.0, description="need scan",
+        )
+        loop, graph = _make_loop(gaps=[gap], observations=[obs], history=history)
+        await loop.run([Target.domain("out.com")])
+        assert history.decisions[0].outcome_observations >= 1

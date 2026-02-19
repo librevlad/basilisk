@@ -225,6 +225,7 @@ class Audit:
         from basilisk.capabilities.mapping import build_capabilities
         from basilisk.events.bus import EventBus
         from basilisk.knowledge.graph import KnowledgeGraph
+        from basilisk.memory.history import History
         from basilisk.orchestrator.executor import OrchestratorExecutor
         from basilisk.orchestrator.loop import AutonomousLoop
         from basilisk.orchestrator.planner import Planner
@@ -236,7 +237,8 @@ class Audit:
         planner = Planner()
         capabilities = build_capabilities(registry)
         selector = Selector(capabilities)
-        scorer = Scorer(graph)
+        history = History()
+        scorer = Scorer(graph, history=history)
         core_executor = AsyncExecutor(max_concurrency=settings.scan.max_concurrency)
         orch_executor = OrchestratorExecutor(registry, core_executor, ctx)
         bus = EventBus()
@@ -256,6 +258,7 @@ class Audit:
             bus=bus,
             safety=safety,
             on_progress=None,
+            history=history,
         )
 
         # Open project DB for knowledge graph persistence if project is set
@@ -281,6 +284,11 @@ class Audit:
             # Persist knowledge graph to SQLite
             if kg_store:
                 await kg_store.save(result.graph)
+
+            # Save decision history alongside project DB
+            if self._project and result.history:
+                history_path = self._project.db_path.parent / "decision_history.json"
+                result.history.save(history_path)
 
             return self._loop_result_to_pipeline_state(result)
         finally:

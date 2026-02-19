@@ -34,3 +34,25 @@ class TestSafetyLimits:
         safety.start()
         time.sleep(0.01)
         assert safety.elapsed > 0
+
+
+class TestCooldown:
+    def test_cooled_down_when_never_run(self):
+        safety = SafetyLimits(cooldown_per_capability=10.0)
+        assert safety.is_cooled_down("plugin:entity") is True
+
+    def test_not_cooled_down_immediately(self):
+        safety = SafetyLimits(cooldown_per_capability=10.0)
+        safety.record_run("plugin:entity")
+        assert safety.is_cooled_down("plugin:entity") is False
+
+    def test_cooled_down_after_wait(self):
+        safety = SafetyLimits(cooldown_per_capability=0.01)
+        safety.record_run("plugin:entity")
+        time.sleep(0.02)
+        assert safety.is_cooled_down("plugin:entity") is True
+
+    def test_no_cooldown_when_zero(self):
+        safety = SafetyLimits(cooldown_per_capability=0.0)
+        safety.record_run("plugin:entity")
+        assert safety.is_cooled_down("plugin:entity") is True
