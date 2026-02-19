@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Проект
 
-**Basilisk v3.0.0** — профессиональный модульный фреймворк безопасности для разведки, анализа и пентеста доменов. Два режима: классический pipeline и автономный движок на knowledge graph. Плагинная архитектура с автообнаружением, мультипровайдерная агрегация данных, TUI-дашборд в реальном времени, SQLite-хранилище для миллионов записей.
+**Basilisk v3.1.0** — профессиональный модульный фреймворк безопасности для разведки, анализа и пентеста доменов. Два режима: классический pipeline и автономный движок на knowledge graph с детерминированными decision traces. Плагинная архитектура с автообнаружением, мультипровайдерная агрегация данных, TUI-дашборд в реальном времени, SQLite-хранилище для миллионов записей.
 
 Философия: сделать с хакерскими утилитами то, что Laravel сделал с Symfony — элегантные абстракции поверх мощных инструментов.
 
@@ -12,7 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 # Тесты
-.venv/Scripts/python.exe -m pytest tests/ -v              # все 1382 теста
+.venv/Scripts/python.exe -m pytest tests/ -v              # все 1441 тестов
 .venv/Scripts/python.exe -m pytest tests/test_plugins/ -v  # только плагины (324)
 .venv/Scripts/python.exe -m pytest tests/ -x --tb=short    # до первого падения
 
@@ -80,6 +80,7 @@ basilisk/
 │   ├── entities.py                # Entity, EntityType — типизированные узлы
 │   ├── relations.py               # Relation, RelationType — типизированные связи
 │   ├── graph.py                   # KnowledgeGraph: dedup, merge, query, neighbors
+│   ├── state.py                   # [v3.1] KnowledgeState: delta-tracking wrapper
 │   └── store.py                   # KnowledgeStore: SQLite persistence
 │
 ├── observations/                  # [v3] PluginResult → Observation мост
@@ -90,19 +91,25 @@ basilisk/
 │   ├── capability.py              # Capability model (requires/produces/cost/noise)
 │   └── mapping.py                 # CAPABILITY_MAP для 175 плагинов
 │
+├── decisions/                     # [v3.1] Decision tracing
+│   └── decision.py                # Decision, ContextSnapshot, EvaluatedOption
+│
+├── memory/                        # [v3.1] Decision memory
+│   └── history.py                 # History: decision log, repetition penalty, persistence
+│
 ├── scoring/                       # [v3] Scoring engine
-│   └── scorer.py                  # Scorer: novelty * knowledge_gain / cost + noise
+│   └── scorer.py                  # Scorer: novelty * knowledge_gain / cost + noise + breakdown
 │
 ├── orchestrator/                  # [v3] Автономный движок
 │   ├── planner.py                 # Planner: 7 правил обнаружения knowledge gaps
 │   ├── selector.py                # Selector: match gaps → capabilities, pick batch
 │   ├── executor.py                # OrchestratorExecutor: обёртка над core executor
-│   ├── loop.py                    # AutonomousLoop: главный цикл inspect→plan→execute
-│   ├── safety.py                  # SafetyLimits: max_steps, max_duration, batch_size
+│   ├── loop.py                    # AutonomousLoop: цикл + decision tracing + KnowledgeState
+│   ├── safety.py                  # SafetyLimits: max_steps, max_duration, cooldown
 │   └── timeline.py                # Timeline: структурированный лог выполнения
 │
 ├── events/                        # [v3] Event Bus
-│   └── bus.py                     # EventBus: subscribe/emit для lifecycle events
+│   └── bus.py                     # EventBus: subscribe/emit + DECISION_MADE event
 │
 ├── utils/                         # Утилиты
 │   ├── http.py                    # AsyncHttpClient (aiohttp), resolve_base_url(s)
@@ -156,7 +163,7 @@ basilisk/
     └── forensics/     (6)         # log_analyzer, memory_dump, ...
 
 wordlists/bundled/                 # 13 словарей
-tests/                             # 1382 теста, 65+ файлов
+tests/                             # 1441 тест, 70+ файлов
 ├── test_models/                   # 43 теста
 ├── test_core/                     # 167 тестов
 ├── test_plugins/                  # 324 теста (110/110 плагинов покрыты)
@@ -164,11 +171,13 @@ tests/                             # 1382 теста, 65+ файлов
 ├── test_storage/                  # 18 тестов
 ├── test_reporting/                # 26 тестов
 ├── test_tui/                      # 10 тестов
-├── test_knowledge/                # 45 тестов (entities, graph, store)
+├── test_knowledge/                # 56 тестов (entities, graph, state, store)
 ├── test_observations/             # 26 тестов (adapter)
 ├── test_capabilities/             # 8 тестов (mapping)
-├── test_scoring/                  # 9 тестов (scorer)
-├── test_orchestrator/             # 38 тестов (loop, planner, selector, safety)
+├── test_decisions/                # 12 тестов (decision model)
+├── test_memory/                   # 19 тестов (history, repetition penalty)
+├── test_scoring/                  # 14 тестов (scorer + breakdown)
+├── test_orchestrator/             # 51 тест (loop + decisions, planner, selector, safety + cooldown)
 ├── test_events/                   # 5 тестов (bus)
 └── test_cli.py, test_config.py    # 24 теста
 
@@ -246,13 +255,16 @@ results = await Audit("example.com").autonomous(max_steps=50).run()
 results = await Audit.run_plugin("ssl_check", ["example.com"])
 ```
 
-### Автономный движок (v3)
+### Автономный движок (v3 + v3.1 decision tracing)
 - `KnowledgeGraph` — in-memory граф с entities, relations, dedup, confidence merge
+- `KnowledgeState` — [v3.1] delta-tracking wrapper, `apply_observation()` → `ObservationOutcome`
 - `Planner` — 7 правил обнаружения gaps (host_without_services, http_without_tech, ...)
 - `Selector` — match gaps → capabilities, pick batch (budget-constrained)
-- `Scorer` — формула `(novelty * knowledge_gain) / (cost + noise + repetition_penalty)`
-- `AutonomousLoop` — seed → find_gaps → match → score → pick → execute → apply → repeat
-- `SafetyLimits` — max_steps, max_duration_seconds, batch_size
+- `Scorer` — формула + `score_breakdown` dict + опциональная `History` для repetition penalty
+- `Decision` — [v3.1] полная запись: context snapshot, evaluated options, reasoning trace, outcome
+- `History` — [v3.1] лог решений, repetition penalty (decay + unproductive multiplier), JSON persistence
+- `AutonomousLoop` — seed → find_gaps → match → score → **build decision** → execute → apply → repeat
+- `SafetyLimits` — max_steps, max_duration_seconds, batch_size, cooldown tracking
 - `adapter.py` — конвертация `PluginResult` → `list[Observation]` → entities/relations в граф
 - `mapping.py` — все 175 плагинов маппятся на requires/produces/cost/noise
 
@@ -325,6 +337,18 @@ ctx = PluginContext(config=settings, http=http, dns=dns, net=net, rate=rate, ...
 
 > **Приоритет**: серверные уязвимости, не требующие участия жертвы (SQLi, CMDi, SSRF, SSTI, LFI, XXE, etc.)
 > Клиентские уязвимости (XSS, CSRF, Clickjacking) — вторичные.
+
+### Что сделано (v3.1.0 — deterministic decision runtime)
+- [x] Decision model: `Decision`, `ContextSnapshot`, `EvaluatedOption` — полная запись каждого решения
+- [x] KnowledgeState: delta-tracking wrapper — `apply_observation()` → `ObservationOutcome` с confidence before/after
+- [x] Memory/History: лог решений, repetition penalty (base * decay * unproductive_multiplier), JSON persistence
+- [x] Scorer: `score_breakdown` dict (novelty, knowledge_gain, cost, noise, repetition_penalty, raw_score)
+- [x] Scorer: опциональная `History` для адаптивного repetition penalty (вместо binary 5.0)
+- [x] SafetyLimits: cooldown tracking — `record_run()`, `is_cooled_down()`
+- [x] EventBus: `DECISION_MADE` event с decision_id, reasoning
+- [x] AutonomousLoop: decision traces, KnowledgeState integration, real confidence deltas (было 0.0)
+- [x] Facade: wire History в autonomous mode, persist `decision_history.json`
+- [x] 59 новых тестов (1441 всего), ruff чисто, pipeline mode не затронут
 
 ### Что сделано (v3.0.0 — autonomous engine)
 - [x] Knowledge Graph: entities (7 типов), relations (7 типов), in-memory граф, SQLite persistence

@@ -1,4 +1,65 @@
-# Basilisk v3.0.0 — Audit Notes
+# Basilisk v3.1.0 — Audit Notes
+
+## v3.1.0 — Deterministic Decision Runtime (2026-02-19)
+
+Апгрейд автономного движка: каждое действие теперь производит детерминированную decision trace
+с объяснением WHY, какие альтернативы рассматривались и был ли результат продуктивным.
+
+### Новые модули
+
+| Модуль | Файлы | Описание |
+|--------|-------|----------|
+| `decisions/` | decision.py | `Decision`, `ContextSnapshot`, `EvaluatedOption` — полная запись решения с pre/post execution data |
+| `knowledge/state.py` | state.py | `KnowledgeState` — delta-tracking wrapper: `apply_observation()` → `ObservationOutcome` (was_new, confidence_before/after) |
+| `memory/` | history.py | `History` — лог решений, repetition penalty (base * time_decay * unproductive_multiplier), JSON persistence |
+
+### Изменённые модули
+
+| Модуль | Изменение |
+|--------|-----------|
+| `scoring/scorer.py` | + `score_breakdown` dict (6 ключей), + опциональная `History` для адаптивного repetition penalty |
+| `events/bus.py` | + `DECISION_MADE` event type |
+| `orchestrator/safety.py` | + `record_run()`, `is_cooled_down()` — cooldown tracking |
+| `orchestrator/loop.py` | Decision tracing, KnowledgeState, real confidence deltas (было hardcoded 0.0), cooldown, DECISION_MADE events |
+| `core/facade.py` | Wire History + Scorer в autonomous mode, persist `decision_history.json` |
+
+### Decision Model
+
+```python
+Decision(
+    id="sha256[:16]",         # детерминированный ID
+    step=3, goal="services",  # из какого gap
+    context=ContextSnapshot(entity_count=15, host_count=3, ...),
+    evaluated_options=[...],  # все рассмотренные кандидаты (до 20)
+    chosen_capability="port_scan", chosen_score=0.85,
+    reasoning_trace="Gap: Host x has no known services. Selected port_scan (score=0.850)...",
+    # После выполнения:
+    outcome_observations=5, outcome_new_entities=3,
+    outcome_confidence_delta=0.42, was_productive=True,
+)
+```
+
+### Repetition Penalty (History)
+
+Формула: `base_penalty * time_decay * unproductive_multiplier`
+- `time_decay = 1 / (1 + 0.1 * steps_since)` — затухание с расстоянием
+- `unproductive_multiplier = 2.0` если предыдущий запуск не дал результата
+- Заменяет binary 5.0 из v3.0 на адаптивную пенальти
+
+### Тесты
+
+59 новых тестов в 6 файлах. Всего: 1441 (все проходят).
+
+| Файл | Тесты |
+|------|-------|
+| test_decisions/test_decision.py | 12 |
+| test_knowledge/test_state.py | 11 |
+| test_memory/test_history.py | 19 |
+| test_scoring/test_scorer.py | +5 (14 всего) |
+| test_orchestrator/test_safety.py | +4 (9 всего) |
+| test_orchestrator/test_loop.py | +8 (18 всего) |
+
+---
 
 ## v3.0.0 — State-Driven Autonomous Engine (2026-02-19)
 
