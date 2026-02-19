@@ -15,6 +15,7 @@ class SafetyLimits(BaseModel):
     batch_size: int = 5
     cooldown_per_capability: float = 0.0  # seconds between same capability runs
     _start_time: float = PrivateAttr(default=0.0)
+    _last_run: dict[str, float] = PrivateAttr(default_factory=dict)
 
     def start(self) -> None:
         """Record the start time."""
@@ -35,3 +36,20 @@ class SafetyLimits(BaseModel):
         if self._start_time <= 0:
             return 0.0
         return time.monotonic() - self._start_time
+
+    def record_run(self, fingerprint: str) -> None:
+        """Record that a capability was just executed."""
+        self._last_run[fingerprint] = time.monotonic()
+
+    def is_cooled_down(self, fingerprint: str) -> bool:
+        """Check if enough time has passed since the last run of this capability.
+
+        Returns True if the capability is ready to run (cooldown elapsed).
+        Returns False if it was run too recently.
+        """
+        if self.cooldown_per_capability <= 0:
+            return True
+        last = self._last_run.get(fingerprint)
+        if last is None:
+            return True
+        return (time.monotonic() - last) >= self.cooldown_per_capability

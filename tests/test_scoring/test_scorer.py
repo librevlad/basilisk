@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from basilisk.capabilities.capability import Capability
-from basilisk.knowledge.entities import Entity, EntityType
+from basilisk.decisions.decision import Decision
+from basilisk.knowledge.entities import Entity
 from basilisk.knowledge.graph import KnowledgeGraph
+from basilisk.memory.history import History
 from basilisk.scoring.scorer import Scorer
 
 
-def _cap(name: str = "test", cost: float = 2.0, noise: float = 2.0, produces: int = 2) -> Capability:
+def _cap(
+    name: str = "test", cost: float = 2.0, noise: float = 2.0, produces: int = 2,
+) -> Capability:
     return Capability(
         name=name,
         plugin_name=name,
@@ -134,3 +140,77 @@ class TestScorer:
 
         scored = scorer.rank([(quiet, host), (loud, host)])
         assert scored[0].capability.name == "quiet"
+
+
+class TestScorerBreakdown:
+    def test_breakdown_has_all_keys(self):
+        g = KnowledgeGraph()
+        host = _host()
+        g.add_entity(host)
+        scorer = Scorer(g)
+        scored = scorer.rank([(_cap(), host)])
+        bd = scored[0].score_breakdown
+        assert "novelty" in bd
+        assert "knowledge_gain" in bd
+        assert "cost" in bd
+        assert "noise" in bd
+        assert "repetition_penalty" in bd
+        assert "raw_score" in bd
+
+    def test_breakdown_raw_score_matches(self):
+        g = KnowledgeGraph()
+        host = _host()
+        g.add_entity(host)
+        scorer = Scorer(g)
+        scored = scorer.rank([(_cap(), host)])
+        assert abs(scored[0].score - scored[0].score_breakdown["raw_score"]) < 1e-9
+
+    def test_backward_compat_without_history(self):
+        """Scorer without history should work identically to v3.0."""
+        g = KnowledgeGraph()
+        host = _host()
+        g.add_entity(host)
+        scorer = Scorer(g)
+        scored = scorer.rank([(_cap(), host)])
+        assert scored[0].score > 0
+        assert scored[0].score_breakdown["repetition_penalty"] == 0.0
+
+
+class TestScorerWithHistory:
+    def test_history_repetition_penalty(self):
+        g = KnowledgeGraph()
+        host = _host()
+        g.add_entity(host)
+
+        history = History()
+        ts = datetime(2026, 1, 1, tzinfo=UTC)
+        d = Decision(
+            id=Decision.make_id(1, ts, "test", "example.com"),
+            step=1, chosen_plugin="test", chosen_capability="test",
+            chosen_target="example.com",
+            triggering_entity_id=host.id,
+        )
+        history.record(d)
+
+        scorer = Scorer(g, history=history)
+        scored = scorer.rank([(_cap("test"), host)])
+        assert scored[0].score_breakdown["repetition_penalty"] > 0
+
+    def test_history_no_penalty_different_plugin(self):
+        g = KnowledgeGraph()
+        host = _host()
+        g.add_entity(host)
+
+        history = History()
+        ts = datetime(2026, 1, 1, tzinfo=UTC)
+        d = Decision(
+            id=Decision.make_id(1, ts, "other", "example.com"),
+            step=1, chosen_plugin="other", chosen_capability="other",
+            chosen_target="example.com",
+            triggering_entity_id=host.id,
+        )
+        history.record(d)
+
+        scorer = Scorer(g, history=history)
+        scored = scorer.rank([(_cap("test"), host)])
+        assert scored[0].score_breakdown["repetition_penalty"] == 0.0
