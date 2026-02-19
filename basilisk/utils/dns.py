@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import time
 
 import dns.asyncresolver
 import dns.exception
@@ -89,29 +91,39 @@ _RECORD_MAP = {
 
 
 class DnsClient:
-    """Async DNS resolver with caching."""
+    """Async DNS resolver with TTL-based caching."""
 
     def __init__(
         self,
         nameservers: list[str] | None = None,
         timeout: float = 5.0,
         retries: int = 2,
+        cache_ttl: float = 300.0,
     ):
         self.resolver = dns.asyncresolver.Resolver()
         if nameservers:
             self.resolver.nameservers = nameservers
         self.resolver.lifetime = timeout
         self.resolver.retry_servfail = retries > 0
+        self._cache: dict[tuple[str, str], tuple[float, list[DnsRecord]]] = {}
+        self._cache_ttl = cache_ttl
 
     async def resolve(
         self,
         domain: str,
         record_type: str = "A",
     ) -> list[DnsRecord]:
-        """Resolve DNS records for a domain."""
+        """Resolve DNS records for a domain (with caching)."""
         rdtype = _RECORD_MAP.get(record_type.upper())
         if rdtype is None:
             return []
+
+        cache_key = (domain.lower(), record_type.upper())
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            expiry, records = cached
+            if time.monotonic() < expiry:
+                return records
 
         try:
             answer = await self.resolver.resolve(domain, rdtype)
@@ -132,9 +144,12 @@ class DnsClient:
                     ttl=answer.ttl,
                     priority=priority,
                 ))
+            self._cache[cache_key] = (time.monotonic() + self._cache_ttl, records)
             return records
         except dns.exception.DNSException as e:
             logger.debug("DNS %s query for %s failed: %s", record_type, domain, e)
+            # Cache negative results briefly to avoid repeated failures
+            self._cache[cache_key] = (time.monotonic() + 30.0, [])
             return []
 
     async def resolve_all(
@@ -142,21 +157,25 @@ class DnsClient:
         domain: str,
         record_types: list[str] | None = None,
     ) -> list[DnsRecord]:
-        """Resolve multiple record types for a domain."""
+        """Resolve multiple record types for a domain concurrently."""
         types = record_types or ["A", "AAAA", "MX", "NS", "TXT", "CNAME", "SOA"]
+        results = await asyncio.gather(
+            *(self.resolve(domain, rt) for rt in types),
+            return_exceptions=True,
+        )
         all_records: list[DnsRecord] = []
-        for rt in types:
-            records = await self.resolve(domain, rt)
-            all_records.extend(records)
+        for r in results:
+            if isinstance(r, list):
+                all_records.extend(r)
         return all_records
 
     async def get_ips(self, domain: str) -> list[str]:
-        """Get all A/AAAA record IPs for a domain."""
-        ips = []
-        for rt in ("A", "AAAA"):
-            records = await self.resolve(domain, rt)
-            ips.extend(r.value for r in records)
-        return ips
+        """Get all A/AAAA record IPs for a domain concurrently."""
+        a_records, aaaa_records = await asyncio.gather(
+            self.resolve(domain, "A"),
+            self.resolve(domain, "AAAA"),
+        )
+        return [r.value for r in a_records] + [r.value for r in aaaa_records]
 
     async def reverse_lookup(self, ip: str) -> list[str]:
         """Reverse DNS lookup for an IP address."""

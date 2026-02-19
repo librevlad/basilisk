@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import heapq
 import importlib
 import inspect
 import pkgutil
@@ -88,9 +89,7 @@ class PluginRegistry:
                     graph[dep].append(name)
                     in_degree[name] += 1
 
-        # Kahn's algorithm
-        queue = [n for n, d in in_degree.items() if d == 0]
-        # Stable sort: within same level, order by category priority
+        # Kahn's algorithm with heap for O(n log n) priority ordering
         category_order = {
             PluginCategory.RECON: 0,
             PluginCategory.SCANNING: 1,
@@ -103,19 +102,21 @@ class PluginRegistry:
             PluginCategory.CRYPTO: 8,
             PluginCategory.FORENSICS: 9,
         }
-        queue.sort(key=lambda n: category_order.get(plugins[n].meta.category, 99))
+
+        def _prio(name: str) -> tuple[int, str]:
+            return (category_order.get(plugins[name].meta.category, 99), name)
+
+        heap = [_prio(n) for n, d in in_degree.items() if d == 0]
+        heapq.heapify(heap)
 
         result: list[type[BasePlugin]] = []
-        while queue:
-            node = queue.pop(0)
+        while heap:
+            _priority, node = heapq.heappop(heap)
             result.append(plugins[node])
             for neighbor in graph[node]:
                 in_degree[neighbor] -= 1
                 if in_degree[neighbor] == 0:
-                    queue.append(neighbor)
-            queue.sort(
-                key=lambda n: category_order.get(plugins[n].meta.category, 99)
-            )
+                    heapq.heappush(heap, _prio(neighbor))
 
         if len(result) != len(plugins):
             resolved = {p.meta.name for p in result}

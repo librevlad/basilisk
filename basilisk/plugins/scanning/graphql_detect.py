@@ -13,6 +13,17 @@ from basilisk.models.target import Target
 logger = logging.getLogger(__name__)
 
 
+def _is_graphql_response(body: str) -> bool:
+    """Check if *body* is a valid GraphQL JSON response (has ``data`` or ``errors`` key)."""
+    try:
+        parsed = json.loads(body)
+        if isinstance(parsed, dict):
+            return "data" in parsed or "errors" in parsed
+    except (json.JSONDecodeError, ValueError):
+        pass
+    return False
+
+
 class GraphqlDetectPlugin(BasePlugin):
     meta: ClassVar[PluginMeta] = PluginMeta(
         name="graphql_detect",
@@ -87,9 +98,7 @@ class GraphqlDetectPlugin(BasePlugin):
                             tags=["scanning", "graphql", "introspection"],
                         ))
                         found = True
-                    elif resp.status == 200 and (
-                        "data" in body or "errors" in body
-                    ):
+                    elif resp.status == 200 and _is_graphql_response(body):
                         endpoints.append({
                             "path": path, "introspection": False,
                             "method": "POST",
@@ -135,9 +144,7 @@ class GraphqlDetectPlugin(BasePlugin):
                                     "scanning", "graphql", "introspection",
                                 ],
                             ))
-                        elif resp.status == 200 and (
-                            "data" in body or "errors" in body
-                        ):
+                        elif resp.status == 200 and _is_graphql_response(body):
                             endpoints.append({
                                 "path": path, "introspection": False,
                                 "method": "GET",

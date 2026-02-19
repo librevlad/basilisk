@@ -63,6 +63,8 @@ class Audit:
         self._no_cache: bool = False
         self._cache_ttl_hours: float = 0
         self._force_phases: list[str] = []
+        self._autonomous: bool = False
+        self._max_steps: int = 100
 
     @classmethod
     def targets(cls, target_list: list[str], **kwargs: Any) -> Audit:
@@ -118,6 +120,12 @@ class Audit:
         """Run all offensive phases (HTB full attack chain)."""
         from basilisk.core.pipeline import OFFENSIVE_PHASES
         self._phases = list(OFFENSIVE_PHASES)
+        return self
+
+    def autonomous(self, max_steps: int = 100) -> Audit:
+        """Enable autonomous orchestration (replaces fixed pipeline)."""
+        self._autonomous = True
+        self._max_steps = max_steps
         return self
 
     def plugins(self, *names: str) -> Audit:
@@ -192,6 +200,9 @@ class Audit:
         scope = self._build_scope(settings)
         registry, ctx = self._build_context(settings)
 
+        if self._autonomous:
+            return await self._run_autonomous(registry, ctx, scope, settings)
+
         if self._project:
             db, run_id, completed_pairs = await self._setup_project_db(ctx, scope)
         else:
@@ -202,6 +213,113 @@ class Audit:
             registry, ctx, settings, completed_pairs, cache,
         )
         return await self._execute(pipeline, scope, ctx, db, run_id, settings, cache)
+
+    async def _run_autonomous(
+        self,
+        registry: PluginRegistry,
+        ctx: PluginContext,
+        scope: TargetScope,
+        settings: Settings,
+    ) -> PipelineState:
+        """Run the autonomous orchestrator instead of the fixed pipeline."""
+        from basilisk.capabilities.mapping import build_capabilities
+        from basilisk.events.bus import EventBus
+        from basilisk.knowledge.graph import KnowledgeGraph
+        from basilisk.orchestrator.executor import OrchestratorExecutor
+        from basilisk.orchestrator.loop import AutonomousLoop
+        from basilisk.orchestrator.planner import Planner
+        from basilisk.orchestrator.safety import SafetyLimits
+        from basilisk.orchestrator.selector import Selector
+        from basilisk.scoring.scorer import Scorer
+
+        graph = KnowledgeGraph()
+        planner = Planner()
+        capabilities = build_capabilities(registry)
+        selector = Selector(capabilities)
+        scorer = Scorer(graph)
+        core_executor = AsyncExecutor(max_concurrency=settings.scan.max_concurrency)
+        orch_executor = OrchestratorExecutor(registry, core_executor, ctx)
+        bus = EventBus()
+        safety = SafetyLimits(
+            max_steps=self._max_steps,
+            max_duration_seconds=settings.scan.global_timeout
+            if hasattr(settings.scan, "global_timeout") else 3600.0,
+            batch_size=5,
+        )
+
+        loop = AutonomousLoop(
+            graph=graph,
+            planner=planner,
+            selector=selector,
+            scorer=scorer,
+            executor=orch_executor,
+            bus=bus,
+            safety=safety,
+            on_progress=None,
+        )
+
+        # Open project DB for knowledge graph persistence if project is set
+        kg_store = None
+        db = None
+        if self._project:
+            from basilisk.storage.db import open_db
+
+            db = await open_db(self._project.db_path)
+            from basilisk.knowledge.store import KnowledgeStore
+
+            kg_store = KnowledgeStore(db)
+            await kg_store.init_schema()
+
+        try:
+            if ctx.callback:
+                await ctx.callback.start()
+            if ctx.browser:
+                await ctx.browser.start()
+
+            result = await loop.run(list(scope))
+
+            # Persist knowledge graph to SQLite
+            if kg_store:
+                await kg_store.save(result.graph)
+
+            return self._loop_result_to_pipeline_state(result)
+        finally:
+            if db:
+                await db.close()
+            if ctx.http:
+                await ctx.http.close()
+            if ctx.callback:
+                await ctx.callback.stop()
+            if ctx.browser:
+                await ctx.browser.stop()
+
+    @staticmethod
+    def _loop_result_to_pipeline_state(result: Any) -> PipelineState:
+        """Convert LoopResult to PipelineState for backward compat with reporting."""
+        from basilisk.core.pipeline import PhaseProgress
+        from basilisk.models.result import PluginResult
+
+        state = PipelineState()
+        state.status = "completed"
+
+        all_results = []
+        state.total_findings = len(result.graph.findings())
+
+        # Build a single "autonomous" phase
+        state.phases["autonomous"] = PhaseProgress(
+            phase="autonomous",
+            total=result.steps,
+            completed=result.steps,
+            status="done",
+        )
+
+        # Collect PluginResults stored during execution
+        for pr in result.plugin_results.values():
+            if isinstance(pr, PluginResult):
+                all_results.append(pr)
+
+        state.results = all_results
+        return state
 
     def _build_scope(self, settings: Settings) -> TargetScope:
         """Build target scope from configured targets."""
@@ -392,7 +510,11 @@ class Audit:
         cache: Any = None,
     ) -> PipelineState:
         """Run the pipeline with proper startup/shutdown of engines."""
-        phases = self._phases or ["recon", "scanning", "analysis", "pentesting"]
+        phases = self._phases or [
+            "recon", "scanning", "analysis", "pentesting",
+            "exploitation", "post_exploit", "privesc", "lateral",
+            "crypto", "forensics",
+        ]
 
         try:
             if ctx.callback:

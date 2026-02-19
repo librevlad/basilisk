@@ -102,6 +102,7 @@ class PipelineState:
     current_phase: str = ""
     current_plugin: str = ""
     skipped_plugins: list[str] = field(default_factory=list)
+    http_schemes: dict[str, str | None] = field(default_factory=dict)
 
     def init_phases(self, categories: list[str]) -> None:
         for cat in categories:
@@ -357,6 +358,7 @@ class Pipeline:
         hosts = list({t.host for t in scope})
         await asyncio.gather(*[check_one(h) for h in hosts])
         self.ctx.state["http_scheme"] = scheme_map
+        self.state.http_schemes = scheme_map
 
         reachable = sum(1 for v in scheme_map.values() if v is not None)
         logger.info(
@@ -523,12 +525,13 @@ class Pipeline:
 
     def _check_quality_gate(self, phase_name: str) -> None:
         """Warn if too many findings in this phase lack evidence."""
+        phase_plugins = {
+            p.meta.name for p in self.registry.all()
+            if p.meta.category == phase_name
+        }
         phase_results = [
             r for r in self.state.results
-            if r.plugin in {
-                p.meta.name for p in self.registry.all()
-                if p.meta.category == phase_name
-            }
+            if r.plugin in phase_plugins
         ]
         non_info = [
             f for r in phase_results for f in r.findings

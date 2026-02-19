@@ -122,12 +122,17 @@ class WebCrawlerPlugin(BasePlugin):
                 continue
             sub_links = self._extract_links(sub_html, follow_url, target.host)
             sub_forms = self._extract_forms(sub_html, follow_url)
+            seen_links = set(links) | set(depth2_links)
             for sl in sub_links:
-                if sl not in links and sl not in depth2_links:
+                if sl not in seen_links:
                     depth2_links.append(sl)
+                    seen_links.add(sl)
+            seen_forms = {str(f) for f in forms} | {str(f) for f in depth2_forms}
             for sf in sub_forms:
-                if sf not in forms and sf not in depth2_forms:
+                sf_key = str(sf)
+                if sf_key not in seen_forms:
                     depth2_forms.append(sf)
+                    seen_forms.add(sf_key)
 
         links.extend(depth2_links)
         forms.extend(depth2_forms)

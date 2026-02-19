@@ -184,7 +184,11 @@ class TestAuditRun:
             call_args = mock_pipeline.run.call_args
             phases = call_args[0][2] if len(call_args[0]) > 2 else call_args[1].get("phases")
             # Positional args: scope, plugins, phases
-            assert phases == ["recon", "scanning", "analysis", "pentesting"]
+            assert phases == [
+                "recon", "scanning", "analysis", "pentesting",
+                "exploitation", "post_exploit", "privesc", "lateral",
+                "crypto", "forensics",
+            ]
 
 
 class TestRunPlugin:

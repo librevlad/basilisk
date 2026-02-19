@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import re
 import time
 from typing import Any, ClassVar
 
@@ -539,12 +540,9 @@ class PortScanPlugin(BasePlugin):
     # Version extraction
     # ================================================================
 
-    @staticmethod
-    def _extract_version(banner: str) -> str:
-        """Extract version string from service banner."""
-        import re
-
-        patterns = [
+    # Precompiled version extraction patterns (avoids per-call recompilation)
+    _VERSION_PATTERNS: ClassVar[list[re.Pattern[str]]] = [
+        re.compile(p, re.IGNORECASE) for p in [
             r"(SSH-[\d.]+\S+)",
             r"(Apache/[\d.]+)",
             r"(nginx/[\d.]+)",
@@ -554,7 +552,6 @@ class PortScanPlugin(BasePlugin):
             r"redis[_ ]?(?:server[_ ]?)?v?=?([\d.]+)",
             r"(PostgreSQL\s+[\d.]+)",
             r"(OpenSSL/[\d.]+\w*)",
-            # New patterns
             r"(Exim\s+[\d.]+)",
             r"(Postfix)",
             r"(Sendmail[\s/][\d.]+)",
@@ -563,7 +560,7 @@ class PortScanPlugin(BasePlugin):
             r"(MySQL\s+[\d.]+)",
             r"(MariaDB[- ][\d.]+)",
             r"(Elasticsearch[\s/][\d.]+)",
-            r'"version"\s*:\s*"([\d.]+)"',  # JSON version (ES, Docker)
+            r'"version"\s*:\s*"([\d.]+)"',
             r"(mongod?b?\s+v?[\d.]+)",
             r"(Jetty[\s/(][\d.]+)",
             r"(Express[\s/][\d.]+)",
@@ -575,11 +572,15 @@ class PortScanPlugin(BasePlugin):
             r"(Tengine/[\d.]+)",
             r"(lighttpd/[\d.]+)",
             r"(Envoy[\s/][\d.]+)",
-            r"(\w+/[\d]+\.[\d]+[\w.]*)",  # Generic: Service/Version
+            r"(\w+/[\d]+\.[\d]+[\w.]*)",
         ]
+    ]
 
-        for pattern in patterns:
-            match = re.search(pattern, banner, re.IGNORECASE)
+    @staticmethod
+    def _extract_version(banner: str) -> str:
+        """Extract version string from service banner."""
+        for pattern in PortScanPlugin._VERSION_PATTERNS:
+            match = pattern.search(banner)
             if match:
                 return match.group(1).strip()
         return ""

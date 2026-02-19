@@ -65,6 +65,12 @@ def audit(
     force: str | None = typer.Option(
         None, "--force", help="Force re-run phases, e.g.: recon,pentesting",
     ),
+    autonomous: bool = typer.Option(
+        False, "--autonomous", "-A", help="Autonomous mode (state-driven orchestration)",
+    ),
+    max_steps: int = typer.Option(
+        100, "--max-steps", help="Max autonomous steps (only with --autonomous)",
+    ),
 ):
     """Run a full audit against a target domain."""
     # Load config early to get log_level
@@ -95,6 +101,8 @@ def audit(
         audit_builder = audit_builder.exclude(*exclude.split(","))
     if wordlist:
         audit_builder = audit_builder.wordlists(*wordlist.split(","))
+    if autonomous:
+        audit_builder = audit_builder.autonomous(max_steps=max_steps)
     if no_cache:
         audit_builder = audit_builder.no_cache()
     if cache_ttl > 0:
@@ -120,7 +128,8 @@ def audit(
                 raise typer.Exit(1)
             audit_builder = getattr(audit_builder, phase_methods[p])()
     else:
-        audit_builder = audit_builder.discover().scan().analyze().pentest()
+        for method in phase_methods.values():
+            audit_builder = getattr(audit_builder, method)()
 
     # Build scan output directory: target_YYYYMMDD_HHMMSS
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

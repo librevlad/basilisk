@@ -41,17 +41,24 @@ VULN_CATEGORY_MAP: dict[str, list[str]] = {
 }
 
 
+_SEVERITY_WEIGHT: dict[str, int] = {
+    "CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1, "INFO": 0,
+}
+
+
 def categorize_findings(findings: list[dict]) -> dict[str, int]:
     """Categorize findings into OWASP-like threat categories for the radar."""
     cats: dict[str, int] = {k: 0 for k in VULN_CATEGORY_MAP}
     for f in findings:
+        weight = _SEVERITY_WEIGHT.get(f.get("severity", "INFO"), 0)
+        if weight == 0:
+            continue  # INFO findings don't contribute to radar
         text = f"{f['title']} {f.get('description', '')}".lower()
         tags = " ".join(f.get("tags", []))
         combined = f"{text} {tags}"
         for cat, keywords in VULN_CATEGORY_MAP.items():
             if any(kw in combined for kw in keywords):
-                weight = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1, "INFO": 0}
-                cats[cat] += weight.get(f["severity"], 0)
+                cats[cat] += weight
     return cats
 
 

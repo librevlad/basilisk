@@ -366,6 +366,15 @@
   }
   .chain-header .chain-risk.CRITICAL { background: var(--critical-bg); color: var(--critical); }
   .chain-header .chain-risk.HIGH { background: var(--high-bg); color: var(--high); }
+  .chain-header .chain-score {
+    padding: 2px 8px; border-radius: 4px; font-size: var(--text-xs); font-weight: 700;
+    background: var(--bg3); color: var(--neon-orange); border: 1px solid var(--border);
+  }
+  .chain-path-text {
+    font-family: var(--font-mono); font-size: var(--text-xs); color: var(--fg-dim);
+    margin-bottom: 0.75rem; padding: 0.4rem 0.6rem;
+    background: var(--bg2); border-radius: 4px; letter-spacing: 0.02em;
+  }
   .chain-steps {
     display: flex; align-items: center; gap: 0;
   }
@@ -1226,7 +1235,9 @@
       <div class="chain-header">
         <span class="chain-name">{{ chain.name }}</span>
         <span class="chain-risk {{ chain.risk }}">{{ chain.risk }}</span>
+        {% if chain.score %}<span class="chain-score">{{ chain.score }}/100</span>{% endif %}
       </div>
+      {% if chain.path_text %}<div class="chain-path-text">{{ chain.path_text }}</div>{% endif %}
       <div class="chain-steps">
         {% for step in chain.steps %}
         <div class="chain-step">
@@ -1332,7 +1343,7 @@
         <div class="label mt-2" style="color:var(--high)">Admin Panels</div>
         <ul class="path-list">
           {% for a in info.admin_panels[:10] %}
-          <li><span class="dot-s s2xx"></span><a href="https://{{ host }}{{ a.path }}" target="_blank" rel="noopener" class="p-text link-hover" style="color:var(--high)">{{ a.path }}</a><span class="p-status">{{ a.status }}</span></li>
+          <li><span class="dot-s s2xx"></span><a href="{{ (host_schemes|default({})).get(host, 'https') }}://{{ host }}{{ a.path }}" target="_blank" rel="noopener" class="p-text link-hover" style="color:var(--high)">{{ a.path }}</a><span class="p-status">{{ a.status }}</span></li>
           {% endfor %}
         </ul>
         {% endif %}
@@ -1341,7 +1352,7 @@
         <div class="label mt-2" style="color:var(--critical)">Exposed Files</div>
         <ul class="path-list">
           {% for f in info.exposed_files[:10] %}
-          <li><span class="dot-s s2xx"></span><a href="https://{{ host }}{{ f.path }}" target="_blank" rel="noopener" class="p-text link-hover" style="color:var(--critical)">{{ f.path }}</a></li>
+          <li><span class="dot-s s2xx"></span><a href="{{ (host_schemes|default({})).get(host, 'https') }}://{{ host }}{{ f.path }}" target="_blank" rel="noopener" class="p-text link-hover" style="color:var(--critical)">{{ f.path }}</a></li>
           {% endfor %}
         </ul>
         {% endif %}
@@ -1350,7 +1361,7 @@
         <div class="label mt-2" style="color:var(--high)">Backup Files</div>
         <ul class="path-list">
           {% for b in info.backup_files[:10] %}
-          <li><span class="dot-s s2xx"></span><a href="https://{{ host }}{{ b.path }}" target="_blank" rel="noopener" class="p-text link-hover" style="color:var(--high)">{{ b.path }}</a></li>
+          <li><span class="dot-s s2xx"></span><a href="{{ (host_schemes|default({})).get(host, 'https') }}://{{ host }}{{ b.path }}" target="_blank" rel="noopener" class="p-text link-hover" style="color:var(--high)">{{ b.path }}</a></li>
           {% endfor %}
         </ul>
         {% endif %}
@@ -1359,7 +1370,7 @@
         <div class="label mt-2" style="color:var(--neon-cyan)">API Endpoints</div>
         <ul class="path-list">
           {% for e in info.api_endpoints[:10] %}
-          <li><span class="dot-s s2xx"></span><a href="https://{{ host }}{{ e.path }}" target="_blank" rel="noopener" class="p-text link-hover">{{ e.path }}</a><span class="p-status">{{ e.status }}</span></li>
+          <li><span class="dot-s s2xx"></span><a href="{{ (host_schemes|default({})).get(host, 'https') }}://{{ host }}{{ e.path }}" target="_blank" rel="noopener" class="p-text link-hover">{{ e.path }}</a><span class="p-status">{{ e.status }}</span></li>
           {% endfor %}
           {% if info.api_endpoints|length > 10 %}<li style="color:var(--fg-muted)">...+{{ info.api_endpoints|length - 10 }} more</li>{% endif %}
         </ul>
@@ -1399,7 +1410,7 @@
           {% for p in info.paths[:20] %}
           <li>
             <span class="dot-s {% if p.status >= 200 and p.status < 300 %}s2xx{% elif p.status >= 300 and p.status < 400 %}s3xx{% else %}s4xx{% endif %}"></span>
-            <a href="https://{{ host }}{{ p.path }}" target="_blank" rel="noopener" class="p-text link-hover">{{ p.path }}</a>
+            <a href="{{ (host_schemes|default({})).get(host, 'https') }}://{{ host }}{{ p.path }}" target="_blank" rel="noopener" class="p-text link-hover">{{ p.path }}</a>
             <span class="p-status">{{ p.status }}</span>
           </li>
           {% endfor %}
@@ -1492,7 +1503,7 @@
                   {% for entry in child.entries %}
                   <div class="tree-file">
                     <span class="file-icon">&#9702;</span>
-                    <a href="https://{{ thost }}{{ entry.path }}" target="_blank" rel="noopener" class="file-name link-hover">{{ entry.path.split('/')|last }}</a>
+                    <a href="{{ (host_schemes|default({})).get(thost, 'https') }}://{{ thost }}{{ entry.path }}" target="_blank" rel="noopener" class="file-name link-hover">{{ entry.path.split('/')|last }}</a>
                     {% if entry.get('status', 0) > 0 %}
                     <span class="file-status {% if entry.status >= 500 %}s5xx{% elif entry.status >= 400 %}s4xx{% elif entry.status >= 300 %}s3xx{% elif entry.status >= 200 %}s2xx{% else %}s0{% endif %}">{{ entry.status }}</span>
                     {% endif %}
@@ -1506,7 +1517,7 @@
               {% for entry in child.entries %}
               <div class="tree-file">
                 <span class="file-icon">&#9702;</span>
-                <a href="https://{{ thost }}{{ entry.path }}" target="_blank" rel="noopener" class="file-name link-hover">{{ name }}</a>
+                <a href="{{ (host_schemes|default({})).get(thost, 'https') }}://{{ thost }}{{ entry.path }}" target="_blank" rel="noopener" class="file-name link-hover">{{ name }}</a>
                 {% if entry.get('status', 0) > 0 %}
                 <span class="file-status {% if entry.status >= 500 %}s5xx{% elif entry.status >= 400 %}s4xx{% elif entry.status >= 300 %}s3xx{% elif entry.status >= 200 %}s2xx{% else %}s0{% endif %}">{{ entry.status }}</span>
                 {% endif %}

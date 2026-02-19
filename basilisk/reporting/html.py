@@ -138,6 +138,21 @@ class HtmlRenderer:
                 "elapsed": round(phase.elapsed, 1),
             })
 
+        # Build host→scheme map for correct link generation
+        host_schemes = dict(state.http_schemes) if state.http_schemes else {}
+        # Fallback for hosts without cached scheme: infer from port
+        tls_ports = {443, 8443, 9443, 4443}
+        for t in targets:
+            if t not in host_schemes or host_schemes[t] is None:
+                if ":" in t:
+                    try:
+                        port = int(t.rsplit(":", 1)[1])
+                        host_schemes[t] = "https" if port in tls_ports else "http"
+                    except ValueError:
+                        host_schemes[t] = "https"
+                else:
+                    host_schemes[t] = "https"
+
         html = template.render(
             title="Basilisk Security Audit Report",
             timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -172,6 +187,7 @@ class HtmlRenderer:
             remediation_priority=remediation_priority,
             quality_metrics=quality_metrics,
             skipped_plugins=state.skipped_plugins,
+            host_schemes=host_schemes,
         )
 
         output_path.write_text(html, encoding="utf-8")
