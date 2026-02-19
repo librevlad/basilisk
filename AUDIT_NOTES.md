@@ -1,4 +1,64 @@
-# Basilisk v2.0.0 — Audit Notes (2026-02-12)
+# Basilisk v3.0.0 — Audit Notes
+
+## v3.0.0 — State-Driven Autonomous Engine (2026-02-19)
+
+Замена фиксированного pipeline (`recon → scanning → analysis → pentesting`) автономным
+движком на knowledge graph. Плагины не изменяются — adapter слой конвертирует `PluginResult`
+в `Observation` для knowledge graph.
+
+### Новые модули
+
+| Модуль | Файлы | Описание |
+|--------|-------|----------|
+| `knowledge/` | entities, relations, graph, store | Knowledge Graph: 7 типов entities, 7 типов relations, dedup, confidence merge, SQLite persistence |
+| `observations/` | observation, adapter | Мост PluginResult → Observation. Обрабатывает open_ports, technologies, subdomains, endpoints, credentials, findings и др. |
+| `capabilities/` | capability, mapping | Маппинг 175 плагинов → requires/produces/cost/noise. Auto-inference для немаппированных |
+| `scoring/` | scorer | Формула: `(novelty * knowledge_gain) / (cost + noise + repetition_penalty)` |
+| `orchestrator/` | planner, selector, executor, loop, safety, timeline | Автономный цикл: find_gaps → match → score → pick → execute → apply → repeat |
+| `events/` | bus | Event bus: entity_created, plugin_started/finished, gap_detected, step_completed |
+
+### Gap Detection Rules (planner.py)
+
+1. `host_without_services` — Host без Service relations → нужен port_scan
+2. `host_without_dns` — Host без dns_data → нужен dns_enum
+3. `http_without_tech` — Service:http без Technology → нужен tech_detect
+4. `http_without_endpoints` — Service:http без Endpoint → нужен web_crawler
+5. `endpoint_without_testing` — Endpoint с params без Finding → нужен sqli/xss
+6. `technology_without_version` — Technology без version → нужен version_detect
+7. `low_confidence_entity` — Entity с confidence < 0.5 → recheck
+
+### Confidence Merge
+
+`confidence = 1 - (1-old) * (1-new)` — probabilistic OR. Два наблюдения с 0.5 → 0.75.
+
+### Интеграция
+
+- `facade.py`: `.autonomous(max_steps=N)` fluent method, `_run_autonomous()` ветка
+- `cli.py`: `--autonomous` / `-A` + `--max-steps` флаги
+- `KnowledgeStore`: сохранение графа в SQLite после автономного прогона (если задан проект)
+- `LoopResult.plugin_results` → `PipelineState` для обратной совместимости с reporting
+
+### Тесты
+
+131 новых тестов в 11 файлах. Всего: 1382 (все проходят).
+
+| Файл | Тесты |
+|------|-------|
+| test_knowledge/test_entities.py | 14 |
+| test_knowledge/test_graph.py | 22 |
+| test_knowledge/test_store.py | 9 |
+| test_observations/test_adapter.py | 26 |
+| test_capabilities/test_mapping.py | 8 |
+| test_scoring/test_scorer.py | 9 |
+| test_orchestrator/test_planner.py | 14 |
+| test_orchestrator/test_selector.py | 9 |
+| test_orchestrator/test_loop.py | 10 |
+| test_orchestrator/test_safety.py | 5 |
+| test_events/test_bus.py | 5 |
+
+---
+
+# v2.0.0 — Audit Notes (2026-02-12)
 
 ## Проведённый аудит
 

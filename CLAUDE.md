@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Проект
 
-**Basilisk v2.0.0** — профессиональный модульный фреймворк безопасности для разведки, анализа и пентеста доменов. Плагинная архитектура с автообнаружением, мультипровайдерная агрегация данных, TUI-дашборд в реальном времени, SQLite-хранилище для миллионов записей.
+**Basilisk v3.0.0** — профессиональный модульный фреймворк безопасности для разведки, анализа и пентеста доменов. Два режима: классический pipeline и автономный движок на knowledge graph. Плагинная архитектура с автообнаружением, мультипровайдерная агрегация данных, TUI-дашборд в реальном времени, SQLite-хранилище для миллионов записей.
 
 Философия: сделать с хакерскими утилитами то, что Laravel сделал с Symfony — элегантные абстракции поверх мощных инструментов.
 
@@ -12,7 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 # Тесты
-.venv/Scripts/python.exe -m pytest tests/ -v              # все 883 теста
+.venv/Scripts/python.exe -m pytest tests/ -v              # все 1382 теста
 .venv/Scripts/python.exe -m pytest tests/test_plugins/ -v  # только плагины (324)
 .venv/Scripts/python.exe -m pytest tests/ -x --tb=short    # до первого падения
 
@@ -24,7 +24,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 .venv/Scripts/python.exe -m basilisk                       # TUI дашборд
 .venv/Scripts/python.exe -m basilisk audit example.com     # полный аудит
 .venv/Scripts/python.exe -m basilisk run ssl_check example.com  # один плагин
-.venv/Scripts/python.exe -m basilisk plugins               # 112 плагинов
+.venv/Scripts/python.exe -m basilisk plugins               # 175 плагинов
+.venv/Scripts/python.exe -m basilisk audit example.com --autonomous  # автономный режим
 
 # Установка
 uv sync && uv pip install -e ".[dev]"
@@ -69,10 +70,39 @@ basilisk/
 │   ├── executor.py                # AsyncExecutor + PluginContext (DI-контейнер)
 │   ├── providers.py               # ProviderPool: стратегии all/first/fastest
 │   ├── project_manager.py         # ProjectManager: CRUD проектов
-│   ├── facade.py                  # Audit — fluent API фасад
+│   ├── facade.py                  # Audit — fluent API фасад (+autonomous mode)
 │   ├── auth.py                    # AuthManager, FormLoginStrategy
 │   ├── callback.py                # OOB CallbackServer
+│   ├── attack_graph.py            # AttackGraph для exploit chain визуализации
 │   └── exploit_chain.py           # ExploitChainEngine
+│
+├── knowledge/                     # [v3] Knowledge Graph
+│   ├── entities.py                # Entity, EntityType — типизированные узлы
+│   ├── relations.py               # Relation, RelationType — типизированные связи
+│   ├── graph.py                   # KnowledgeGraph: dedup, merge, query, neighbors
+│   └── store.py                   # KnowledgeStore: SQLite persistence
+│
+├── observations/                  # [v3] PluginResult → Observation мост
+│   ├── observation.py             # Observation model
+│   └── adapter.py                 # adapt_result(): PluginResult → list[Observation]
+│
+├── capabilities/                  # [v3] Маппинг плагинов на capabilities
+│   ├── capability.py              # Capability model (requires/produces/cost/noise)
+│   └── mapping.py                 # CAPABILITY_MAP для 175 плагинов
+│
+├── scoring/                       # [v3] Scoring engine
+│   └── scorer.py                  # Scorer: novelty * knowledge_gain / cost + noise
+│
+├── orchestrator/                  # [v3] Автономный движок
+│   ├── planner.py                 # Planner: 7 правил обнаружения knowledge gaps
+│   ├── selector.py                # Selector: match gaps → capabilities, pick batch
+│   ├── executor.py                # OrchestratorExecutor: обёртка над core executor
+│   ├── loop.py                    # AutonomousLoop: главный цикл inspect→plan→execute
+│   ├── safety.py                  # SafetyLimits: max_steps, max_duration, batch_size
+│   └── timeline.py                # Timeline: структурированный лог выполнения
+│
+├── events/                        # [v3] Event Bus
+│   └── bus.py                     # EventBus: subscribe/emit для lifecycle events
 │
 ├── utils/                         # Утилиты
 │   ├── http.py                    # AsyncHttpClient (aiohttp), resolve_base_url(s)
@@ -107,27 +137,39 @@ basilisk/
 │   ├── live_html.py               # Liquid glass live HTML report
 │   └── templates/report.html.j2   # HTML-шаблон (dark theme)
 │
-└── plugins/                       # 112 плагинов (auto-discover)
+└── plugins/                       # 175 плагинов (auto-discover)
     ├── recon/        (23)         # dns_enum, subdomain_*, whois, reverse_ip,
     │                              # asn_lookup, web_crawler, email_harvest,
     │                              # github_dorking, robots_parser, sitemap_parser, ...
-    ├── scanning/     (13)         # port_scan, ssl_check, service_detect, cdn_detect,
+    ├── scanning/     (16)         # port_scan, ssl_check, service_detect, cdn_detect,
     │                              # cors_scan, graphql_detect, websocket_detect, ...
     ├── analysis/     (21)         # http_headers, tech_detect, takeover_check,
     │                              # js_secret_scan, csp_analyzer, waf_detect, ...
-    └── pentesting/   (55)         # git_exposure, dir_brute, sqli_*, xss_*,
-                                   # ssrf_*, ssti_*, command_injection, lfi_check,
-                                   # jwt_attack, cors_exploit, cache_poison, ...
+    ├── pentesting/   (55)         # git_exposure, dir_brute, sqli_*, xss_*,
+    │                              # ssrf_*, ssti_*, command_injection, lfi_check,
+    │                              # jwt_attack, cors_exploit, cache_poison, ...
+    ├── exploitation/ (18)         # cors_exploit, graphql_exploit, nosqli_verify, ...
+    ├── crypto/        (8)         # hash_crack, padding_oracle, weak_random, ...
+    ├── lateral/      (12)         # service_brute, ssh_brute, credential_spray, ...
+    ├── privesc/       (7)         # suid_finder, kernel_suggest, ...
+    ├── post_exploit/  (7)         # data_exfil, persistence_check, ...
+    └── forensics/     (6)         # log_analyzer, memory_dump, ...
 
 wordlists/bundled/                 # 13 словарей
-tests/                             # 883 теста, 54 файла
+tests/                             # 1382 теста, 65+ файлов
 ├── test_models/                   # 43 теста
-├── test_core/                     # 147 тестов
+├── test_core/                     # 167 тестов
 ├── test_plugins/                  # 324 теста (110/110 плагинов покрыты)
 ├── test_utils/                    # 212 тестов
 ├── test_storage/                  # 18 тестов
 ├── test_reporting/                # 26 тестов
 ├── test_tui/                      # 10 тестов
+├── test_knowledge/                # 45 тестов (entities, graph, store)
+├── test_observations/             # 26 тестов (adapter)
+├── test_capabilities/             # 8 тестов (mapping)
+├── test_scoring/                  # 9 тестов (scorer)
+├── test_orchestrator/             # 38 тестов (loop, planner, selector, safety)
+├── test_events/                   # 5 тестов (bus)
 └── test_cli.py, test_config.py    # 24 теста
 
 examples/git/                      # Скрипты массового сканирования
@@ -196,9 +238,23 @@ class MyPlugin(BasePlugin):
 
 ### Fluent API (facade.py)
 ```python
+# Классический pipeline
 results = await Audit("example.com").discover().scan().analyze().pentest().report(["json", "html"]).run()
+# Автономный режим (v3)
+results = await Audit("example.com").autonomous(max_steps=50).run()
+# Один плагин
 results = await Audit.run_plugin("ssl_check", ["example.com"])
 ```
+
+### Автономный движок (v3)
+- `KnowledgeGraph` — in-memory граф с entities, relations, dedup, confidence merge
+- `Planner` — 7 правил обнаружения gaps (host_without_services, http_without_tech, ...)
+- `Selector` — match gaps → capabilities, pick batch (budget-constrained)
+- `Scorer` — формула `(novelty * knowledge_gain) / (cost + noise + repetition_penalty)`
+- `AutonomousLoop` — seed → find_gaps → match → score → pick → execute → apply → repeat
+- `SafetyLimits` — max_steps, max_duration_seconds, batch_size
+- `adapter.py` — конвертация `PluginResult` → `list[Observation]` → entities/relations в граф
+- `mapping.py` — все 175 плагинов маппятся на requires/produces/cost/noise
 
 ### Инициализация контекста (паттерн из facade.py:135-241)
 ```python
@@ -213,8 +269,9 @@ ctx = PluginContext(config=settings, http=http, dns=dns, net=net, rate=rate, ...
 
 ### Storage (SQLite WAL)
 - PRAGMA: journal_mode=WAL, synchronous=NORMAL, cache_size=-65536, mmap_size=2GB
-- Таблицы: projects, domains, scan_runs, findings, plugin_data
+- Таблицы: projects, domains, scan_runs, findings, plugin_data, kg_entities, kg_relations
 - Bulk insert батчами по 1000 записей
+- KnowledgeStore сохраняет knowledge graph в SQLite после автономного прогона
 
 ### Pipeline
 - 4 фазы: recon → scanning → analysis → pentesting
@@ -269,7 +326,20 @@ ctx = PluginContext(config=settings, http=http, dns=dns, net=net, rate=rate, ...
 > **Приоритет**: серверные уязвимости, не требующие участия жертвы (SQLi, CMDi, SSRF, SSTI, LFI, XXE, etc.)
 > Клиентские уязвимости (XSS, CSRF, Clickjacking) — вторичные.
 
-### Что сделано (v2.0.0 refactoring)
+### Что сделано (v3.0.0 — autonomous engine)
+- [x] Knowledge Graph: entities (7 типов), relations (7 типов), in-memory граф, SQLite persistence
+- [x] Observation adapter: PluginResult → list[Observation] для всех data keys
+- [x] Capability mapping: 175 плагинов → requires/produces/cost/noise с auto-inference
+- [x] Scoring engine: формула priority с novelty, knowledge_gain, cost, noise, repetition_penalty
+- [x] Orchestrator: planner (7 gap rules), selector, executor, autonomous loop, safety limits, timeline
+- [x] Event bus: subscribe/emit для lifecycle events
+- [x] Attack graph: визуализация exploit chains
+- [x] CLI --autonomous + facade.autonomous() fluent API
+- [x] SQLite persistence: kg_entities + kg_relations таблицы
+- [x] Полная обратная совместимость с pipeline режимом
+- [x] 131 новых тестов v3, все 1382 проходят, ruff чисто
+
+### Что было сделано (v2.0.0 refactoring)
 - [x] Глубокий аудит всей кодовой базы (3 параллельных ревью)
 - [x] 5 критических багов исправлено (race condition, progress math, etc.)
 - [x] DI-контейнер улучшен (типизация, requires_http, ProviderPool setup/teardown)
