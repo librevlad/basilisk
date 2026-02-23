@@ -162,6 +162,20 @@ class OrchestratorExecutor:
                     existing.append(s)
                     existing_set.add(s)
 
+        # container_runtimes → ctx.state
+        runtimes = data.get("container_runtimes", [])
+        if runtimes:
+            existing = self.ctx.state.setdefault(
+                "container_runtimes", {},
+            ).setdefault(host, [])
+            existing.extend(runtimes)
+
+        # containers → ctx.state
+        containers = data.get("containers", [])
+        if containers:
+            existing = self.ctx.state.setdefault("containers", {}).setdefault(host, [])
+            existing.extend(containers)
+
     @staticmethod
     def _entity_to_target(entity: Entity, graph: KnowledgeGraph) -> Target:
         """Convert an entity to a Target object for plugin execution.
@@ -191,7 +205,10 @@ class OrchestratorExecutor:
             return target
 
         # Fallback: walk relations to find a host
-        if entity.type in (EntityType.SERVICE, EntityType.ENDPOINT, EntityType.TECHNOLOGY):
+        if entity.type in (
+            EntityType.SERVICE, EntityType.ENDPOINT, EntityType.TECHNOLOGY,
+            EntityType.CONTAINER, EntityType.IMAGE,
+        ):
             parents = graph.reverse_neighbors(entity.id)
             for parent in parents:
                 if parent.type == EntityType.HOST:

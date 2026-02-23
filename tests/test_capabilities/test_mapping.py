@@ -119,6 +119,34 @@ class TestBuildCapabilities:
         assert "Finding:nosqli" in nosqli.reduces_uncertainty
 
 
+class TestContainerCapabilities:
+    def test_container_plugins_have_container_risk_domain(self):
+        container_plugins = [
+            "container_discovery", "container_enumeration", "image_fingerprint",
+            "container_config_audit", "container_escape_probe", "registry_lookup",
+            "container_verification",
+        ]
+        for name in container_plugins:
+            assert name in CAPABILITY_MAP, f"{name} not in CAPABILITY_MAP"
+            assert CAPABILITY_MAP[name].get("risk_domain") == "container", (
+                f"{name} should have risk_domain='container'"
+            )
+
+    def test_container_verification_has_reduces_uncertainty(self):
+        entry = CAPABILITY_MAP["container_verification"]
+        assert "reduces_uncertainty" in entry
+        assert len(entry["reduces_uncertainty"]) > 0
+
+    def test_container_capabilities_build(self):
+        registry = PluginRegistry()
+        registry.discover()
+        caps = build_capabilities(registry)
+        assert "container_discovery" in caps
+        assert caps["container_discovery"].risk_domain == "container"
+        assert "container_enumeration" in caps
+        assert "Container" in caps["container_enumeration"].produces_knowledge
+
+
 class TestInferRiskDomain:
     def test_recon(self):
         assert _infer_risk_domain("recon") == "recon"

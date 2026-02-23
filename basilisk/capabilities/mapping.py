@@ -576,6 +576,38 @@ CAPABILITY_MAP: dict[str, dict] = {
         "produces": ["Vulnerability"],
         "cost": 5, "noise": 6,
     },
+    # -- Container Security ------------------------------------------
+    "container_discovery": {
+        "requires": ["Host"], "produces": ["Technology:container_runtime"],
+        "cost": 2, "noise": 2, "risk_domain": "container",
+    },
+    "container_enumeration": {
+        "requires": ["Host", "Technology:docker"],
+        "produces": ["Container", "Image"],
+        "cost": 3, "noise": 3, "risk_domain": "container",
+    },
+    "image_fingerprint": {
+        "requires": ["Image"], "produces": ["Finding", "Vulnerability"],
+        "cost": 3, "noise": 1, "risk_domain": "container",
+    },
+    "container_config_audit": {
+        "requires": ["Container"], "produces": ["Finding"],
+        "cost": 3, "noise": 2, "risk_domain": "container",
+    },
+    "container_escape_probe": {
+        "requires": ["Container"], "produces": ["Finding", "Vulnerability"],
+        "cost": 5, "noise": 7, "risk_domain": "container",
+    },
+    "registry_lookup": {
+        "requires": ["Host", "Technology:docker"],
+        "produces": ["Finding", "Endpoint"],
+        "cost": 2, "noise": 2, "risk_domain": "container",
+    },
+    "container_verification": {
+        "requires": ["Finding"], "produces": ["Finding", "Vulnerability"],
+        "cost": 3, "noise": 3, "risk_domain": "container",
+        "reduces_uncertainty": ["Finding:container", "Finding:escape", "Finding:privileged"],
+    },
     # -- Exploitation ------------------------------------------------
     "cve_exploit": {
         "requires": ["Technology"], "produces": ["Finding"],

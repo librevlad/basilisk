@@ -25,6 +25,10 @@ _GAP_TO_PRODUCES: dict[str, list[str]] = {
     "confirmation": [],  # any capability that targets this entity
     "attack_path": ["Finding", "Vulnerability", "Credential", "Endpoint"],
     "finding_verification": ["Finding", "Vulnerability"],
+    "container_runtime": ["Technology:container_runtime", "Container"],
+    "container_enumeration": ["Container", "Image"],
+    "container_config_audit": ["Finding"],
+    "image_analysis": ["Finding", "Vulnerability"],
 }
 
 
@@ -224,6 +228,23 @@ def _requirements_met(cap: Capability, entity: Entity, graph: KnowledgeGraph) ->
                 continue
             return False
 
+        if base_type == "Container":
+            if entity.type == EntityType.CONTAINER:
+                continue
+            if entity.type == EntityType.HOST:
+                containers = graph.query(
+                    EntityType.CONTAINER, host=entity.data.get("host", ""),
+                )
+                if not containers:
+                    return False
+                continue
+            return False
+
+        if base_type == "Image":
+            if entity.type == EntityType.IMAGE:
+                continue
+            return False
+
     return True
 
 
@@ -272,5 +293,7 @@ def _matches_service_type(service_entity: Entity, svc_type: str) -> bool:
         return port == 11211 or "memcache" in service_name
     if svc_type == "elasticsearch":
         return port == 9200 or "elastic" in service_name
+    if svc_type == "docker":
+        return port in (2375, 2376, 2377) or "docker" in service_name
 
     return svc_type in service_name

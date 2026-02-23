@@ -123,6 +123,23 @@ def adapt_result(result: PluginResult) -> list[Observation]:
     if data.get("records"):
         observations.append(_dns_observation(host, data["records"], plugin))
 
+    # container_runtimes → Technology entities (is_container_runtime=True)
+    for rt in _safe_list("container_runtimes"):
+        obs = _container_runtime_observation(host, rt, plugin)
+        if obs:
+            observations.append(obs)
+
+    # containers → Container entities + USES_IMAGE relations
+    for container in _safe_list("containers"):
+        obs_list = _container_observations(host, container, plugin)
+        observations.extend(obs_list)
+
+    # images → Image entities
+    for img in _safe_list("images"):
+        obs = _image_observation(host, img, plugin)
+        if obs:
+            observations.append(obs)
+
     # findings → Finding entities
     for finding in result.findings:
         observations.append(_finding_observation(host, finding, plugin))
@@ -449,6 +466,144 @@ def _dns_observation(host: str, records: list, plugin: str) -> Observation:
         entity_type=EntityType.HOST,
         entity_data={"host": host, "dns_records": records},
         key_fields={"host": host},
+        source_plugin=plugin,
+    )
+
+
+def _container_runtime_observation(
+    host: str, rt: Any, plugin: str,
+) -> Observation | None:
+    """Convert container runtime entry to Technology observation with is_container_runtime."""
+    if isinstance(rt, dict):
+        name = rt.get("name", "docker")
+        version = rt.get("version", "")
+    elif isinstance(rt, str):
+        name = rt
+        version = ""
+    else:
+        return None
+
+    if not name:
+        return None
+
+    host_id = Entity.make_id(EntityType.HOST, host=host)
+    tech_id = Entity.make_id(EntityType.TECHNOLOGY, host=host, name=name, version=version)
+
+    return Observation(
+        entity_type=EntityType.TECHNOLOGY,
+        entity_data={
+            "host": host, "name": name, "version": version, "is_container_runtime": True,
+        },
+        key_fields={"host": host, "name": name, "version": version},
+        relation=Relation(
+            source_id=host_id, target_id=tech_id,
+            type=RelationType.RUNS, source_plugin=plugin,
+        ),
+        source_plugin=plugin,
+    )
+
+
+def _parse_image_ref(ref: str) -> tuple[str, str]:
+    """Parse image reference like 'nginx:1.24' → ('nginx', '1.24').
+
+    Handles: 'nginx:1.24', 'ubuntu', 'registry.io/app:v2', 'sha256:abc...'.
+    """
+    if not ref or ref.startswith("sha256:"):
+        return ref, ""
+    # Split on last colon, but not if it's part of a registry port
+    parts = ref.rsplit(":", 1)
+    if len(parts) == 2:
+        name, tag = parts
+        # If tag looks like a port number followed by a path, it's a registry
+        if "/" in tag:
+            return ref, "latest"
+        return name, tag
+    return ref, "latest"
+
+
+def _container_observations(
+    host: str, container: Any, plugin: str,
+) -> list[Observation]:
+    """Convert container entry to Container + optional Image observations."""
+    if not isinstance(container, dict):
+        return []
+
+    container_id = container.get("id", container.get("container_id", ""))
+    if not container_id:
+        return []
+
+    observations: list[Observation] = []
+
+    # Container entity
+    container_entity_id = Entity.make_id(
+        EntityType.CONTAINER, host=host, container_id=container_id,
+    )
+
+    # Find runtime Technology to create RUNS_CONTAINER relation
+    runtime_name = container.get("runtime", "docker")
+    runtime_id = Entity.make_id(
+        EntityType.TECHNOLOGY, host=host, name=runtime_name, version="",
+    )
+
+    container_data: dict[str, Any] = {"host": host, "container_id": container_id}
+    for key in (
+        "image", "state", "names", "ports", "mounts", "network_mode",
+        "privileged", "user", "pid_mode", "capabilities",
+    ):
+        if key in container:
+            container_data[key] = container[key]
+
+    observations.append(Observation(
+        entity_type=EntityType.CONTAINER,
+        entity_data=container_data,
+        key_fields={"host": host, "container_id": container_id},
+        relation=Relation(
+            source_id=runtime_id, target_id=container_entity_id,
+            type=RelationType.RUNS_CONTAINER, source_plugin=plugin,
+        ),
+        source_plugin=plugin,
+    ))
+
+    # Image entity from container's image field
+    image_ref = container.get("image", "")
+    if image_ref:
+        image_name, image_tag = _parse_image_ref(image_ref)
+        image_entity_id = Entity.make_id(
+            EntityType.IMAGE, host=host, image_name=image_name, image_tag=image_tag,
+        )
+        observations.append(Observation(
+            entity_type=EntityType.IMAGE,
+            entity_data={
+                "host": host, "image_name": image_name, "image_tag": image_tag,
+            },
+            key_fields={"host": host, "image_name": image_name, "image_tag": image_tag},
+            relation=Relation(
+                source_id=container_entity_id, target_id=image_entity_id,
+                type=RelationType.USES_IMAGE, source_plugin=plugin,
+            ),
+            source_plugin=plugin,
+        ))
+
+    return observations
+
+
+def _image_observation(host: str, img: Any, plugin: str) -> Observation | None:
+    """Convert image entry to Image observation."""
+    if isinstance(img, dict):
+        image_name = img.get("image_name", img.get("name", ""))
+        image_tag = img.get("image_tag", img.get("tag", "latest"))
+    elif isinstance(img, str):
+        image_name, image_tag = _parse_image_ref(img)
+    else:
+        return None
+
+    if not image_name:
+        return None
+
+    return Observation(
+        entity_type=EntityType.IMAGE,
+        entity_data={"host": host, "image_name": image_name, "image_tag": image_tag},
+        key_fields={"host": host, "image_name": image_name, "image_tag": image_tag},
         source_plugin=plugin,
     )
 
