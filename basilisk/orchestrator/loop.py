@@ -449,6 +449,29 @@ class AutonomousLoop:
         if entity.type == EntityType.TECHNOLOGY:
             entity.data["version_checked"] = True
 
+        # Mark container runtime check complete
+        if (
+            "Technology:container_runtime" in cap.produces_knowledge
+            and entity.type == EntityType.HOST
+        ):
+            entity.data["container_runtime_checked"] = True
+
+        # Mark container enumeration complete
+        if (
+            "Container" in cap.produces_knowledge
+            and entity.type == EntityType.TECHNOLOGY
+            and entity.data.get("is_container_runtime")
+        ):
+            entity.data["containers_enumerated"] = True
+
+        # Mark container config audit complete
+        if cap.plugin_name == "container_config_audit" and entity.type == EntityType.CONTAINER:
+            entity.data["config_audited"] = True
+
+        # Mark image analysis complete
+        if cap.plugin_name == "image_fingerprint" and entity.type == EntityType.IMAGE:
+            entity.data["vulnerabilities_checked"] = True
+
         # Mark findings as verified when a verification plugin runs
         if cap.reduces_uncertainty and entity.type == EntityType.FINDING:
             entity.data["verified"] = True
@@ -486,4 +509,6 @@ class AutonomousLoop:
             "endpoints": len(self.graph.endpoints()),
             "technologies": len(self.graph.technologies()),
             "findings": len(self.graph.findings()),
+            "containers": len(self.graph.containers()),
+            "images": len(self.graph.images()),
         }

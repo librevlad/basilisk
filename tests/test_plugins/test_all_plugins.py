@@ -27,13 +27,14 @@ class TestAllPluginsMeta:
             "dns_zone_transfer", "robots_parser", "sitemap_parser", "s3_bucket_finder",
             "web_crawler", "shodan_lookup", "github_dorking", "cloud_bucket_enum",
             "subdomain_certspotter", "subdomain_anubis",
-            # Scanning (16)
+            # Scanning (19)
             "port_scan", "ssl_check", "ssl_protocols", "ssl_vulns",
             "ssl_compliance", "service_detect",
             "cors_scan", "cookie_scan", "tls_cipher_scan", "http_methods_scan",
             "websocket_detect", "graphql_detect", "cdn_detect", "dnssec_check",
             "redirect_chain", "ipv6_scan",
-            # Analysis (21)
+            "container_discovery", "container_enumeration", "registry_lookup",
+            # Analysis (23)
             "http_headers", "tech_detect", "takeover_check",
             "waf_detect", "csp_analyzer", "js_secret_scan", "meta_extract",
             "link_extractor", "form_analyzer", "comment_finder", "version_detect",
@@ -41,6 +42,7 @@ class TestAllPluginsMeta:
             "ssl_cert_chain", "api_detect", "cms_detect",
             "waf_bypass", "prometheus_scrape", "js_api_extract",
             "openapi_parser",
+            "image_fingerprint", "container_config_audit",
             # Pentesting (55)
             "dir_brute", "git_exposure", "backup_finder", "ftp_anon",
             "sqli_basic", "xss_basic", "open_redirect", "lfi_check",
@@ -62,12 +64,13 @@ class TestAllPluginsMeta:
             "idor_check", "actuator_exploit", "api_logic_engine",
             "credential_spray", "prototype_pollution",
             "file_upload_check", "session_check",
-            # Exploitation (21)
+            # Exploitation (23)
             "credential_reuse", "cve_exploit", "docker_exploit", "file_upload_bypass",
             "jenkins_exploit", "ldap_enum", "lfi_harvest", "mssql_exploit",
             "mysql_exploit", "nfs_enum", "redis_exploit", "rpc_enum", "smb_enum",
             "smb_exploit", "snmp_enum", "sqli_extract", "tomcat_exploit",
             "vhost_enum", "webshell_deploy", "winrm_check", "wordpress_exploit",
+            "container_escape_probe", "container_verification",
             # Crypto (8)
             "aes_attack", "classical_cipher", "custom_crypto", "hash_crack",
             "hash_extension", "jwt_forge", "prng_crack", "rsa_attack",
@@ -88,7 +91,7 @@ class TestAllPluginsMeta:
             "memory_analyze", "pcap_analyze", "steganography",
         }
         assert expected.issubset(names), f"Missing: {expected - names}"
-        assert len(names) == 178, f"Expected 178 plugins, got {len(names)}"
+        assert len(names) == 185, f"Expected 185 plugins, got {len(names)}"
 
     def test_all_have_valid_meta(self):
         for plugin_cls in self._get_all_plugins():
@@ -126,13 +129,13 @@ class TestAllPluginsMeta:
         registry = PluginRegistry()
         registry.discover()
         scanning = registry.by_category(PluginCategory.SCANNING)
-        assert len(scanning) == 16
+        assert len(scanning) == 19
 
     def test_analysis_count(self):
         registry = PluginRegistry()
         registry.discover()
         analysis = registry.by_category(PluginCategory.ANALYSIS)
-        assert len(analysis) == 21
+        assert len(analysis) == 23
 
     def test_pentesting_count(self):
         registry = PluginRegistry()
@@ -144,7 +147,7 @@ class TestAllPluginsMeta:
         registry = PluginRegistry()
         registry.discover()
         exploitation = registry.by_category(PluginCategory.EXPLOITATION)
-        assert len(exploitation) == 21
+        assert len(exploitation) == 23
 
     def test_crypto_count(self):
         registry = PluginRegistry()

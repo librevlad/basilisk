@@ -58,8 +58,8 @@ DEFAULT_GOAL_PROGRESSION: list[Goal] = [
         type=GoalType.SURFACE_MAPPING,
         name="Surface Mapping",
         priority=1.3,
-        relevant_gap_types=["technology", "endpoints", "forms", "version"],
-        relevant_risk_domains=["web", "network"],
+        relevant_gap_types=["technology", "endpoints", "forms", "version", "container_runtime"],
+        relevant_risk_domains=["web", "network", "container"],
         completion_condition="All HTTP services have endpoints and tech detected",
     ),
     Goal(
@@ -69,8 +69,9 @@ DEFAULT_GOAL_PROGRESSION: list[Goal] = [
         relevant_gap_types=[
             "vulnerability_testing", "host_vulnerability_testing",
             "service_exploitation", "credential_exploitation", "attack_path",
+            "container_enumeration", "container_config_audit", "image_analysis",
         ],
-        relevant_risk_domains=["web", "auth", "network"],
+        relevant_risk_domains=["web", "auth", "network", "container"],
         completion_condition="Vulnerability testing complete on all endpoints",
     ),
     Goal(

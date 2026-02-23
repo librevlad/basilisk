@@ -114,6 +114,15 @@ ATTACK_PATHS: list[AttackPath] = [
         risk=2.0,
         unlock=["credential_attack", "api_exploitation"],
     ),
+    AttackPath(
+        name="container_exploitation",
+        preconditions=["Technology:docker"],
+        actions=["container_enumeration", "container_config_audit",
+                 "container_escape_probe", "image_fingerprint"],
+        expected_gain=["Finding", "Vulnerability", "Container"],
+        risk=6.0,
+        unlock=["privilege_escalation", "lateral_movement"],
+    ),
 ]
 
 
@@ -172,6 +181,12 @@ def _precondition_met(precondition: str, graph: KnowledgeGraph) -> bool:
             return any(t.data.get("is_waf") for t in techs)
         if subtype == "cms":
             return any(t.data.get("is_cms") for t in techs)
+        if subtype == "docker":
+            return any(
+                t.data.get("is_container_runtime")
+                or "docker" in str(t.data.get("name", "")).lower()
+                for t in techs
+            )
         return True
 
     return False
