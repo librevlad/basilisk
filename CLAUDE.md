@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Проект
 
-**Basilisk v3.3.0** — профессиональный модульный фреймворк безопасности для разведки, анализа и пентеста доменов. Два режима: классический pipeline и автономный движок на knowledge graph с детерминированными decision traces. Плагинная архитектура с автообнаружением, мультипровайдерная агрегация данных, TUI-дашборд в реальном времени, SQLite-хранилище для миллионов записей. Persistent campaign memory для кросс-аудитного обучения. Container security audit подсистема.
+**Basilisk v3.4.0** — профессиональный модульный фреймворк безопасности для разведки, анализа и пентеста доменов. Два режима: классический pipeline и автономный движок на knowledge graph с детерминированными decision traces. Плагинная архитектура с автообнаружением, мультипровайдерная агрегация данных, TUI-дашборд в реальном времени, SQLite-хранилище для миллионов записей. Persistent campaign memory для кросс-аудитного обучения. Container security audit подсистема. Cognitive reasoning: hypothesis engine + evidence fusion + belief revision.
 
 Философия: сделать с хакерскими утилитами то, что Laravel сделал с Symfony — элегантные абстракции поверх мощных инструментов.
 
@@ -12,7 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 # Тесты
-.venv/Scripts/python.exe -m pytest tests/ -v              # все 1798 тестов
+.venv/Scripts/python.exe -m pytest tests/ -v              # все 1929 тестов
 .venv/Scripts/python.exe -m pytest tests/test_plugins/ -v  # только плагины (345)
 .venv/Scripts/python.exe -m pytest tests/ -x --tb=short    # до первого падения
 
@@ -90,8 +90,12 @@ basilisk/
 │   └── adapter.py                 # adapt_result(): PluginResult → list[Observation]
 │
 ├── capabilities/                  # [v3] Маппинг плагинов на capabilities
-│   ├── capability.py              # Capability model (requires/produces/cost/noise)
+│   ├── capability.py              # Capability model + ActionType enum (requires/produces/cost/noise)
 │   └── mapping.py                 # CAPABILITY_MAP для 185 плагинов
+│
+├── reasoning/                     # [v3.4] Cognitive reasoning primitives
+│   ├── hypothesis.py              # HypothesisEngine: 5 pattern detectors, evidence tracking
+│   └── belief.py                  # EvidenceAggregator: source-family independence, belief revision
 │
 ├── decisions/                     # [v3.1] Decision tracing
 │   └── decision.py                # Decision, ContextSnapshot, EvaluatedOption
@@ -100,10 +104,10 @@ basilisk/
 │   └── history.py                 # History: decision log, repetition penalty, persistence
 │
 ├── scoring/                       # [v3] Scoring engine
-│   └── scorer.py                  # Scorer: multi-component formula + campaign-aware cost
+│   └── scorer.py                  # Scorer: multi-component formula + hypothesis_gain + action_type_bonus
 │
 ├── orchestrator/                  # [v3] Автономный движок
-│   ├── planner.py                 # Planner: 17 правил обнаружения knowledge gaps
+│   ├── planner.py                 # Planner: 18 правил обнаружения knowledge gaps
 │   ├── selector.py                # Selector: match gaps → capabilities, pick batch
 │   ├── executor.py                # OrchestratorExecutor: обёртка над core executor
 │   ├── loop.py                    # AutonomousLoop: цикл + decision tracing + KnowledgeState
@@ -120,7 +124,7 @@ basilisk/
 │   └── extractor.py               # Extract profiles/efficacy/fingerprints from KG
 │
 ├── events/                        # [v3] Event Bus
-│   └── bus.py                     # EventBus: subscribe/emit + DECISION_MADE event
+│   └── bus.py                     # EventBus: subscribe/emit + 14 event types
 │
 ├── utils/                         # Утилиты
 │   ├── http.py                    # AsyncHttpClient (aiohttp), resolve_base_url(s)
@@ -176,7 +180,7 @@ basilisk/
     └── forensics/     (6)         # log_analyzer, memory_dump, ...
 
 wordlists/bundled/                 # 6 словарей
-tests/                             # 1798 тестов, 90+ файлов
+tests/                             # 1929 тестов, 90+ файлов
 ├── test_models/                   # 43 теста
 ├── test_core/                     # 167 тестов
 ├── test_plugins/                  # 345 тестов (117/117 плагинов покрыты)
@@ -193,6 +197,7 @@ tests/                             # 1798 тестов, 90+ файлов
 ├── test_orchestrator/             # 111 тестов (loop, planner, selector, safety, attack_paths, cost_tracker, goals, container_*)
 ├── test_events/                   # 5 тестов (bus)
 ├── test_campaign/                 # 61 тест (models, store, memory, extractor, integration)
+├── test_reasoning/                # 42 теста (hypothesis engine, evidence aggregator, belief revision)
 └── test_cli.py, test_config.py    # 24 теста
 
 examples/git/                      # Скрипты массового сканирования
@@ -271,22 +276,24 @@ results = await Audit("example.com").autonomous(max_steps=50).enable_campaign().
 results = await Audit.run_plugin("ssl_check", ["example.com"])
 ```
 
-### Автономный движок (v3 + v3.1 decision tracing + v3.2 campaign memory + v3.3 container audit)
-- `KnowledgeGraph` — in-memory граф с 9 entity types, 9 relation types, dedup, confidence merge, decay
-- `KnowledgeState` — [v3.1] delta-tracking wrapper, `apply_observation()` → `ObservationOutcome`
-- `Planner` — 17 правил обнаружения gaps (host_without_services, container_*, attack_paths, ...)
+### Автономный движок (v3 + v3.1 decision tracing + v3.2 campaign memory + v3.3 container audit + v3.4 cognitive reasoning)
+- `KnowledgeGraph` — in-memory граф с 9 entity types, 11 relation types, dedup, confidence merge, decay, hypothesis storage
+- `KnowledgeState` — [v3.1] delta-tracking wrapper, `apply_observation()` → `ObservationOutcome` (+ source_family)
+- `Planner` — 18 правил обнаружения gaps (host_without_services, container_*, attack_paths, hypothesis_validation, ...)
 - `Selector` — match gaps → capabilities, pick batch (budget-constrained)
-- `Scorer` — формула + `score_breakdown` dict + campaign-aware cost + prior_bonus
-- `GoalEngine` — [v3.3] 5-goal progression (RECON → SURFACE_MAPPING → EXPLOIT → POST_EXPLOIT → REPORTING)
+- `Scorer` — формула + `score_breakdown` dict + campaign-aware cost + prior_bonus + hypothesis_gain + action_type_bonus
+- `GoalEngine` — [v3.3] 5-goal progression + [v3.4] `goal_progress_delta()`
+- `HypothesisEngine` — [v3.4] 5 pattern detectors, hypothesis lifecycle, resolution_gain scoring
+- `EvidenceAggregator` — [v3.4] source-family independence, contradiction penalty, per-step belief revision
 - `AttackPaths` — [v3.2] multi-step exploit chain scoring, unlock_value, container_exploitation path
 - `CostTracker` — [v3.2] runtime plugin success/failure statistics, adaptive cost adjustment
 - `CampaignMemory` — [v3.2] persistent cross-audit learning (SQLite, opt-in)
-- `Decision` — [v3.1] полная запись: context snapshot, evaluated options, reasoning trace, outcome
+- `Decision` — [v3.1] полная запись: context snapshot, evaluated options, reasoning trace, outcome + [v3.4] hypothesis context
 - `History` — [v3.1] лог решений, repetition penalty (decay + unproductive multiplier), JSON persistence
-- `AutonomousLoop` — seed → find_gaps → match → score → **build decision** → execute → apply → repeat
+- `AutonomousLoop` — seed → find_gaps → match → score → **build decision** → execute → apply → **hypothesize** → **revise beliefs** → repeat
 - `SafetyLimits` — max_steps, max_duration_seconds, batch_size, cooldown tracking
 - `adapter.py` — конвертация `PluginResult` → `list[Observation]` → entities/relations в граф
-- `mapping.py` — все 185 плагинов маппятся на requires/produces/cost/noise
+- `mapping.py` — все 185 плагинов маппятся на requires/produces/cost/noise/action_type/expected_state_delta
 
 ### Инициализация контекста (паттерн из facade.py:135-241)
 ```python
@@ -399,7 +406,7 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 **Scopes** (один из):
 `plugins`, `orchestrator`, `knowledge`, `pipeline`, `tui`, `cli`, `storage`, `reporting`,
 `utils`, `models`, `core`, `scoring`, `observations`, `capabilities`, `decisions`, `memory`,
-`events`, `data`, `config`, `campaign`
+`events`, `data`, `config`, `campaign`, `reasoning`
 
 **Примеры:**
 ```
@@ -456,7 +463,7 @@ git branch -d feature/my-feature
 # На develop, когда готов релиз:
 git checkout master && git pull origin master
 git merge develop
-git tag -a v3.3.0 -m "v3.3.0"
+git tag -a v3.4.0 -m "v3.4.0"
 git push origin master --tags
 ```
 
@@ -486,7 +493,7 @@ git checkout develop && git merge master
                           │                                                 │
   Targets ──► SEED ──►    │  ┌─────────┐    ┌──────────┐    ┌───────────┐  │
   (hosts)   (create       │  │ PLANNER │───►│ SELECTOR │───►│  SCORER   │  │
-             Host         │  │ 17 gap  │    │ match +  │    │ rank by   │  │
+             Host         │  │ 18 gap  │    │ match +  │    │ rank by   │  │
              entities)    │  │ rules   │    │ pick     │    │ priority  │  │
                           │  └────┬────┘    └──────────┘    └─────┬─────┘  │
                           │       │                               │        │
@@ -561,7 +568,7 @@ results = await Audit.run_plugin("ssl_check", ["example.com"])           # од�
 | `CONTAINER` | `host`, `container_id` | `host`, `container_id`, `image`, `privileged`, `mounts`, `capabilities` | `Entity.container("example.com", "abc123")` |
 | `IMAGE` | `host`, `image_name`, `image_tag` | `host`, `image_name`, `image_tag` | `Entity.image("example.com", "nginx", "1.24")` |
 
-### RelationType — 9 типов связей
+### RelationType — 11 типов связей
 
 | RelationType | Семантика | Направление | Пример |
 |-------------|-----------|-------------|--------|
@@ -574,6 +581,8 @@ results = await Audit.run_plugin("ssl_check", ["example.com"])           # од�
 | `PARENT_OF` | Домен является родителем | HOST -> HOST | example.com PARENT_OF sub.example.com |
 | `RUNS_CONTAINER` | Runtime запускает контейнер | TECHNOLOGY -> CONTAINER | docker RUNS_CONTAINER abc123 |
 | `USES_IMAGE` | Контейнер использует образ | CONTAINER -> IMAGE | abc123 USES_IMAGE nginx:1.24 |
+| `SUPPORTED_BY` | Доказательство подтверждает гипотезу | ENTITY -> HYPOTHESIS | [v3.4] evidence supports hypothesis |
+| `DISPROVED_BY` | Доказательство опровергает гипотезу | ENTITY -> HYPOTHESIS | [v3.4] evidence contradicts hypothesis |
 
 ### Генерация ID и дедупликация
 
@@ -606,6 +615,9 @@ merged = 1.0 - (1.0 - existing.confidence) * (1.0 - new.confidence)
 | `hosts()` / `services()` / `endpoints()` / `technologies()` / `findings()` / `containers()` / `images()` | Shortcut-методы |
 | `record_execution(fingerprint)` / `was_executed(fingerprint)` | Трекинг выполнений |
 | `to_targets()` | Конвертация Host entities -> list[Target] |
+| `add_hypothesis(hyp)` / `get_hypothesis(id)` | [v3.4] CRUD для гипотез |
+| `active_hypotheses()` / `all_hypotheses()` | [v3.4] Запрос гипотез по статусу |
+| `hypotheses_for_entity(entity_id)` | [v3.4] Гипотезы, связанные с entity |
 
 ### KnowledgeState — delta-tracking wrapper (`knowledge/state.py`)
 
@@ -614,7 +626,7 @@ merged = 1.0 - (1.0 - existing.confidence) * (1.0 - new.confidence)
 ```python
 state = KnowledgeState(graph, planner)
 outcome = state.apply_observation(obs)
-# -> ObservationOutcome(entity_id, was_new, confidence_before, confidence_after)
+# -> ObservationOutcome(entity_id, was_new, confidence_before, confidence_after, source_family)
 
 snapshot = state.snapshot(step=5, elapsed=42.0, gap_count=3)
 # -> ContextSnapshot(entity_count, relation_count, host_count, ...)
@@ -688,6 +700,12 @@ Plugin.run() -> PluginResult
 ### Модель Capability (`capabilities/capability.py`)
 
 ```python
+class ActionType(StrEnum):
+    ENUMERATION = "enumeration"     # recon, scanning — discover new entities
+    EXPERIMENT = "experiment"       # analysis, pentesting — test hypotheses
+    EXPLOIT = "exploit"             # exploitation — needs confirmed vulnerability
+    VERIFICATION = "verification"   # re-test to confirm/reject findings
+
 class Capability(BaseModel):
     name: str                              # display name
     plugin_name: str                       # имя плагина в registry
@@ -697,7 +715,20 @@ class Capability(BaseModel):
     cost_score: float = 1.0               # 1-10
     noise_score: float = 1.0              # 1-10
     execution_time_estimate: float = 10.0  # секунды
+    reduces_uncertainty: list[str] = []    # knowledge confirmed
+    risk_domain: str = "general"           # recon|web|network|auth|crypto|forensics|general
+    action_type: ActionType = ENUMERATION  # [v3.4] what the capability does
+    expected_state_delta: dict = {}        # [v3.4] predicted world change
 ```
+
+### ActionType auto-inference (`capabilities/mapping.py`)
+
+| Категория плагина | ActionType | Условие |
+|-------------------|------------|---------|
+| recon, scanning | ENUMERATION | По умолчанию |
+| analysis, pentesting, crypto | EXPERIMENT | По умолчанию |
+| exploitation, lateral, privesc, post_exploit | EXPLOIT | По умолчанию |
+| любая | VERIFICATION | Если `reduces_uncertainty` не пуст (override) |
 
 ### Синтаксис requires_knowledge
 
@@ -725,18 +756,35 @@ class Capability(BaseModel):
 ### Формула скоринга (`scoring/scorer.py`)
 
 ```
-priority = (novelty * knowledge_gain + unlock_value + prior_bonus) / (cost + noise + repetition_penalty)
+priority = (novelty * knowledge_gain * success_prob + unlock_value + prior_bonus
+            + hypothesis_gain + action_type_bonus) * gap_boost / (cost + noise + repetition_penalty)
 ```
 
 | Компонент | Формула |
 |-----------|---------|
 | `novelty` | `1.0 / (1.0 + (observation_count - 1) * 0.3)` |
 | `knowledge_gain` | `len(produces) * (1.0 - confidence)`, min 0.1 |
+| `success_prob` | `GoalEngine.success_probability()` — вероятность успеха на текущей стадии |
 | `unlock_value` | `count_unlockable_paths() * 0.3` — будущая ценность от attack paths |
 | `prior_bonus` | Campaign-aware: 0.15 для известной инфры, `tech_rate * 0.2` для стека |
+| `hypothesis_gain` | [v3.4] `HypothesisEngine.resolution_gain(plugin, entity_id)` — max 1.0 |
+| `action_type_bonus` | [v3.4] Бонус за тип действия в текущем контексте (0.0-0.2) |
+| `gap_boost` | `1.0 + gap.priority * 0.1` — множитель от приоритета gap |
 | `cost` | `cap.cost_score` (1-10), campaign/cost_tracker adjusted |
 | `noise` | `cap.noise_score` (1-10) |
 | `repetition_penalty` | Adaptive из History или binary 5.0 из графа |
+
+**hypothesis_gain** (v3.4):
+- 0.3 per matching `validation_plugins` in hypothesis
+- 0.15 per matching `target_entity_ids`
+- Higher when hypothesis is uncertain (confidence near 0.5)
+
+**action_type_bonus** (v3.4):
+| ActionType | Условие | Бонус |
+|------------|---------|-------|
+| EXPERIMENT | `entity.confidence < 0.7` | +0.1 (предпочитать эксперименты при неопределённости) |
+| EXPLOIT | `entity.confidence >= 0.8` | +0.15 (предпочитать эксплойты при подтверждённых данных) |
+| VERIFICATION | severity high/critical | +0.2 (всегда ценно для опасных находок) |
 
 **Cost sources** (приоритет):
 1. `CostTracker` — runtime plugin statistics (текущий аудит)
@@ -767,7 +815,7 @@ penalty = base_penalty * time_decay * (unproductive_multiplier if unproductive e
 Planner (`orchestrator/planner.py`) анализирует knowledge graph и обнаруживает пробелы
 в знаниях — `KnowledgeGap(entity, missing, priority, description)`.
 
-### 17 правил обнаружения gaps
+### 18 правил обнаружения gaps
 
 | # | Правило | missing | Приоритет | Условие |
 |---|---------|---------|-----------|---------|
@@ -782,12 +830,13 @@ Planner (`orchestrator/planner.py`) анализирует knowledge graph и о
 | 9 | `_credential_without_exploitation` | `"credential_exploitation"` | **7.5** | Существует Credential |
 | 10 | `_technology_without_version` | `"version"` | **4.0** | Technology без `version` |
 | 11 | `_low_confidence_entity` | `"confirmation"` | **3.0** | Entity с `confidence < 0.5` |
-| 12 | `_host_without_container_check` | `"container_runtime"` | **6.0** | Host с Docker/K8s портами (2375,2376,2377,5000,10250) или is_container_runtime tech |
-| 13 | `_container_runtime_without_enumeration` | `"container_enumeration"` | **7.0** | Technology(is_container_runtime) без `containers_enumerated` |
-| 14 | `_container_without_config_audit` | `"container_config_audit"` | **5.5** | Container без `config_audited` (1 gap per host) |
-| 15 | `_container_without_image_analysis` | `"image_analysis"` | **5.0** | Image без `vulnerabilities_checked` |
-| 16 | `_attack_path_gaps` | `"attack_path"` | **path.risk** | Attack path preconditions met, actions available |
-| 17 | `_goal_driven_gaps` | `"goal"` | **varies** | Goal engine gap detection |
+| 12 | `_finding_without_verification` | `"finding_verification"` | **6.0** | HIGH/CRITICAL finding, confidence < 0.95 |
+| 13 | `_host_without_container_check` | `"container_runtime"` | **6.0** | Host с Docker/K8s портами (2375,2376,2377,5000,10250) или is_container_runtime tech |
+| 14 | `_container_runtime_without_enumeration` | `"container_enumeration"` | **7.0** | Technology(is_container_runtime) без `containers_enumerated` |
+| 15 | `_container_without_config_audit` | `"container_config_audit"` | **5.5** | Container без `config_audited` (1 gap per host) |
+| 16 | `_container_without_image_analysis` | `"image_analysis"` | **5.0** | Image без `vulnerabilities_checked` |
+| 17 | `_attack_path_gaps` | `"attack_path"` | **path.risk** | Attack path preconditions met, actions available |
+| 18 | `_hypothesis_validation` | `"hypothesis_validation"` | **5.5** | [v3.4] Active hypothesis с confidence в [0.3, 0.7] |
 
 ### Gap satisfaction flags
 
@@ -839,11 +888,18 @@ Greedy top-N с дедупликацией:
     e. create async task              -> executor.execute(cap, entity, graph)
  8. asyncio.gather(*tasks)            -> параллельное выполнение
  9. for each result:
-    a. state.apply_observation(obs)   -> обновление графа
+    a. state.apply_observation(obs)   -> обновление графа (+ source_family)
     b. emit ENTITY events
     c. update decision outcome
-10. _mark_gap_satisfied(sc)           -> satisfaction flags
-11. emit STEP_COMPLETED event
+10. [v3.4] hypothesis_engine.generate_hypotheses(graph)  -> новые гипотезы
+11. [v3.4] evidence_aggregator.record_evidence(...)      -> запись evidence per entity
+12. [v3.4] evidence_aggregator.revise_beliefs()          -> belief revision
+    - emit BELIEF_STRENGTHENED / BELIEF_WEAKENED
+13. [v3.4] hypothesis_engine.update_from_observation()   -> обновление confidence гипотез
+    - emit HYPOTHESIS_CONFIRMED / HYPOTHESIS_REJECTED
+14. [v3.4] evidence_aggregator.reset_step()              -> сброс aggregator для след. шага
+15. _mark_gap_satisfied(sc)           -> satisfaction flags
+16. emit STEP_COMPLETED event
 ```
 
 ---
@@ -855,10 +911,13 @@ Greedy top-N с дедупликацией:
 **Pre-execution** (заполняются ДО запуска плагина):
 - `id` — SHA256(step:timestamp:plugin:target)[:16]
 - `step`, `goal` (gap.missing), `goal_priority`, `triggering_entity_id`
-- `context` — ContextSnapshot (entity_count, relation_count, host/service/finding_count, gap_count)
+- `context` — ContextSnapshot (entity_count, relation_count, host/service/finding_count, gap_count, active_hypothesis_count, confirmed_hypothesis_count)
 - `evaluated_options` — все кандидаты (max 20) с score_breakdown
 - `chosen_capability`, `chosen_plugin`, `chosen_target`, `chosen_score`
 - `reasoning_trace` — "Gap: X. Selected Y (score=Z) from N candidates."
+- `related_hypothesis_ids` — [v3.4] гипотезы, связанные с target entity
+- `hypothesis_resolution_gain` — [v3.4] ожидаемый вклад в разрешение гипотез (0.0-1.0)
+- `action_type` — [v3.4] тип действия capability (enumeration/experiment/exploit/verification)
 
 **Post-execution** (заполняются ПОСЛЕ):
 - `outcome_observations`, `outcome_new_entities`, `outcome_confidence_delta`, `outcome_duration`
@@ -871,7 +930,7 @@ Greedy top-N с дедупликацией:
 - `repetition_penalty(plugin, entity_id)` — adaptive penalty
 - `save(path)` / `load(path)` — JSON persistence (`decision_history.json`)
 
-### EventBus — 9 типов событий (`events/bus.py`)
+### EventBus — 14 типов событий (`events/bus.py`)
 
 | EventType | Когда |
 |-----------|-------|
@@ -882,6 +941,9 @@ Greedy top-N с дедупликацией:
 | `GAP_DETECTED` | Обнаружены knowledge gaps |
 | `STEP_COMPLETED` | Шаг цикла завершён |
 | `DECISION_MADE` | Принято решение о запуске |
+| `GOAL_ADVANCED` / `AUDIT_COMPLETED` | Прогресс целей / аудит завершён |
+| `BELIEF_STRENGTHENED` / `BELIEF_WEAKENED` | [v3.4] Уверенность в entity повышена/понижена belief revision |
+| `HYPOTHESIS_CONFIRMED` / `HYPOTHESIS_REJECTED` | [v3.4] Гипотеза подтверждена (≥0.85) / отклонена (≤0.15) |
 
 ### SafetyLimits (`orchestrator/safety.py`)
 
@@ -1005,6 +1067,104 @@ Audit("example.com").autonomous().enable_campaign().run()  # API
 campaign:
   enabled: true                              # config YAML
 ```
+
+---
+
+## Cognitive Reasoning (v3.4)
+
+Детерминированные reasoning-примитивы поверх knowledge graph. Без AI/LLM — чистая логика
+на паттернах и статистике. Три компонента: Hypothesis Engine, Evidence Aggregator, ActionType.
+
+### Hypothesis Engine (`reasoning/hypothesis.py`)
+
+Формирует тестируемые гипотезы из паттернов в knowledge graph.
+
+**Модель Hypothesis:**
+```python
+class Hypothesis(BaseModel):
+    id: str                    # SHA256 deterministic (same pattern as Entity)
+    type: HypothesisType       # SHARED_STACK|SERVICE_IDENTITY|SYSTEMATIC_VULN|...
+    statement: str             # человекочитаемое описание
+    confidence: float = 0.5    # [0.0, 1.0]
+    status: HypothesisStatus   # ACTIVE → CONFIRMED (≥0.85) | REJECTED (≤0.15)
+    supporting_evidence: list[EvidenceItem] = []
+    contradicting_evidence: list[EvidenceItem] = []
+    validation_plugins: list[str] = []   # плагины для проверки
+    target_entity_ids: list[str] = []    # entities для тестирования
+```
+
+**5 детекторов паттернов:**
+
+| Детектор | Триггер | Генерирует |
+|----------|---------|-----------|
+| `_detect_shared_stack` | Одна технология на 2+ хостах | "Организация стандартизирует X" |
+| `_detect_service_identity` | Сервис на нестандартном порту, без tech | "Порт N вероятно запускает X" |
+| `_detect_systematic_vuln` | 3+ findings одного типа | "Систематическая уязвимость категории X" |
+| `_detect_unverified_findings` | HIGH/CRITICAL finding, confidence < 0.7 | "Уязвимость может существовать в X" |
+| `_detect_framework_pattern` | Пути endpoints совпадают с известным фреймворком | "Цель использует WordPress/Laravel/etc" |
+
+**Confidence recalculation:**
+- Группировка evidence по `source_family`
+- Первое evidence в семье: полный weight. Каждое следующее: `weight * 0.7^i` (diminishing returns)
+- Contradiction penalty: `weight * 0.5`
+- Нормализация к [0.0, 1.0]
+- Status transitions: `≥ 0.85` → CONFIRMED, `≤ 0.15` → REJECTED
+
+**HypothesisEngine API:**
+- `generate_hypotheses(graph)` → `list[Hypothesis]` — запуск всех детекторов
+- `update_from_observation(entity_id, source_plugin, ...)` → `list[Hypothesis]` — обновление из observation
+- `resolution_gain(plugin_name, target_entity_id)` → `float` — ожидаемый вклад (0.0-1.0)
+- `active_hypotheses` / `all_hypotheses` — properties
+- `MAX_ACTIVE = 50` — ограничение активных гипотез
+
+### Evidence Aggregator (`reasoning/belief.py`)
+
+Belief revision на основе source-family independence.
+
+**6 source families:**
+
+| Family | Плагины |
+|--------|---------|
+| `dns` | dns_enum, whois, reverse_ip, ... |
+| `network_scan` | port_scan, service_detect, banner_grab, ... |
+| `http_probe` | tech_detect, waf_detect, http_headers, ... |
+| `exploit` | sqli_*, xss_*, ssrf_*, ssti_*, command_injection, ... |
+| `config_leak` | container_config_audit, git_exposure, sensitive_files, ... |
+| `verification` | ssti_verify, container_verification, nosqli_verify, ... |
+
+**Логика belief revision:**
+- Track `(plugin, family, delta)` per entity per step
+- После шага: entity с evidence из 2+ source families → independence bonus (+0.05 per family, max +0.15)
+- Contradicting evidence → penalty (-0.1)
+- Confidence clamped to [0.1, 1.0]
+- Events: `BELIEF_STRENGTHENED` / `BELIEF_WEAKENED`
+
+**EvidenceAggregator API:**
+- `record_evidence(entity_id, source_plugin, confidence_delta)` — запись evidence
+- `revise_beliefs()` → `list[tuple[entity_id, old_conf, new_conf]]` — revision
+- `reset_step()` — сброс для следующего шага
+
+### Integration with Autonomous Loop
+
+```
+... execute plugins → apply observations → [v3.4 START] →
+  generate_hypotheses(graph)         # detect patterns, create hypotheses
+  record_evidence(entity, plugin)    # track per-entity evidence
+  revise_beliefs()                   # independence bonus / contradiction penalty
+  update_from_observation(...)       # hypothesis confidence updates
+  reset_step()                       # prepare for next iteration
+→ [v3.4 END] → mark_gap_satisfied → emit STEP_COMPLETED
+```
+
+### Backward Compatibility
+
+Все новые поля имеют defaults. Все новые параметры конструкторов `= None`.
+Когда `hypothesis_engine is None` (по умолчанию в non-autonomous mode):
+- Нет генерации гипотез
+- Нет belief revision
+- Нет hypothesis_gain в скоринге
+- Нет hypothesis_validation gaps
+- Поведение идентично v3.3.0
 
 ---
 
