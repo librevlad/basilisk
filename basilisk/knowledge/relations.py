@@ -17,6 +17,8 @@ class RelationType(StrEnum):
     PARENT_OF = "parent_of"          # HOST → HOST (domain → subdomain)
     RUNS_CONTAINER = "runs_container"  # TECHNOLOGY(runtime) → CONTAINER
     USES_IMAGE = "uses_image"          # CONTAINER → IMAGE
+    SUPPORTED_BY = "supported_by"      # evidence supports hypothesis
+    DISPROVED_BY = "disproved_by"      # evidence contradicts hypothesis
 
 
 class Relation(BaseModel):

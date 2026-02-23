@@ -20,7 +20,7 @@ from basilisk.core.pipeline import (
 )
 from basilisk.core.providers import ProviderPool
 from basilisk.core.registry import PluginRegistry
-from basilisk.models.result import Finding
+from basilisk.models.result import Finding, PluginResult
 from basilisk.models.target import Target, TargetScope
 from basilisk.utils.dns import DnsClient
 from basilisk.utils.http import AsyncHttpClient
@@ -104,6 +104,7 @@ class Audit:
         self._autonomous: bool = False
         self._max_steps: int = 100
         self._campaign_enabled: bool = False
+        self._training_profile_path: Path | None = None
 
     @classmethod
     def targets(cls, target_list: list[str], **kwargs: Any) -> Audit:
@@ -170,6 +171,12 @@ class Audit:
     def enable_campaign(self) -> Audit:
         """Enable persistent campaign memory for cross-audit learning."""
         self._campaign_enabled = True
+        return self
+
+    def training(self, profile_path: str | Path) -> Audit:
+        """Enable training validation mode with a profile YAML."""
+        self._training_profile_path = Path(profile_path)
+        self._autonomous = True
         return self
 
     def plugins(self, *names: str) -> Audit:
@@ -244,6 +251,9 @@ class Audit:
         scope = self._build_scope(settings)
         registry, ctx = self._build_context(settings)
 
+        if self._training_profile_path:
+            return await self._run_training(registry, ctx, settings)
+
         if self._autonomous:
             return await self._run_autonomous(registry, ctx, scope, settings)
 
@@ -277,11 +287,53 @@ class Audit:
         from basilisk.orchestrator.selector import Selector
         from basilisk.scoring.scorer import Scorer
 
-        graph = KnowledgeGraph()
+        # Open project DB early so we can restore the knowledge graph
+        kg_store = None
+        db = None
+        if self._project:
+            from basilisk.storage.db import open_db
+
+            db = await open_db(self._project.db_path)
+            from basilisk.knowledge.store import KnowledgeStore
+
+            kg_store = KnowledgeStore(db)
+            await kg_store.init_schema()
+
+        # Load persisted KG from previous runs, or start fresh
+        if kg_store:
+            graph = await kg_store.load()
+            if graph.entity_count > 0:
+                # Clear gap satisfaction flags so planner re-evaluates from scratch.
+                # Execution log (was_executed) handles plugin dedup; satisfaction
+                # flags would prevent gaps from firing for entities that were never
+                # fully explored (e.g. subdomains discovered but never port-scanned).
+                satisfaction_flags = {
+                    "services_checked", "tech_checked", "endpoints_checked",
+                    "forms_checked", "version_checked", "container_runtime_checked",
+                    "containers_enumerated", "config_audited", "vulnerabilities_checked",
+                    "service_tested",
+                }
+                for entity in graph.all_entities():
+                    for flag in satisfaction_flags:
+                        entity.data.pop(flag, None)
+                logger.info(
+                    "Resumed knowledge graph: %d entities, %d relations, %d executions",
+                    graph.entity_count, graph.relation_count, len(graph._execution_log),
+                )
+        else:
+            graph = KnowledgeGraph()
+
         planner = Planner()
         capabilities = build_capabilities(registry)
         selector = Selector(capabilities)
+
+        # Load decision history from previous runs
         history = History()
+        if self._project:
+            history_path = self._project.db_path.parent / "decision_history.json"
+            if history_path.exists():
+                history = History.load(history_path)
+                logger.info("Resumed decision history: %d decisions", len(history._decisions))
 
         # Campaign memory (opt-in cross-audit learning)
         campaign_memory = None
@@ -297,7 +349,17 @@ class Audit:
                 campaign_store, [t.host for t in scope],
             )
 
-        scorer = Scorer(graph, history=history, campaign_memory=campaign_memory)
+        # Reasoning engines — hypothesis generation and belief revision
+        from basilisk.reasoning.belief import EvidenceAggregator
+        from basilisk.reasoning.hypothesis import HypothesisEngine
+
+        hypothesis_engine = HypothesisEngine()
+        evidence_aggregator = EvidenceAggregator(graph, hypothesis_engine)
+
+        scorer = Scorer(
+            graph, history=history, campaign_memory=campaign_memory,
+            hypothesis_engine=hypothesis_engine,
+        )
         core_executor = AsyncExecutor(max_concurrency=settings.scan.max_concurrency)
         orch_executor = OrchestratorExecutor(registry, core_executor, ctx)
         bus = EventBus()
@@ -313,6 +375,58 @@ class Audit:
 
         goal_engine = GoalEngine(goals=list(DEFAULT_GOAL_PROGRESSION))
 
+        # Build live progress adapter: converts loop progress dict → PipelineState
+        # so LiveReportEngine can update the report on every step
+        loop_progress_cb = None
+        if self._on_progress:
+            def _live_progress_adapter(progress_dict: dict) -> None:
+                """Convert loop step progress into PipelineState for report engine."""
+                from basilisk.core.pipeline import PhaseProgress
+
+                step = progress_dict.get("step", 0)
+                entities = progress_dict.get("entities", 0)
+                observations = progress_dict.get("observations", 0)
+
+                state = PipelineState()
+                state.status = "running"
+                state.phases["autonomous"] = PhaseProgress(
+                    phase="autonomous",
+                    total=safety.max_steps,
+                    completed=step,
+                    status="running",
+                )
+
+                # Collect current plugin results from executor context
+                all_results = []
+                for pr in orch_executor.ctx.pipeline.values():
+                    if isinstance(pr, PluginResult):
+                        all_results.append(pr)
+                state.results = all_results
+                state.total_findings = sum(len(pr.findings) for pr in all_results)
+                state.http_schemes = ctx.state.get("http_scheme", {})
+
+                # Minimal autonomous metadata for the live template
+                from basilisk.reporting.autonomous import _build_graph_viz_data
+                state.autonomous = {
+                    "steps": step,
+                    "total_observations": observations,
+                    "termination_reason": "",
+                    "graph_summary": {
+                        "entities": entities,
+                        "relations": graph.relation_count,
+                        "hosts": len(graph.hosts()),
+                        "services": len(graph.services()),
+                        "endpoints": len(graph.endpoints()),
+                        "technologies": len(graph.technologies()),
+                        "findings": len(graph.findings()),
+                    },
+                    "graph_data": _build_graph_viz_data(graph),
+                }
+
+                self._on_progress(state)
+
+            loop_progress_cb = _live_progress_adapter
+
         loop = AutonomousLoop(
             graph=graph,
             planner=planner,
@@ -321,22 +435,12 @@ class Audit:
             executor=orch_executor,
             bus=bus,
             safety=safety,
-            on_progress=None,
+            on_progress=loop_progress_cb,
             history=history,
             goal_engine=goal_engine,
+            hypothesis_engine=hypothesis_engine,
+            evidence_aggregator=evidence_aggregator,
         )
-
-        # Open project DB for knowledge graph persistence if project is set
-        kg_store = None
-        db = None
-        if self._project:
-            from basilisk.storage.db import open_db
-
-            db = await open_db(self._project.db_path)
-            from basilisk.knowledge.store import KnowledgeStore
-
-            kg_store = KnowledgeStore(db)
-            await kg_store.init_schema()
 
         try:
             if ctx.callback:
@@ -455,6 +559,40 @@ class Audit:
                 await ctx.callback.stop()
             if ctx.browser:
                 await ctx.browser.stop()
+
+    async def _run_training(
+        self,
+        registry: PluginRegistry,
+        ctx: PluginContext,
+        settings: Settings,
+    ) -> PipelineState:
+        """Run training validation mode."""
+        from basilisk.training.profile import TrainingProfile
+        from basilisk.training.runner import TrainingRunner
+
+        profile = TrainingProfile.load(self._training_profile_path)
+        runner = TrainingRunner(
+            profile,
+            target_override=self._targets[0] if self._targets else None,
+        )
+        report = await runner.run(config=settings)
+
+        # Log validation summary
+        logger.info(
+            "Training validation: %s — coverage=%.1f%% (%d/%d), verified=%d, passed=%s",
+            report.profile_name,
+            report.coverage * 100,
+            report.discovered,
+            report.total_expected,
+            report.verified,
+            report.passed,
+        )
+
+        # Return a minimal PipelineState for backward compat
+        state = PipelineState()
+        state.status = "completed"
+        state.total_findings = report.discovered
+        return state
 
     @staticmethod
     def _loop_result_to_pipeline_state(result: Any) -> PipelineState:

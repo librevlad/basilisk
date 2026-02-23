@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from basilisk.campaign.memory import CampaignMemory
     from basilisk.memory.history import History
     from basilisk.orchestrator.cost_tracker import CostTracker
+    from basilisk.reasoning.hypothesis import HypothesisEngine
 
 
 class ScoredCapability(BaseModel):
@@ -39,19 +40,28 @@ class Scorer:
         history: History | None = None,
         cost_tracker: CostTracker | None = None,
         campaign_memory: CampaignMemory | None = None,
+        hypothesis_engine: HypothesisEngine | None = None,
     ) -> None:
         self.graph = graph
         self._history = history
         self._cost_tracker = cost_tracker
         self._campaign = campaign_memory
+        self._hypothesis_engine = hypothesis_engine
 
     def rank(
-        self, candidates: list[tuple[Capability, Entity]],
+        self,
+        candidates: list[tuple[Capability, Entity, float]]
+        | list[tuple[Capability, Entity]],
     ) -> list[ScoredCapability]:
         """Score all candidates and return sorted by score descending."""
         scored = []
-        for cap, entity in candidates:
-            score, breakdown = self._score_one(cap, entity)
+        for item in candidates:
+            if len(item) == 3:
+                cap, entity, gap_priority = item
+            else:
+                cap, entity = item
+                gap_priority = 5.0  # default mid-priority
+            score, breakdown = self._score_one(cap, entity, gap_priority)
             reason = self._explain(cap, entity, score)
             scored.append(ScoredCapability(
                 capability=cap,
@@ -63,11 +73,14 @@ class Scorer:
         scored.sort(key=lambda s: s.score, reverse=True)
         return scored
 
-    def _score_one(self, cap: Capability, entity: Entity) -> tuple[float, dict[str, float]]:
+    def _score_one(
+        self, cap: Capability, entity: Entity, gap_priority: float = 5.0,
+    ) -> tuple[float, dict[str, float]]:
         """Compute priority score for a single (capability, entity) pair.
 
         Returns (score, breakdown_dict).
 
+        gap_priority: from planner (1-10), boosts candidates from high-priority gaps
         novelty: 1.0 if entity never explored by this cap, decays with observation_count
         knowledge_gain: len(produces) * (1 - confidence)
         cost: cost_score (1-10)
@@ -130,9 +143,25 @@ class Scorer:
         # Success probability — learned from past runs
         success_probability = self._compute_success_probability(cap)
 
+        # Hypothesis resolution gain — how much this helps resolve active hypotheses
+        hypothesis_gain = 0.0
+        if self._hypothesis_engine is not None:
+            hypothesis_gain = self._hypothesis_engine.resolution_gain(
+                cap.plugin_name, entity.id,
+            )
+
+        # Action type bonus — prefer experiments when uncertain, exploits when justified
+        action_type_bonus = self._compute_action_type_bonus(cap, entity)
+
+        # Gap priority boost — normalized to [0.5, 2.0] range so high-priority gaps
+        # (like host_without_services=10) strongly outrank low-priority gaps (like
+        # low_confidence_entity=3).  Formula: 0.5 + gap_priority / 10 * 1.5
+        gap_boost = 0.5 + gap_priority / 10.0 * 1.5
+
         raw_score = (
             novelty * knowledge_gain * success_probability + unlock_value + prior_bonus
-        ) / denominator
+            + hypothesis_gain + action_type_bonus
+        ) * gap_boost / denominator
 
         breakdown = {
             "novelty": novelty,
@@ -140,6 +169,10 @@ class Scorer:
             "success_probability": success_probability,
             "unlock_value": unlock_value,
             "prior_bonus": prior_bonus,
+            "hypothesis_gain": hypothesis_gain,
+            "action_type_bonus": action_type_bonus,
+            "gap_priority": gap_priority,
+            "gap_boost": gap_boost,
             "cost": cost,
             "noise": noise,
             "repetition_penalty": repetition_penalty,
@@ -177,6 +210,26 @@ class Scorer:
         n_unlocked = count_unlockable_paths(cap.produces_knowledge, self.graph)
         # Each unlocked path contributes 0.3 to the score
         return n_unlocked * 0.3
+
+    @staticmethod
+    def _compute_action_type_bonus(cap: Capability, entity: Entity) -> float:
+        """Bonus based on action type vs current entity confidence.
+
+        - EXPERIMENT + low confidence → prefer testing when uncertain
+        - EXPLOIT + high confidence → prefer exploitation when justified
+        - VERIFICATION + high/critical finding → always valuable
+        """
+        from basilisk.capabilities.capability import ActionType
+
+        if cap.action_type == ActionType.EXPERIMENT and entity.confidence < 0.7:
+            return 0.1
+        if cap.action_type == ActionType.EXPLOIT and entity.confidence >= 0.8:
+            return 0.15
+        if cap.action_type == ActionType.VERIFICATION:
+            severity = entity.data.get("severity", "")
+            if severity in ("high", "critical"):
+                return 0.2
+        return 0.0
 
     @staticmethod
     def _explain(cap: Capability, entity: Entity, score: float) -> str:

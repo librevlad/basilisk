@@ -23,6 +23,7 @@ class ObservationOutcome:
     was_new: bool
     confidence_before: float
     confidence_after: float
+    source_family: str = ""
 
     @property
     def confidence_delta(self) -> float:
@@ -67,11 +68,18 @@ class KnowledgeState:
         if obs.relation:
             self.graph.add_relation(obs.relation)
 
+        # Resolve source family for evidence aggregation
+        source_family = ""
+        if obs.source_plugin:
+            from basilisk.reasoning.belief import get_source_family
+            source_family = get_source_family(obs.source_plugin)
+
         return ObservationOutcome(
             entity_id=entity_id,
             was_new=was_new,
             confidence_before=confidence_before,
             confidence_after=confidence_after,
+            source_family=source_family,
         )
 
     def snapshot(self, step: int, elapsed: float, gap_count: int) -> ContextSnapshot:

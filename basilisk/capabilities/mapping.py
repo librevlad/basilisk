@@ -6,7 +6,7 @@ listed get auto-inferred defaults.
 
 from __future__ import annotations
 
-from basilisk.capabilities.capability import Capability
+from basilisk.capabilities.capability import ActionType, Capability
 from basilisk.core.registry import PluginRegistry
 
 # Explicit capability map: plugin_name -> {requires, produces, cost, noise}
@@ -312,6 +312,21 @@ CAPABILITY_MAP: dict[str, dict] = {
         "requires": ["Endpoint:params"],
         "produces": ["Finding:xss"],
         "cost": 5, "noise": 6,
+    },
+    "xss_dom": {
+        "requires": ["Endpoint"],
+        "produces": ["Finding"],
+        "cost": 5, "noise": 3,
+    },
+    "param_tampering": {
+        "requires": ["Endpoint:params"],
+        "produces": ["Finding"],
+        "cost": 4, "noise": 3,
+    },
+    "auth_bypass": {
+        "requires": ["Endpoint"],
+        "produces": ["Finding", "Credential"],
+        "cost": 5, "noise": 4,
     },
     "ssrf_check": {
         "requires": ["Endpoint:params"],
@@ -710,101 +725,101 @@ CAPABILITY_MAP: dict[str, dict] = {
         "produces": ["Finding"],
         "cost": 2, "noise": 4,
     },
-    # -- Post-Exploit ------------------------------------------------
+    # -- Post-Exploit (require shell access via credentials) ----------
     "credential_harvest": {
-        "requires": ["Host"], "produces": ["Credential"],
+        "requires": ["Credential"], "produces": ["Credential"],
         "cost": 3, "noise": 2,
     },
     "file_system_enum": {
-        "requires": ["Host"], "produces": ["Finding"],
+        "requires": ["Credential"], "produces": ["Finding"],
         "cost": 4, "noise": 2,
     },
     "linux_enum": {
-        "requires": ["Host"],
+        "requires": ["Credential"],
         "produces": ["Finding", "Credential"],
         "cost": 5, "noise": 3,
     },
     "windows_enum": {
-        "requires": ["Host"],
+        "requires": ["Credential"],
         "produces": ["Finding", "Credential"],
         "cost": 5, "noise": 3,
     },
     "network_enum": {
-        "requires": ["Host"], "produces": ["Finding"],
+        "requires": ["Credential"], "produces": ["Finding"],
         "cost": 2, "noise": 2,
     },
     "process_enum": {
-        "requires": ["Host"], "produces": ["Finding"],
+        "requires": ["Credential"], "produces": ["Finding"],
         "cost": 2, "noise": 1,
     },
     "user_enum": {
-        "requires": ["Host"], "produces": ["Finding"],
+        "requires": ["Credential"], "produces": ["Finding"],
         "cost": 2, "noise": 1,
     },
-    # -- PrivEsc -----------------------------------------------------
+    # -- PrivEsc (require shell access via credentials) ---------------
     "capability_exploit": {
-        "requires": ["Host"], "produces": ["Finding"],
+        "requires": ["Credential"], "produces": ["Finding"],
         "cost": 2, "noise": 2,
     },
     "cron_exploit": {
-        "requires": ["Host"], "produces": ["Finding"],
+        "requires": ["Credential"], "produces": ["Finding"],
         "cost": 3, "noise": 2,
     },
     "kernel_exploit": {
-        "requires": ["Host"], "produces": ["Finding"],
+        "requires": ["Credential"], "produces": ["Finding"],
         "cost": 2, "noise": 2,
     },
     "sudo_exploit": {
-        "requires": ["Host"], "produces": ["Finding"],
+        "requires": ["Credential"], "produces": ["Finding"],
         "cost": 3, "noise": 2,
     },
     "suid_exploit": {
-        "requires": ["Host"], "produces": ["Finding"],
+        "requires": ["Credential"], "produces": ["Finding"],
         "cost": 3, "noise": 2,
     },
     "win_service_exploit": {
-        "requires": ["Host"], "produces": ["Finding"],
+        "requires": ["Credential"], "produces": ["Finding"],
         "cost": 3, "noise": 2,
     },
     "win_token_exploit": {
-        "requires": ["Host"], "produces": ["Finding"],
+        "requires": ["Credential"], "produces": ["Finding"],
         "cost": 2, "noise": 2,
     },
-    # -- Lateral -----------------------------------------------------
+    # -- Lateral (require AD services or credentials) -----------------
     "ad_acl_abuse": {
-        "requires": ["Host"], "produces": ["Finding"],
+        "requires": ["Service:ldap"], "produces": ["Finding"],
         "cost": 3, "noise": 3,
     },
     "ad_cert_attack": {
-        "requires": ["Host"], "produces": ["Credential"],
+        "requires": ["Service:ldap"], "produces": ["Credential"],
         "cost": 4, "noise": 5,
     },
     "asrep_roast": {
-        "requires": ["Host"], "produces": ["Credential"],
+        "requires": ["Service:ldap"], "produces": ["Credential"],
         "cost": 4, "noise": 5,
     },
     "bloodhound_collect": {
-        "requires": ["Host"], "produces": ["Finding"],
+        "requires": ["Service:ldap"], "produces": ["Finding"],
         "cost": 6, "noise": 6,
     },
     "constrained_deleg": {
-        "requires": ["Host"], "produces": ["Finding"],
+        "requires": ["Service:ldap"], "produces": ["Finding"],
         "cost": 4, "noise": 5,
     },
     "dcsync": {
-        "requires": ["Host"], "produces": ["Credential"],
+        "requires": ["Credential", "Service:ldap"], "produces": ["Credential"],
         "cost": 6, "noise": 9,
     },
     "gpp_decrypt": {
-        "requires": ["Host"], "produces": ["Credential"],
+        "requires": ["Service:smb"], "produces": ["Credential"],
         "cost": 3, "noise": 2,
     },
     "kerberoast": {
-        "requires": ["Host"], "produces": ["Credential"],
+        "requires": ["Service:ldap"], "produces": ["Credential"],
         "cost": 4, "noise": 5, "risk_domain": "auth",
     },
     "ntlm_relay": {
-        "requires": ["Host"], "produces": ["Finding"],
+        "requires": ["Service:smb"], "produces": ["Finding"],
         "cost": 5, "noise": 6,
     },
     "pass_the_hash": {
@@ -816,67 +831,67 @@ CAPABILITY_MAP: dict[str, dict] = {
         "cost": 5, "noise": 6,
     },
     "secrets_dump": {
-        "requires": ["Host"], "produces": ["Credential"],
+        "requires": ["Credential", "Service:smb"], "produces": ["Credential"],
         "cost": 6, "noise": 9,
     },
-    # -- Crypto ------------------------------------------------------
+    # -- Crypto (jwt/prng need HTTP; others need captured data) -------
     "aes_attack": {
-        "requires": ["Host"], "produces": ["Finding"],
+        "requires": ["Credential"], "produces": ["Finding"],
         "cost": 6, "noise": 1,
     },
     "classical_cipher": {
-        "requires": ["Host"], "produces": ["Finding"],
+        "requires": ["Credential"], "produces": ["Finding"],
         "cost": 3, "noise": 1,
     },
     "custom_crypto": {
-        "requires": ["Host"], "produces": ["Finding"],
+        "requires": ["Credential"], "produces": ["Finding"],
         "cost": 2, "noise": 1,
     },
     "hash_crack": {
-        "requires": ["Host"], "produces": ["Credential"],
+        "requires": ["Credential"], "produces": ["Credential"],
         "cost": 6, "noise": 1, "risk_domain": "crypto",
     },
     "hash_extension": {
-        "requires": ["Host"], "produces": ["Finding"],
+        "requires": ["Credential"], "produces": ["Finding"],
         "cost": 2, "noise": 1,
     },
     "jwt_forge": {
-        "requires": ["Host"], "produces": ["Finding"],
+        "requires": ["Service:http"], "produces": ["Finding"],
         "cost": 3, "noise": 1,
     },
     "prng_crack": {
-        "requires": ["Host"], "produces": ["Finding"],
+        "requires": ["Service:http"], "produces": ["Finding"],
         "cost": 3, "noise": 1,
     },
     "rsa_attack": {
-        "requires": ["Host"], "produces": ["Finding"],
+        "requires": ["Credential"], "produces": ["Finding"],
         "cost": 6, "noise": 1,
     },
-    # -- Forensics ---------------------------------------------------
+    # -- Forensics (require local access via credentials) -------------
     "disk_forensics": {
-        "requires": ["Host"], "produces": ["Finding"],
+        "requires": ["Credential"], "produces": ["Finding"],
         "cost": 6, "noise": 1,
     },
     "file_forensics": {
-        "requires": ["Host"], "produces": ["Finding"],
+        "requires": ["Credential"], "produces": ["Finding"],
         "cost": 3, "noise": 1,
     },
     "log_analyze": {
-        "requires": ["Host"], "produces": ["Finding"],
+        "requires": ["Credential"], "produces": ["Finding"],
         "cost": 3, "noise": 1, "risk_domain": "forensics",
     },
     "memory_analyze": {
-        "requires": ["Host"],
+        "requires": ["Credential"],
         "produces": ["Finding", "Credential"],
         "cost": 8, "noise": 1,
     },
     "pcap_analyze": {
-        "requires": ["Host"],
+        "requires": ["Credential"],
         "produces": ["Finding", "Credential"],
         "cost": 6, "noise": 1,
     },
     "steganography": {
-        "requires": ["Host"], "produces": ["Finding"],
+        "requires": ["Credential"], "produces": ["Finding"],
         "cost": 3, "noise": 1,
     },
 }
@@ -885,6 +900,42 @@ CAPABILITY_MAP: dict[str, dict] = {
 def _noise_from_risk(risk_level: str) -> float:
     """Derive noise score from plugin risk_level."""
     return {"safe": 1.0, "noisy": 5.0, "destructive": 9.0}.get(risk_level, 1.0)
+
+
+_CATEGORY_TO_ACTION: dict[str, ActionType] = {
+    "recon": ActionType.ENUMERATION,
+    "scanning": ActionType.ENUMERATION,
+    "analysis": ActionType.EXPERIMENT,
+    "pentesting": ActionType.EXPERIMENT,
+    "exploitation": ActionType.EXPLOIT,
+    "lateral": ActionType.EXPLOIT,
+    "privesc": ActionType.EXPLOIT,
+    "post_exploit": ActionType.EXPLOIT,
+    "crypto": ActionType.EXPERIMENT,
+    "forensics": ActionType.ENUMERATION,
+}
+
+
+def _infer_action_type(category: str, reduces_uncertainty: list[str]) -> ActionType:
+    """Auto-infer action type from category, with verification override."""
+    if reduces_uncertainty:
+        return ActionType.VERIFICATION
+    return _CATEGORY_TO_ACTION.get(category, ActionType.ENUMERATION)
+
+
+def _infer_state_delta(
+    produces: list[str], reduces: list[str],
+) -> dict[str, object]:
+    """Auto-infer expected state delta from produces/reduces knowledge."""
+    delta: dict[str, object] = {}
+    if produces:
+        delta["produces_entities"] = produces
+    if reduces:
+        delta["strengthens_entities"] = reduces
+        delta["uncertainty_reduction"] = 0.3
+    else:
+        delta["uncertainty_reduction"] = 0.1
+    return delta
 
 
 _CATEGORY_TO_DOMAIN: dict[str, str] = {
@@ -920,17 +971,21 @@ def build_capabilities(registry: PluginRegistry) -> dict[str, Capability]:
 
         if name in CAPABILITY_MAP:
             m = CAPABILITY_MAP[name]
+            reduces = m.get("reduces_uncertainty", [])
+            produces = m["produces"]
             cap = Capability(
                 name=name,
                 plugin_name=name,
                 category=meta.category.value,
                 requires_knowledge=m["requires"],
-                produces_knowledge=m["produces"],
+                produces_knowledge=produces,
                 cost_score=m["cost"],
                 noise_score=m["noise"],
                 execution_time_estimate=meta.timeout,
-                reduces_uncertainty=m.get("reduces_uncertainty", []),
+                reduces_uncertainty=reduces,
                 risk_domain=m.get("risk_domain", _infer_risk_domain(meta.category.value)),
+                action_type=_infer_action_type(meta.category.value, reduces),
+                expected_state_delta=_infer_state_delta(produces, reduces),
             )
         else:
             # Auto-infer from PluginMeta
@@ -948,6 +1003,8 @@ def build_capabilities(registry: PluginRegistry) -> dict[str, Capability]:
                 noise_score=_noise_from_risk(meta.risk_level),
                 execution_time_estimate=meta.timeout,
                 risk_domain=_infer_risk_domain(meta.category.value),
+                action_type=_infer_action_type(meta.category.value, []),
+                expected_state_delta=_infer_state_delta(produces, []),
             )
 
         capabilities[name] = cap

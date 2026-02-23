@@ -177,3 +177,39 @@ class GoalEngine:
                 return goal
 
         return self.active_goal
+
+    def goal_progress_delta(
+        self, before_snapshot: dict[str, int], after_snapshot: dict[str, int],
+    ) -> float:
+        """Compute progress toward the active goal between two snapshots.
+
+        Maps GoalType to relevant metrics and returns normalized delta [0.0, 1.0].
+        Snapshots should have keys: host_count, service_count, endpoint_count,
+        technology_count, finding_count, vulnerability_count.
+        """
+        goal = self.active_goal
+        if goal is None:
+            return 0.0
+
+        # Map goal types to relevant metrics
+        goal_metrics: dict[GoalType, list[str]] = {
+            GoalType.RECON: ["host_count", "service_count"],
+            GoalType.SURFACE_MAPPING: ["endpoint_count", "technology_count"],
+            GoalType.EXPLOIT: ["finding_count"],
+            GoalType.PRIVILEGE_ESCALATION: ["finding_count"],
+            GoalType.VERIFICATION: ["finding_count"],
+        }
+
+        metrics = goal_metrics.get(goal.type, [])
+        if not metrics:
+            return 0.0
+
+        total_delta = 0.0
+        for metric in metrics:
+            before = before_snapshot.get(metric, 0)
+            after = after_snapshot.get(metric, 0)
+            if after > before:
+                total_delta += (after - before)
+
+        # Normalize: each new entity contributes ~0.05, cap at 1.0
+        return min(total_delta * 0.05, 1.0)

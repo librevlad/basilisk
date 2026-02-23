@@ -25,6 +25,10 @@ class EventType(StrEnum):
     STEP_COMPLETED = "step_completed"
     DECISION_MADE = "decision_made"
     FINDING_VERIFIED = "finding_verified"
+    BELIEF_STRENGTHENED = "belief_strengthened"
+    BELIEF_WEAKENED = "belief_weakened"
+    HYPOTHESIS_CONFIRMED = "hypothesis_confirmed"
+    HYPOTHESIS_REJECTED = "hypothesis_rejected"
 
 
 @dataclass

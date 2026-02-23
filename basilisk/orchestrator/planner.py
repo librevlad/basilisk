@@ -417,6 +417,35 @@ def _attack_path_gaps(graph: KnowledgeGraph) -> list[KnowledgeGap]:
     return gaps
 
 
+def _hypothesis_validation(graph: KnowledgeGraph) -> list[KnowledgeGap]:
+    """Active hypotheses with uncertain confidence need testing.
+
+    Fires for hypotheses where confidence is in [0.3, 0.7] — these are
+    uncertain enough to benefit from additional evidence gathering.
+    """
+    gaps = []
+    for hypothesis in graph.active_hypotheses():
+        if not (0.3 <= hypothesis.confidence <= 0.7):
+            continue
+        # Use the first target entity, or first related entity
+        target_ids = hypothesis.target_entity_ids or hypothesis.related_entity_ids
+        if not target_ids:
+            continue
+        target_entity = graph.get(target_ids[0])
+        if target_entity is None:
+            continue
+        gaps.append(KnowledgeGap(
+            entity=target_entity,
+            missing="hypothesis_validation",
+            priority=5.5,
+            description=(
+                f"Hypothesis '{hypothesis.statement[:60]}' "
+                f"(conf={hypothesis.confidence:.2f}) needs validation"
+            ),
+        ))
+    return gaps
+
+
 _RULES = [
     _host_without_services,
     _host_without_dns,
@@ -435,4 +464,5 @@ _RULES = [
     _container_without_config_audit,
     _container_without_image_analysis,
     _attack_path_gaps,
+    _hypothesis_validation,
 ]

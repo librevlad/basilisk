@@ -19,6 +19,8 @@ class ContextSnapshot(BaseModel):
     gap_count: int = 0
     elapsed_seconds: float = 0.0
     step: int = 0
+    active_hypothesis_count: int = 0
+    confirmed_hypothesis_count: int = 0
 
 
 class EvaluatedOption(BaseModel):
@@ -55,6 +57,9 @@ class Decision(BaseModel):
     chosen_target: str = ""
     chosen_score: float = 0.0
     reasoning_trace: str = ""
+    related_hypothesis_ids: list[str] = Field(default_factory=list)
+    hypothesis_resolution_gain: float = 0.0
+    action_type: str = ""
 
     # Filled after execution
     outcome_observations: int = 0

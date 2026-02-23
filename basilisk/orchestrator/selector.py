@@ -29,6 +29,7 @@ _GAP_TO_PRODUCES: dict[str, list[str]] = {
     "container_enumeration": ["Container", "Image"],
     "container_config_audit": ["Finding"],
     "image_analysis": ["Finding", "Vulnerability"],
+    "hypothesis_validation": ["Finding", "Vulnerability", "Technology"],
 }
 
 
@@ -40,12 +41,12 @@ class Selector:
 
     def match(
         self, gaps: list[KnowledgeGap], graph: KnowledgeGraph,
-    ) -> list[tuple[Capability, Entity]]:
+    ) -> list[tuple[Capability, Entity, float]]:
         """For each gap, find capabilities that can fill it.
 
-        Returns (capability, target_entity) pairs.
+        Returns (capability, target_entity, gap_priority) triples.
         """
-        candidates: list[tuple[Capability, Entity]] = []
+        candidates: list[tuple[Capability, Entity, float]] = []
         seen: set[tuple[str, str]] = set()
 
         # Pre-compute which host entity IDs are IPs/localhost
@@ -87,7 +88,7 @@ class Selector:
                     key = (cap.name, gap.entity.id)
                 if key not in seen:
                     seen.add(key)
-                    candidates.append((cap, gap.entity))
+                    candidates.append((cap, gap.entity, gap.priority))
 
         return candidates
 
