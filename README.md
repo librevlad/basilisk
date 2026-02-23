@@ -171,14 +171,16 @@ Capability(
 ### Scoring Formula
 
 ```
-priority = (novelty * knowledge_gain) / (cost + noise + repetition_penalty)
+priority = (novelty * knowledge_gain + unlock_value + prior_bonus) / (cost + noise + repetition_penalty)
 ```
 
 | Component | Formula | Purpose |
 |-----------|---------|---------|
 | `novelty` | `1 / (1 + (obs_count - 1) * 0.3)` | Prefer unexplored entities |
 | `knowledge_gain` | `len(produces) * (1 - confidence)` | Prefer low-confidence targets |
-| `cost` | capability.cost_score | Penalize expensive plugins |
+| `unlock_value` | `unlockable_paths * 0.3` | Reward capabilities that open attack paths |
+| `prior_bonus` | Campaign-aware (0.15 / tech_rate*0.2) | Reward known infrastructure |
+| `cost` | capability.cost_score (campaign/tracker adjusted) | Penalize expensive plugins |
 | `noise` | capability.noise_score | Penalize noisy plugins |
 | `repetition_penalty` | Adaptive from History | Prevent repeat execution |
 
@@ -186,7 +188,7 @@ priority = (novelty * knowledge_gain) / (cost + noise + repetition_penalty)
 
 ## Gap Detection (Planner)
 
-The Planner examines the knowledge graph and identifies 11 types of knowledge gaps:
+The Planner examines the knowledge graph and identifies 12 types of knowledge gaps:
 
 | # | Gap | Priority | Condition | Typical Plugins |
 |---|-----|----------|-----------|-----------------|
@@ -201,6 +203,7 @@ The Planner examines the knowledge graph and identifies 11 types of knowledge ga
 | 9 | `credential_exploitation` | 7.5 | Credentials found | credential_spray |
 | 10 | `version` | 4.0 | Technology without version | version_detect |
 | 11 | `confirmation` | 3.0 | Low confidence entity (<0.5) | Any matching plugin |
+| 12 | `attack_path` | path.risk | Attack path preconditions met | Path-specific actions |
 
 ---
 
@@ -235,6 +238,37 @@ SafetyLimits(
 
 ---
 
+## Campaign Memory
+
+Persistent cross-audit learning system. Remembers infrastructure, plugin effectiveness, and
+technology stacks across audits. System is opt-in, disabled by default.
+
+```bash
+# Enable via CLI
+basilisk auto example.com --campaign
+
+# Enable via config
+# campaign:
+#   enabled: true
+```
+
+```python
+# Enable via API
+results = await Audit("example.com").autonomous().enable_campaign().run()
+```
+
+**What it learns:**
+- **Target profiles** — services, technologies, endpoints, findings per host
+- **Plugin efficacy** — per-plugin success rates with tech-stack breakdown
+- **Tech fingerprints** — technology patterns per organization (base domain)
+
+**How it helps:**
+- Adjusts plugin cost based on historical success rate (discount proven plugins, penalize ineffective)
+- Adds prior bonus for known infrastructure (skip redundant discovery)
+- Data stored in `~/.basilisk/campaigns/campaign.db` (SQLite WAL)
+
+---
+
 ## Plugin Categories
 
 | Category | Count | Examples |
@@ -259,6 +293,7 @@ basilisk auto <target> [options]
 
 Options:
   --max-steps, -n N       Max autonomous steps (default: 100)
+  --campaign/--no-campaign  Enable persistent campaign memory
   --plugins LIST          Whitelist specific plugins
   --exclude, -x LIST      Exclude plugins by name or prefix
   --config PATH           YAML config file
@@ -387,10 +422,11 @@ basilisk/
 ├── knowledge/             # Knowledge graph: entities, relations, state, store
 ├── observations/          # PluginResult -> Observation adapter
 ├── capabilities/          # Plugin capability mapping (138 explicit + auto-inference)
-├── scoring/               # Priority scoring engine
+├── scoring/               # Priority scoring engine (campaign-aware)
 ├── decisions/             # Decision model, context snapshots, evaluated options
 ├── memory/                # Decision history, adaptive repetition penalty
-├── orchestrator/          # Autonomous loop: planner, selector, executor, safety, timeline
+├── campaign/              # Persistent campaign memory (cross-audit learning)
+├── orchestrator/          # Autonomous loop: planner, selector, executor, safety, attack paths
 ├── events/                # Event bus (9 event types, sync/async handlers)
 ├── data/                  # Fingerprint databases, data loader
 ├── utils/                 # HTTP client, DNS, rate limiter, payloads, WAF bypass
