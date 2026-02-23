@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Проект
 
-**Basilisk v3.1.0** — профессиональный модульный фреймворк безопасности для разведки, анализа и пентеста доменов. Два режима: классический pipeline и автономный движок на knowledge graph с детерминированными decision traces. Плагинная архитектура с автообнаружением, мультипровайдерная агрегация данных, TUI-дашборд в реальном времени, SQLite-хранилище для миллионов записей.
+**Basilisk v3.2.0** — профессиональный модульный фреймворк безопасности для разведки, анализа и пентеста доменов. Два режима: классический pipeline и автономный движок на knowledge graph с детерминированными decision traces. Плагинная архитектура с автообнаружением, мультипровайдерная агрегация данных, TUI-дашборд в реальном времени, SQLite-хранилище для миллионов записей. Persistent campaign memory для кросс-аудитного обучения.
 
 Философия: сделать с хакерскими утилитами то, что Laravel сделал с Symfony — элегантные абстракции поверх мощных инструментов.
 
@@ -12,7 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 # Тесты
-.venv/Scripts/python.exe -m pytest tests/ -v              # все 1441 тестов
+.venv/Scripts/python.exe -m pytest tests/ -v              # все 1664 тестов
 .venv/Scripts/python.exe -m pytest tests/test_plugins/ -v  # только плагины (324)
 .venv/Scripts/python.exe -m pytest tests/ -x --tb=short    # до первого падения
 
@@ -23,6 +23,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Запуск
 .venv/Scripts/python.exe -m basilisk auto example.com                # автономный аудит (основной)
 .venv/Scripts/python.exe -m basilisk auto example.com -n 50          # с лимитом шагов
+.venv/Scripts/python.exe -m basilisk auto example.com --campaign     # с campaign memory
 .venv/Scripts/python.exe -m basilisk audit example.com               # классический pipeline
 .venv/Scripts/python.exe -m basilisk run ssl_check example.com       # один плагин
 .venv/Scripts/python.exe -m basilisk plugins                         # 178 плагинов
@@ -99,15 +100,23 @@ basilisk/
 │   └── history.py                 # History: decision log, repetition penalty, persistence
 │
 ├── scoring/                       # [v3] Scoring engine
-│   └── scorer.py                  # Scorer: novelty * knowledge_gain / cost + noise + breakdown
+│   └── scorer.py                  # Scorer: multi-component formula + campaign-aware cost
 │
 ├── orchestrator/                  # [v3] Автономный движок
-│   ├── planner.py                 # Planner: 7 правил обнаружения knowledge gaps
+│   ├── planner.py                 # Planner: 12 правил обнаружения knowledge gaps
 │   ├── selector.py                # Selector: match gaps → capabilities, pick batch
 │   ├── executor.py                # OrchestratorExecutor: обёртка над core executor
 │   ├── loop.py                    # AutonomousLoop: цикл + decision tracing + KnowledgeState
+│   ├── attack_paths.py            # [v3.2] Multi-step attack path scoring
+│   ├── cost_tracker.py            # [v3.2] Runtime plugin cost learning
 │   ├── safety.py                  # SafetyLimits: max_steps, max_duration, cooldown
 │   └── timeline.py                # Timeline: структурированный лог выполнения
+│
+├── campaign/                      # [v3.2] Persistent campaign memory
+│   ├── models.py                  # TargetProfile, PluginEfficacy, TechFingerprint
+│   ├── store.py                   # CampaignStore: async SQLite (3 tables, WAL mode)
+│   ├── memory.py                  # CampaignMemory: in-memory aggregator, scorer query API
+│   └── extractor.py               # Extract profiles/efficacy/fingerprints from KG
 │
 ├── events/                        # [v3] Event Bus
 │   └── bus.py                     # EventBus: subscribe/emit + DECISION_MADE event
@@ -119,7 +128,6 @@ basilisk/
 │   ├── rate_limiter.py            # Token bucket (aiolimiter), global + per-host
 │   ├── wordlists.py               # WordlistManager: bundle/download/stream
 │   ├── batch_check.py             # batch_head_check — parallel HEAD probing
-│   ├── baseline.py                # Baseline response comparison
 │   ├── browser.py                 # BrowserManager (headless Playwright)
 │   ├── diff.py                    # ResponseDiffer
 │   ├── dynamic_wordlist.py        # DynamicWordlistGenerator
@@ -145,7 +153,7 @@ basilisk/
 │   ├── live_html.py               # Liquid glass live HTML report
 │   └── templates/report.html.j2   # HTML-шаблон (dark theme)
 │
-└── plugins/                       # 175 плагинов (auto-discover)
+└── plugins/                       # 178 плагинов (auto-discover)
     ├── recon/        (23)         # dns_enum, subdomain_*, whois, reverse_ip,
     │                              # asn_lookup, web_crawler, email_harvest,
     │                              # github_dorking, robots_parser, sitemap_parser, ...
@@ -153,18 +161,18 @@ basilisk/
     │                              # cors_scan, graphql_detect, websocket_detect, ...
     ├── analysis/     (21)         # http_headers, tech_detect, takeover_check,
     │                              # js_secret_scan, csp_analyzer, waf_detect, ...
-    ├── pentesting/   (55)         # git_exposure, dir_brute, sqli_*, xss_*,
+    ├── pentesting/   (57)         # git_exposure, dir_brute, sqli_*, xss_*,
     │                              # ssrf_*, ssti_*, command_injection, lfi_check,
     │                              # jwt_attack, cors_exploit, cache_poison, ...
-    ├── exploitation/ (18)         # cors_exploit, graphql_exploit, nosqli_verify, ...
+    ├── exploitation/ (21)         # cors_exploit, graphql_exploit, nosqli_verify, ...
     ├── crypto/        (8)         # hash_crack, padding_oracle, weak_random, ...
     ├── lateral/      (12)         # service_brute, ssh_brute, credential_spray, ...
     ├── privesc/       (7)         # suid_finder, kernel_suggest, ...
     ├── post_exploit/  (7)         # data_exfil, persistence_check, ...
     └── forensics/     (6)         # log_analyzer, memory_dump, ...
 
-wordlists/bundled/                 # 13 словарей
-tests/                             # 1441 тест, 70+ файлов
+wordlists/bundled/                 # 6 словарей
+tests/                             # 1664 тестов, 80+ файлов
 ├── test_models/                   # 43 теста
 ├── test_core/                     # 167 тестов
 ├── test_plugins/                  # 324 теста (110/110 плагинов покрыты)
@@ -177,9 +185,10 @@ tests/                             # 1441 тест, 70+ файлов
 ├── test_capabilities/             # 8 тестов (mapping)
 ├── test_decisions/                # 12 тестов (decision model)
 ├── test_memory/                   # 19 тестов (history, repetition penalty)
-├── test_scoring/                  # 14 тестов (scorer + breakdown)
-├── test_orchestrator/             # 51 тест (loop + decisions, planner, selector, safety + cooldown)
+├── test_scoring/                  # 22 теста (scorer + breakdown + multistep)
+├── test_orchestrator/             # 73 теста (loop, planner, selector, safety, attack_paths, cost_tracker)
 ├── test_events/                   # 5 тестов (bus)
+├── test_campaign/                 # 61 тест (models, store, memory, extractor, integration)
 └── test_cli.py, test_config.py    # 24 теста
 
 examples/git/                      # Скрипты массового сканирования
@@ -252,22 +261,27 @@ class MyPlugin(BasePlugin):
 results = await Audit("example.com").discover().scan().analyze().pentest().report(["json", "html"]).run()
 # Автономный режим (v3)
 results = await Audit("example.com").autonomous(max_steps=50).run()
+# Автономный с campaign memory (v3.2)
+results = await Audit("example.com").autonomous(max_steps=50).enable_campaign().run()
 # Один плагин
 results = await Audit.run_plugin("ssl_check", ["example.com"])
 ```
 
-### Автономный движок (v3 + v3.1 decision tracing)
-- `KnowledgeGraph` — in-memory граф с entities, relations, dedup, confidence merge
+### Автономный движок (v3 + v3.1 decision tracing + v3.2 campaign memory)
+- `KnowledgeGraph` — in-memory граф с entities, relations, dedup, confidence merge, decay
 - `KnowledgeState` — [v3.1] delta-tracking wrapper, `apply_observation()` → `ObservationOutcome`
-- `Planner` — 7 правил обнаружения gaps (host_without_services, http_without_tech, ...)
+- `Planner` — 13 правил обнаружения gaps (host_without_services, attack_paths, ...)
 - `Selector` — match gaps → capabilities, pick batch (budget-constrained)
-- `Scorer` — формула + `score_breakdown` dict + опциональная `History` для repetition penalty
+- `Scorer` — формула + `score_breakdown` dict + campaign-aware cost + prior_bonus
+- `AttackPaths` — [v3.2] multi-step exploit chain scoring, unlock_value
+- `CostTracker` — [v3.2] runtime plugin success/failure statistics, adaptive cost adjustment
+- `CampaignMemory` — [v3.2] persistent cross-audit learning (SQLite, opt-in)
 - `Decision` — [v3.1] полная запись: context snapshot, evaluated options, reasoning trace, outcome
 - `History` — [v3.1] лог решений, repetition penalty (decay + unproductive multiplier), JSON persistence
 - `AutonomousLoop` — seed → find_gaps → match → score → **build decision** → execute → apply → repeat
 - `SafetyLimits` — max_steps, max_duration_seconds, batch_size, cooldown tracking
 - `adapter.py` — конвертация `PluginResult` → `list[Observation]` → entities/relations в граф
-- `mapping.py` — все 175 плагинов маппятся на requires/produces/cost/noise
+- `mapping.py` — все 178 плагинов маппятся на requires/produces/cost/noise
 
 ### Инициализация контекста (паттерн из facade.py:135-241)
 ```python
@@ -380,7 +394,7 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 **Scopes** (один из):
 `plugins`, `orchestrator`, `knowledge`, `pipeline`, `tui`, `cli`, `storage`, `reporting`,
 `utils`, `models`, `core`, `scoring`, `observations`, `capabilities`, `decisions`, `memory`,
-`events`, `data`, `config`
+`events`, `data`, `config`, `campaign`
 
 **Примеры:**
 ```
@@ -467,7 +481,7 @@ git checkout develop && git merge master
                           │                                                 │
   Targets ──► SEED ──►    │  ┌─────────┐    ┌──────────┐    ┌───────────┐  │
   (hosts)   (create       │  │ PLANNER │───►│ SELECTOR │───►│  SCORER   │  │
-             Host         │  │ 11 gap  │    │ match +  │    │ rank by   │  │
+             Host         │  │ 13 gap  │    │ match +  │    │ rank by   │  │
              entities)    │  │ rules   │    │ pick     │    │ priority  │  │
                           │  └────┬────┘    └──────────┘    └─────┬─────┘  │
                           │       │                               │        │
@@ -516,6 +530,7 @@ git checkout develop && git merge master
 ### Fluent API
 ```python
 results = await Audit("example.com").autonomous(max_steps=50).run()      # автономный
+results = await Audit("example.com").autonomous().enable_campaign().run() # с campaign memory
 results = await Audit("example.com").discover().scan().analyze().pentest().run()  # pipeline
 results = await Audit.run_plugin("ssl_check", ["example.com"])           # один плагин
 ```
@@ -695,16 +710,23 @@ class Capability(BaseModel):
 ### Формула скоринга (`scoring/scorer.py`)
 
 ```
-priority = (novelty * knowledge_gain) / (cost + noise + repetition_penalty)
+priority = (novelty * knowledge_gain + unlock_value + prior_bonus) / (cost + noise + repetition_penalty)
 ```
 
 | Компонент | Формула |
 |-----------|---------|
 | `novelty` | `1.0 / (1.0 + (observation_count - 1) * 0.3)` |
 | `knowledge_gain` | `len(produces) * (1.0 - confidence)`, min 0.1 |
-| `cost` | `cap.cost_score` (1-10) |
+| `unlock_value` | `count_unlockable_paths() * 0.3` — будущая ценность от attack paths |
+| `prior_bonus` | Campaign-aware: 0.15 для известной инфры, `tech_rate * 0.2` для стека |
+| `cost` | `cap.cost_score` (1-10), campaign/cost_tracker adjusted |
 | `noise` | `cap.noise_score` (1-10) |
 | `repetition_penalty` | Adaptive из History или binary 5.0 из графа |
+
+**Cost sources** (приоритет):
+1. `CostTracker` — runtime plugin statistics (текущий аудит)
+2. `CampaignMemory` — cross-audit learned cost (если нет CostTracker)
+3. `cap.cost_score` — статический cost из capability map (fallback)
 
 **Adaptive repetition penalty** (с History):
 ```
@@ -730,7 +752,7 @@ penalty = base_penalty * time_decay * (unproductive_multiplier if unproductive e
 Planner (`orchestrator/planner.py`) анализирует knowledge graph и обнаруживает пробелы
 в знаниях — `KnowledgeGap(entity, missing, priority, description)`.
 
-### 11 правил обнаружения gaps
+### 12 правил обнаружения gaps
 
 | # | Правило | missing | Приоритет | Условие |
 |---|---------|---------|-----------|---------|
@@ -745,6 +767,7 @@ Planner (`orchestrator/planner.py`) анализирует knowledge graph и о
 | 9 | `_credential_without_exploitation` | `"credential_exploitation"` | **7.5** | Существует Credential |
 | 10 | `_technology_without_version` | `"version"` | **4.0** | Technology без `version` |
 | 11 | `_low_confidence_entity` | `"confirmation"` | **3.0** | Entity с `confidence < 0.5` |
+| 12 | `_attack_path_gaps` | `"attack_path"` | **path.risk** | Attack path preconditions met, actions available |
 
 ### Gap satisfaction flags
 
@@ -850,6 +873,49 @@ class SafetyLimits(BaseModel):
 
 Структурированный лог: `TimelineEntry` с step, timestamp, capability, target_entity,
 knowledge_gained, confidence_delta, duration. `summary()` -> human-readable лог.
+
+---
+
+## Campaign Memory (v3.2)
+
+Persistent cross-audit learning. Запоминает инфраструктуру, эффективность плагинов и
+технологические стеки между аудитами. Opt-in, по умолчанию выключена.
+
+### Хранилище
+
+```
+~/.basilisk/campaigns/campaign.db     ← SQLite (WAL mode)
+├── target_profiles   (per-host)      ← запомненные сервисы, технологии, findings
+├── plugin_efficacy   (global)        ← per-plugin success rates с tech-stack breakdown
+└── tech_fingerprints (per-domain)    ← паттерны технологий по организациям
+```
+
+### Модели (`campaign/models.py`)
+
+| Модель | Ключ | Назначение |
+|--------|------|-----------|
+| `TargetProfile` | `host` | Сервисы, технологии, endpoints, findings per host |
+| `PluginEfficacy` | `plugin_name` | Success rate, new entities, runtime, tech_stack_stats |
+| `TechFingerprint` | `base_domain` | Технологии по организации (nginx, php, wordpress) |
+
+### Интеграция со Scorer
+
+- **Campaign cost**: `adjusted_cost()` → discount для проверенных плагинов, penalty для бесполезных
+- **Prior bonus**: 0.15 для известной инфраструктуры (host+port), `tech_rate * 0.2` для стека
+- Приоритет: CostTracker > CampaignMemory > static cost_score
+
+### Активация
+
+```bash
+basilisk auto example.com --campaign          # CLI
+```
+```python
+Audit("example.com").autonomous().enable_campaign().run()  # API
+```
+```yaml
+campaign:
+  enabled: true                              # config YAML
+```
 
 ---
 
