@@ -204,9 +204,8 @@ class TestHttpHostWithoutVulnTesting:
             source_id=host.id, target_id=svc.id, type=RelationType.EXPOSES,
         ))
         # Even with findings already present, gap still fires
-        from basilisk.knowledge.entities import Entity as E
-        finding = E(
-            id=E.make_id(EntityType.FINDING, host="web.com", title="test"),
+        finding = Entity(
+            id=Entity.make_id(EntityType.FINDING, host="web.com", title="test"),
             type=EntityType.FINDING,
             data={"host": "web.com", "title": "test", "severity": "high"},
         )

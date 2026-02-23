@@ -1,2 +1,0 @@
-flavor-developer
-flavor-starter
