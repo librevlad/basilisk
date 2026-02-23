@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Проект
 
-**Basilisk v3.2.0** — профессиональный модульный фреймворк безопасности для разведки, анализа и пентеста доменов. Два режима: классический pipeline и автономный движок на knowledge graph с детерминированными decision traces. Плагинная архитектура с автообнаружением, мультипровайдерная агрегация данных, TUI-дашборд в реальном времени, SQLite-хранилище для миллионов записей. Persistent campaign memory для кросс-аудитного обучения.
+**Basilisk v3.3.0** — профессиональный модульный фреймворк безопасности для разведки, анализа и пентеста доменов. Два режима: классический pipeline и автономный движок на knowledge graph с детерминированными decision traces. Плагинная архитектура с автообнаружением, мультипровайдерная агрегация данных, TUI-дашборд в реальном времени, SQLite-хранилище для миллионов записей. Persistent campaign memory для кросс-аудитного обучения. Container security audit подсистема.
 
 Философия: сделать с хакерскими утилитами то, что Laravel сделал с Symfony — элегантные абстракции поверх мощных инструментов.
 
@@ -12,8 +12,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 # Тесты
-.venv/Scripts/python.exe -m pytest tests/ -v              # все 1664 тестов
-.venv/Scripts/python.exe -m pytest tests/test_plugins/ -v  # только плагины (324)
+.venv/Scripts/python.exe -m pytest tests/ -v              # все 1798 тестов
+.venv/Scripts/python.exe -m pytest tests/test_plugins/ -v  # только плагины (345)
 .venv/Scripts/python.exe -m pytest tests/ -x --tb=short    # до первого падения
 
 # Линтинг
@@ -26,7 +26,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 .venv/Scripts/python.exe -m basilisk auto example.com --campaign     # с campaign memory
 .venv/Scripts/python.exe -m basilisk audit example.com               # классический pipeline
 .venv/Scripts/python.exe -m basilisk run ssl_check example.com       # один плагин
-.venv/Scripts/python.exe -m basilisk plugins                         # 178 плагинов
+.venv/Scripts/python.exe -m basilisk plugins                         # 185 плагинов
 .venv/Scripts/python.exe -m basilisk tui                             # TUI дашборд
 
 # Установка
@@ -91,7 +91,7 @@ basilisk/
 │
 ├── capabilities/                  # [v3] Маппинг плагинов на capabilities
 │   ├── capability.py              # Capability model (requires/produces/cost/noise)
-│   └── mapping.py                 # CAPABILITY_MAP для 175 плагинов
+│   └── mapping.py                 # CAPABILITY_MAP для 185 плагинов
 │
 ├── decisions/                     # [v3.1] Decision tracing
 │   └── decision.py                # Decision, ContextSnapshot, EvaluatedOption
@@ -103,10 +103,11 @@ basilisk/
 │   └── scorer.py                  # Scorer: multi-component formula + campaign-aware cost
 │
 ├── orchestrator/                  # [v3] Автономный движок
-│   ├── planner.py                 # Planner: 12 правил обнаружения knowledge gaps
+│   ├── planner.py                 # Planner: 17 правил обнаружения knowledge gaps
 │   ├── selector.py                # Selector: match gaps → capabilities, pick batch
 │   ├── executor.py                # OrchestratorExecutor: обёртка над core executor
 │   ├── loop.py                    # AutonomousLoop: цикл + decision tracing + KnowledgeState
+│   ├── goals.py                   # [v3.3] GoalEngine: 5-goal progression, success_probability
 │   ├── attack_paths.py            # [v3.2] Multi-step attack path scoring
 │   ├── cost_tracker.py            # [v3.2] Runtime plugin cost learning
 │   ├── safety.py                  # SafetyLimits: max_steps, max_duration, cooldown
@@ -153,18 +154,21 @@ basilisk/
 │   ├── live_html.py               # Liquid glass live HTML report
 │   └── templates/report.html.j2   # HTML-шаблон (dark theme)
 │
-└── plugins/                       # 178 плагинов (auto-discover)
+└── plugins/                       # 185 плагинов (auto-discover)
     ├── recon/        (23)         # dns_enum, subdomain_*, whois, reverse_ip,
     │                              # asn_lookup, web_crawler, email_harvest,
     │                              # github_dorking, robots_parser, sitemap_parser, ...
-    ├── scanning/     (16)         # port_scan, ssl_check, service_detect, cdn_detect,
-    │                              # cors_scan, graphql_detect, websocket_detect, ...
-    ├── analysis/     (21)         # http_headers, tech_detect, takeover_check,
-    │                              # js_secret_scan, csp_analyzer, waf_detect, ...
+    ├── scanning/     (19)         # port_scan, ssl_check, service_detect, cdn_detect,
+    │                              # cors_scan, graphql_detect, websocket_detect,
+    │                              # container_discovery, container_enumeration, registry_lookup, ...
+    ├── analysis/     (23)         # http_headers, tech_detect, takeover_check,
+    │                              # js_secret_scan, csp_analyzer, waf_detect,
+    │                              # container_config_audit, image_fingerprint, ...
     ├── pentesting/   (57)         # git_exposure, dir_brute, sqli_*, xss_*,
     │                              # ssrf_*, ssti_*, command_injection, lfi_check,
     │                              # jwt_attack, cors_exploit, cache_poison, ...
-    ├── exploitation/ (21)         # cors_exploit, graphql_exploit, nosqli_verify, ...
+    ├── exploitation/ (23)         # cors_exploit, graphql_exploit, nosqli_verify,
+    │                              # container_escape_probe, container_verification, ...
     ├── crypto/        (8)         # hash_crack, padding_oracle, weak_random, ...
     ├── lateral/      (12)         # service_brute, ssh_brute, credential_spray, ...
     ├── privesc/       (7)         # suid_finder, kernel_suggest, ...
@@ -172,21 +176,21 @@ basilisk/
     └── forensics/     (6)         # log_analyzer, memory_dump, ...
 
 wordlists/bundled/                 # 6 словарей
-tests/                             # 1664 тестов, 80+ файлов
+tests/                             # 1798 тестов, 90+ файлов
 ├── test_models/                   # 43 теста
 ├── test_core/                     # 167 тестов
-├── test_plugins/                  # 324 теста (110/110 плагинов покрыты)
+├── test_plugins/                  # 345 тестов (117/117 плагинов покрыты)
 ├── test_utils/                    # 212 тестов
 ├── test_storage/                  # 18 тестов
 ├── test_reporting/                # 26 тестов
 ├── test_tui/                      # 10 тестов
-├── test_knowledge/                # 56 тестов (entities, graph, state, store)
-├── test_observations/             # 26 тестов (adapter)
-├── test_capabilities/             # 8 тестов (mapping)
+├── test_knowledge/                # 71 тест (entities, graph, state, store, container entities)
+├── test_observations/             # 43 теста (adapter, container adapter)
+├── test_capabilities/             # 36 тестов (mapping, container capabilities)
 ├── test_decisions/                # 12 тестов (decision model)
 ├── test_memory/                   # 19 тестов (history, repetition penalty)
 ├── test_scoring/                  # 22 теста (scorer + breakdown + multistep)
-├── test_orchestrator/             # 73 теста (loop, planner, selector, safety, attack_paths, cost_tracker)
+├── test_orchestrator/             # 111 тестов (loop, planner, selector, safety, attack_paths, cost_tracker, goals, container_*)
 ├── test_events/                   # 5 тестов (bus)
 ├── test_campaign/                 # 61 тест (models, store, memory, extractor, integration)
 └── test_cli.py, test_config.py    # 24 теста
@@ -267,13 +271,14 @@ results = await Audit("example.com").autonomous(max_steps=50).enable_campaign().
 results = await Audit.run_plugin("ssl_check", ["example.com"])
 ```
 
-### Автономный движок (v3 + v3.1 decision tracing + v3.2 campaign memory)
-- `KnowledgeGraph` — in-memory граф с entities, relations, dedup, confidence merge, decay
+### Автономный движок (v3 + v3.1 decision tracing + v3.2 campaign memory + v3.3 container audit)
+- `KnowledgeGraph` — in-memory граф с 9 entity types, 9 relation types, dedup, confidence merge, decay
 - `KnowledgeState` — [v3.1] delta-tracking wrapper, `apply_observation()` → `ObservationOutcome`
-- `Planner` — 13 правил обнаружения gaps (host_without_services, attack_paths, ...)
+- `Planner` — 17 правил обнаружения gaps (host_without_services, container_*, attack_paths, ...)
 - `Selector` — match gaps → capabilities, pick batch (budget-constrained)
 - `Scorer` — формула + `score_breakdown` dict + campaign-aware cost + prior_bonus
-- `AttackPaths` — [v3.2] multi-step exploit chain scoring, unlock_value
+- `GoalEngine` — [v3.3] 5-goal progression (RECON → SURFACE_MAPPING → EXPLOIT → POST_EXPLOIT → REPORTING)
+- `AttackPaths` — [v3.2] multi-step exploit chain scoring, unlock_value, container_exploitation path
 - `CostTracker` — [v3.2] runtime plugin success/failure statistics, adaptive cost adjustment
 - `CampaignMemory` — [v3.2] persistent cross-audit learning (SQLite, opt-in)
 - `Decision` — [v3.1] полная запись: context snapshot, evaluated options, reasoning trace, outcome
@@ -281,7 +286,7 @@ results = await Audit.run_plugin("ssl_check", ["example.com"])
 - `AutonomousLoop` — seed → find_gaps → match → score → **build decision** → execute → apply → repeat
 - `SafetyLimits` — max_steps, max_duration_seconds, batch_size, cooldown tracking
 - `adapter.py` — конвертация `PluginResult` → `list[Observation]` → entities/relations в граф
-- `mapping.py` — все 178 плагинов маппятся на requires/produces/cost/noise
+- `mapping.py` — все 185 плагинов маппятся на requires/produces/cost/noise
 
 ### Инициализация контекста (паттерн из facade.py:135-241)
 ```python
@@ -451,7 +456,7 @@ git branch -d feature/my-feature
 # На develop, когда готов релиз:
 git checkout master && git pull origin master
 git merge develop
-git tag -a v3.2.0 -m "v3.2.0"
+git tag -a v3.3.0 -m "v3.3.0"
 git push origin master --tags
 ```
 
@@ -481,7 +486,7 @@ git checkout develop && git merge master
                           │                                                 │
   Targets ──► SEED ──►    │  ┌─────────┐    ┌──────────┐    ┌───────────┐  │
   (hosts)   (create       │  │ PLANNER │───►│ SELECTOR │───►│  SCORER   │  │
-             Host         │  │ 13 gap  │    │ match +  │    │ rank by   │  │
+             Host         │  │ 17 gap  │    │ match +  │    │ rank by   │  │
              entities)    │  │ rules   │    │ pick     │    │ priority  │  │
                           │  └────┬────┘    └──────────┘    └─────┬─────┘  │
                           │       │                               │        │
@@ -542,19 +547,21 @@ results = await Audit.run_plugin("ssl_check", ["example.com"])           # од�
 Центральное хранилище всей информации о целях аудита. Типизированные узлы (Entity) и
 связи (Relation) образуют граф, который обогащается с каждой итерацией автономного цикла.
 
-### EntityType — 7 типов узлов
+### EntityType — 9 типов узлов
 
 | EntityType | Key Fields (для make_id) | Типичные data fields | Factory method |
 |-----------|-------------------------|---------------------|---------------|
 | `HOST` | `host` | `host`, `type`, `dns_records`, `ssl_info` | `Entity.host("example.com")` |
 | `SERVICE` | `host`, `port`, `protocol` | `host`, `port`, `protocol`, `service`, `banner` | `Entity.service("example.com", 443, "tcp")` |
 | `ENDPOINT` | `host`, `path` | `host`, `path`, `has_params`, `is_api`, `is_upload`, `is_graphql`, `is_admin`, `scan_path` | `Entity.endpoint("example.com", "/api/v1")` |
-| `TECHNOLOGY` | `host`, `name`, `version` | `host`, `name`, `version`, `is_cms`, `is_waf` | `Entity.technology("example.com", "nginx", "1.24")` |
+| `TECHNOLOGY` | `host`, `name`, `version` | `host`, `name`, `version`, `is_cms`, `is_waf`, `is_container_runtime` | `Entity.technology("example.com", "nginx", "1.24")` |
 | `CREDENTIAL` | `host`, `username` | `host`, `username`, `password`, `source` | `Entity.credential("example.com", "admin")` |
 | `FINDING` | `host`, `title` | `host`, `title`, `severity`, `description`, `evidence` | `Entity.finding("example.com", "XSS in /search")` |
 | `VULNERABILITY` | `host`, `name` | `host`, `name`, `severity`, `cve` | `Entity.vulnerability("example.com", "CVE-2024-1234")` |
+| `CONTAINER` | `host`, `container_id` | `host`, `container_id`, `image`, `privileged`, `mounts`, `capabilities` | `Entity.container("example.com", "abc123")` |
+| `IMAGE` | `host`, `image_name`, `image_tag` | `host`, `image_name`, `image_tag` | `Entity.image("example.com", "nginx", "1.24")` |
 
-### RelationType — 7 типов связей
+### RelationType — 9 типов связей
 
 | RelationType | Семантика | Направление | Пример |
 |-------------|-----------|-------------|--------|
@@ -565,6 +572,8 @@ results = await Audit.run_plugin("ssl_check", ["example.com"])           # од�
 | `ACCESSES` | Credential даёт доступ | CREDENTIAL -> HOST | admin:pass ACCESSES example.com |
 | `RELATES_TO` | Finding связан с entity | FINDING -> any | XSS RELATES_TO example.com |
 | `PARENT_OF` | Домен является родителем | HOST -> HOST | example.com PARENT_OF sub.example.com |
+| `RUNS_CONTAINER` | Runtime запускает контейнер | TECHNOLOGY -> CONTAINER | docker RUNS_CONTAINER abc123 |
+| `USES_IMAGE` | Контейнер использует образ | CONTAINER -> IMAGE | abc123 USES_IMAGE nginx:1.24 |
 
 ### Генерация ID и дедупликация
 
@@ -594,7 +603,7 @@ merged = 1.0 - (1.0 - existing.confidence) * (1.0 - new.confidence)
 | `query(entity_type, **filters)` | Фильтр entities по типу и data-полям |
 | `neighbors(entity_id, relation_type)` | Исходящие связи (FROM entity) |
 | `reverse_neighbors(entity_id, relation_type)` | Входящие связи (TO entity) |
-| `hosts()` / `services()` / `endpoints()` / `technologies()` / `findings()` | Shortcut-методы |
+| `hosts()` / `services()` / `endpoints()` / `technologies()` / `findings()` / `containers()` / `images()` | Shortcut-методы |
 | `record_execution(fingerprint)` / `was_executed(fingerprint)` | Трекинг выполнений |
 | `to_targets()` | Конвертация Host entities -> list[Target] |
 
@@ -656,6 +665,9 @@ class Observation(BaseModel):
 | `upload_endpoints` | ENDPOINT (`is_upload=True`) | HAS_ENDPOINT |
 | `forms` | ENDPOINT | HAS_ENDPOINT |
 | `credentials` | CREDENTIAL | ACCESSES (CREDENTIAL->HOST) |
+| `container_runtimes` | TECHNOLOGY (`is_container_runtime=True`) | RUNS (HOST->TECHNOLOGY) |
+| `containers` | CONTAINER + IMAGE | RUNS_CONTAINER (TECHNOLOGY->CONTAINER), USES_IMAGE (CONTAINER->IMAGE) |
+| `images` | IMAGE | — |
 | `ssl_info` / `records` | HOST (enriched) | — |
 | `result.findings` | FINDING | RELATES_TO (FINDING->HOST) |
 
@@ -697,11 +709,14 @@ class Capability(BaseModel):
 | `"Endpoint:params"` | Endpoint с параметрами | sqli_check, xss_check |
 | `"Technology:waf"` | Обнаружен WAF | waf_bypass |
 | `"Technology:cms"` | Обнаружена CMS | wp_deep_scan |
+| `"Technology:docker"` | Обнаружен Docker runtime | container_enumeration, registry_lookup |
+| `"Container"` | Найден контейнер | container_config_audit, container_escape_probe |
+| `"Image"` | Найден образ контейнера | image_fingerprint |
 | `"Credential"` | Найдены credentials | credential_spray |
 
 ### CAPABILITY_MAP (`capabilities/mapping.py`)
 
-138 плагинов явно маппятся. Для остальных — auto-inference из `PluginMeta`:
+145 плагинов явно маппятся. Для остальных — auto-inference из `PluginMeta`:
 - `requires`: `["Host"]` + `"Service:http"` если `meta.requires_http`
 - `produces`: из `meta.produces` или `["Finding"]`
 - `cost_score`: `min(meta.timeout / 10.0, 10.0)`
@@ -752,7 +767,7 @@ penalty = base_penalty * time_decay * (unproductive_multiplier if unproductive e
 Planner (`orchestrator/planner.py`) анализирует knowledge graph и обнаруживает пробелы
 в знаниях — `KnowledgeGap(entity, missing, priority, description)`.
 
-### 12 правил обнаружения gaps
+### 17 правил обнаружения gaps
 
 | # | Правило | missing | Приоритет | Условие |
 |---|---------|---------|-----------|---------|
@@ -767,7 +782,12 @@ Planner (`orchestrator/planner.py`) анализирует knowledge graph и о
 | 9 | `_credential_without_exploitation` | `"credential_exploitation"` | **7.5** | Существует Credential |
 | 10 | `_technology_without_version` | `"version"` | **4.0** | Technology без `version` |
 | 11 | `_low_confidence_entity` | `"confirmation"` | **3.0** | Entity с `confidence < 0.5` |
-| 12 | `_attack_path_gaps` | `"attack_path"` | **path.risk** | Attack path preconditions met, actions available |
+| 12 | `_host_without_container_check` | `"container_runtime"` | **6.0** | Host с Docker/K8s портами (2375,2376,2377,5000,10250) или is_container_runtime tech |
+| 13 | `_container_runtime_without_enumeration` | `"container_enumeration"` | **7.0** | Technology(is_container_runtime) без `containers_enumerated` |
+| 14 | `_container_without_config_audit` | `"container_config_audit"` | **5.5** | Container без `config_audited` (1 gap per host) |
+| 15 | `_container_without_image_analysis` | `"image_analysis"` | **5.0** | Image без `vulnerabilities_checked` |
+| 16 | `_attack_path_gaps` | `"attack_path"` | **path.risk** | Attack path preconditions met, actions available |
+| 17 | `_goal_driven_gaps` | `"goal"` | **varies** | Goal engine gap detection |
 
 ### Gap satisfaction flags
 
@@ -778,6 +798,10 @@ Planner (`orchestrator/planner.py`) анализирует knowledge graph и о
 | `endpoints_checked` | `_http_service_without_endpoints` | Плагин produces "Endpoint" |
 | `forms_checked` | `_http_endpoints_without_forms` | form_analyzer / web_crawler / link_extractor |
 | `version_checked` | `_technology_without_version` | Плагин produces для TECHNOLOGY |
+| `container_runtime_checked` | `_host_without_container_check` | Плагин produces "Technology:container_runtime" |
+| `containers_enumerated` | `_container_runtime_without_enumeration` | Плагин produces "Container" на Technology(is_container_runtime) |
+| `config_audited` | `_container_without_config_audit` | container_config_audit на Container |
+| `vulnerabilities_checked` | `_container_without_image_analysis` | image_fingerprint на Image |
 
 ---
 
@@ -876,6 +900,71 @@ knowledge_gained, confidence_delta, duration. `summary()` -> human-readable ло
 
 ---
 
+## Container Security Audit (v3.3)
+
+Подсистема автономного аудита контейнерной инфраструктуры. Обнаруживает Docker/K8s среды,
+перечисляет контейнеры и образы, аудитирует конфигурацию, проверяет escape-векторы и
+верифицирует находки. Полностью интегрирована в автономный движок через knowledge graph,
+planner rules, goals и attack paths.
+
+### Архитектура данных
+
+```
+HOST --[EXPOSES]--> SERVICE(:2375)
+  \--[RUNS]--> Technology(docker, is_container_runtime=True)
+                  \--[RUNS_CONTAINER]--> CONTAINER(abc123, privileged=True, ...)
+                                            \--[USES_IMAGE]--> IMAGE(nginx:1.24)
+```
+
+### 7 плагинов
+
+| Плагин | Категория | Зависит от | Produces | Описание |
+|--------|-----------|------------|----------|----------|
+| `container_discovery` | scanning | — | `container_runtimes` | Проба Docker API (2375/2376), K8s API (6443/10250) |
+| `container_enumeration` | scanning | `container_discovery` | `containers`, `images` | GET /containers/json, /images/json через Docker API |
+| `registry_lookup` | scanning | — | `registries` | Проба /v2/, /v2/_catalog на портах 5000/443 |
+| `image_fingerprint` | analysis | `container_enumeration` | `image_vulns` | 30 vulnerable base images, :latest tag, stale images |
+| `container_config_audit` | analysis | `container_enumeration` | `container_misconfigs` | 11 проверок: privileged, docker.sock, CAP_SYS_ADMIN, ... |
+| `container_escape_probe` | exploitation | `container_config_audit` | `container_escapes` | 6 escape-векторов, проверка CVE (runc, containerd, dirty pipe) |
+| `container_verification` | exploitation | config_audit + escape_probe | `verified_container_findings` | Re-probe на confidence 0.85 |
+
+### 11 проверок container_config_audit
+
+| Проверка | Severity | Confidence |
+|----------|----------|------------|
+| Privileged mode | CRITICAL | 0.65 |
+| docker.sock mount | CRITICAL | 0.65 |
+| Host PID namespace | HIGH | 0.65 |
+| Host network mode | HIGH | 0.65 |
+| Sensitive volume mounts (/etc, /root, /proc) | HIGH | 0.60 |
+| CAP_SYS_ADMIN capability | HIGH | 0.65 |
+| Secret env vars (PASSWORD/KEY/TOKEN) | HIGH | 0.60 |
+| Running as root | MEDIUM | 0.60 |
+| No resource limits | MEDIUM | 0.55 |
+| No seccomp profile | MEDIUM | 0.55 |
+| Writable root filesystem | LOW | 0.55 |
+
+### Attack path: container_exploitation
+
+```python
+AttackPath(
+    name="container_exploitation",
+    preconditions=["Technology:docker"],
+    actions=["container_enumeration", "container_config_audit",
+             "container_escape_probe", "image_fingerprint"],
+    expected_gain=["Finding", "Vulnerability", "Container"],
+    risk=6.0,
+    unlock=["privilege_escalation", "lateral_movement"],
+)
+```
+
+### Goal integration
+
+- **SURFACE_MAPPING**: gap type `"container_runtime"`, risk domain `"container"`
+- **EXPLOIT**: gap types `"container_enumeration"`, `"container_config_audit"`, `"image_analysis"`, risk domain `"container"`
+
+---
+
 ## Campaign Memory (v3.2)
 
 Persistent cross-audit learning. Запоминает инфраструктуру, эффективность плагинов и
@@ -964,3 +1053,5 @@ Pipeline (`core/pipeline.py`) — последовательное выполн�
 | HTTP smuggling | pentesting/http_smuggling.py | 45 | — |
 | Default credentials | pentesting/default_creds.py | 75 | — |
 | WP plugins/themes | pentesting/wp_deep_scan.py | 86 + 52 | WPScan |
+| VULNERABLE_BASE_IMAGES | analysis/image_fingerprint.py | 30 | — |
+| Container escape CVEs | exploitation/container_escape_probe.py | 3 | — |
