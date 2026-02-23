@@ -124,7 +124,7 @@ def _http_endpoints_without_forms(graph: KnowledgeGraph) -> list[KnowledgeGap]:
                 entity=host,
                 missing="forms",
                 priority=5.5,
-                description=f"HTTP on {host.data.get('host', '?')} — endpoints exist but forms not analyzed",
+                description=f"HTTP on {host.data.get('host', '?')} — endpoints, no forms",
             ))
     return gaps
 
@@ -280,9 +280,35 @@ def _is_http_service(entity: Entity) -> bool:
     if service_name and "http" in service_name.lower():
         return True
     # Detect HTTP from banner (e.g. "HTTP/1.1", "Apache", "nginx")
-    if any(kw in banner for kw in ("http/", "apache", "nginx", "iis")):
-        return True
-    return False
+    return any(kw in banner for kw in ("http/", "apache", "nginx", "iis"))
+
+
+def _attack_path_gaps(graph: KnowledgeGraph) -> list[KnowledgeGap]:
+    """Suggest actions from available attack paths that haven't been executed yet.
+
+    When an attack path's preconditions are met, create gaps for host entities
+    to drive execution of path actions.
+    """
+    from basilisk.orchestrator.attack_paths import find_available_paths
+
+    gaps = []
+    available = find_available_paths(graph)
+    hosts = graph.hosts()
+    if not hosts:
+        return gaps
+
+    for path in available:
+        # Use first host as representative entity
+        host = hosts[0]
+        gaps.append(KnowledgeGap(
+            entity=host,
+            missing="attack_path",
+            priority=min(path.risk, 8.0),
+            description=f"Attack path '{path.name}' available — "
+            f"actions: {', '.join(path.actions[:3])}",
+        ))
+
+    return gaps
 
 
 _RULES = [
@@ -297,4 +323,5 @@ _RULES = [
     _credential_without_exploitation,
     _technology_without_version,
     _low_confidence_entity,
+    _attack_path_gaps,
 ]
