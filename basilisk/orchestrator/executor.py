@@ -181,10 +181,7 @@ class OrchestratorExecutor:
         # For non-Host entities, extract host from data
         host = entity.data.get("host", "")
         if host:
-            if _is_ip_or_local(host):
-                target = Target.ip(host)
-            else:
-                target = Target.domain(host)
+            target = Target.ip(host) if _is_ip_or_local(host) else Target.domain(host)
             # Populate ports from graph
             host_id = Entity.make_id(EntityType.HOST, host=host)
             services = graph.neighbors(host_id, RelationType.EXPOSES)

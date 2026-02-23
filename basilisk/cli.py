@@ -234,6 +234,111 @@ def _run_tui_audit(
         console.print("[red]TUI not available. Install textual: pip install textual[/]")
 
 
+@app.command(name="auto")
+def auto(
+    target: str = typer.Argument(help="Target domain to audit"),
+    max_steps: int = typer.Option(100, "--max-steps", "-n", help="Max autonomous steps"),
+    plugins: str | None = typer.Option(None, help="Comma-separated plugin names (whitelist)"),
+    exclude: str | None = typer.Option(
+        None, "--exclude", "-x",
+        help="Exclude plugins by name or prefix",
+    ),
+    config: str | None = typer.Option(None, help="Path to config YAML"),
+    output: str = typer.Option("reports", help="Output directory"),
+    wordlist: str | None = typer.Option(
+        None, "--wordlist", "-w", help="Wordlist names, comma-separated",
+    ),
+    project_name: str | None = typer.Option(
+        None, "--project", "-p", help="Save to project",
+    ),
+    campaign: bool = typer.Option(
+        False, "--campaign/--no-campaign", help="Enable persistent campaign memory",
+    ),
+    format: str = typer.Option("json", help="Output formats: json,csv,html"),  # noqa: A002
+    verbose: bool = typer.Option(False, "-v", "--verbose"),
+):
+    """Autonomous audit — state-driven knowledge graph exploration."""
+    config_log_level = None
+    if config:
+        from basilisk.config import Settings
+        try:
+            cfg = Settings.load(config)
+            config_log_level = cfg.log_level
+        except Exception:
+            pass
+    _setup_logging(verbose, config_level=config_log_level)
+
+    from basilisk.core.facade import Audit
+
+    console.print(
+        f"[bold blue]Basilisk v{__version__}[/] — "
+        f"Autonomous audit [bold]{target}[/] (max {max_steps} steps)"
+    )
+
+    audit_builder = Audit(target).autonomous(max_steps=max_steps)
+    if campaign:
+        audit_builder = audit_builder.enable_campaign()
+    if config:
+        audit_builder = audit_builder.with_config(config)
+    if plugins:
+        audit_builder = audit_builder.plugins(*plugins.split(","))
+    if exclude:
+        audit_builder = audit_builder.exclude(*exclude.split(","))
+    if wordlist:
+        audit_builder = audit_builder.wordlists(*wordlist.split(","))
+    project_obj = None
+    if project_name:
+        audit_builder, project_obj = _attach_project(audit_builder, project_name, target)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_target = target.replace(":", "_").replace("/", "_")
+    base_reports = project_obj.reports_dir if project_obj else Path(output)
+    scan_dir = base_reports / f"{safe_target}_{timestamp}"
+
+    from basilisk.reporting.live_html import LiveReportEngine
+
+    report_engine = LiveReportEngine(scan_dir)
+    console.print(f"  Reports: {scan_dir} (updating live)")
+
+    _last_plugin = {"name": ""}
+
+    def on_progress(state):
+        report_engine.update(state)
+        if state.status == "running" and state.current_plugin:
+            plugin = state.current_plugin
+            if plugin != _last_plugin["name"]:
+                _last_plugin["name"] = plugin
+                phase = state.current_phase
+                phase_info = state.phases.get(phase)
+                progress = ""
+                if phase_info and phase_info.total:
+                    progress = f" [{phase_info.completed}/{phase_info.total}]"
+                elapsed = ""
+                if phase_info and phase_info.elapsed > 0:
+                    elapsed = f" ({phase_info.elapsed:.0f}s)"
+                console.print(
+                    f"  [dim]{phase}{progress}{elapsed}[/] >> [cyan]{plugin}[/]"
+                )
+
+    audit_builder = audit_builder.on_progress(on_progress)
+    state = asyncio.run(audit_builder.run())
+
+    if "csv" in format.split(","):
+        from basilisk.reporting.csv import CsvRenderer
+        from basilisk.reporting.engine import ReportEngine
+
+        csv_engine = ReportEngine()
+        csv_engine.register("csv", CsvRenderer())
+        csv_engine.generate(state, scan_dir, ["csv"])
+
+    console.print(f"\n[bold green]Audit complete![/] {state.total_findings} findings")
+    if state.skipped_plugins:
+        console.print(f"  [dim]Skipped {len(state.skipped_plugins)} irrelevant plugins[/]")
+    console.print(f"  Reports: {scan_dir}")
+    console.print(f"  - {report_engine.html_path.name}")
+    console.print(f"  - {report_engine.json_path.name}")
+
+
 @app.command(name="run")
 def run_plugin(
     plugin_name: str = typer.Argument(help="Plugin name to run"),

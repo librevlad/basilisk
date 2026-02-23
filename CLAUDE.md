@@ -21,11 +21,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 .venv/Scripts/python.exe -m ruff check . --fix
 
 # Запуск
-.venv/Scripts/python.exe -m basilisk                       # TUI дашборд
-.venv/Scripts/python.exe -m basilisk audit example.com     # полный аудит
-.venv/Scripts/python.exe -m basilisk run ssl_check example.com  # один плагин
-.venv/Scripts/python.exe -m basilisk plugins               # 175 плагинов
-.venv/Scripts/python.exe -m basilisk audit example.com --autonomous  # автономный режим
+.venv/Scripts/python.exe -m basilisk auto example.com                # автономный аудит (основной)
+.venv/Scripts/python.exe -m basilisk auto example.com -n 50          # с лимитом шагов
+.venv/Scripts/python.exe -m basilisk audit example.com               # классический pipeline
+.venv/Scripts/python.exe -m basilisk run ssl_check example.com       # один плагин
+.venv/Scripts/python.exe -m basilisk plugins                         # 178 плагинов
+.venv/Scripts/python.exe -m basilisk tui                             # TUI дашборд
 
 # Установка
 uv sync && uv pip install -e ".[dev]"
@@ -328,103 +329,572 @@ ctx = PluginContext(config=settings, http=http, dns=dns, net=net, rate=rate, ...
 2. **Написание кода**: следовать существующим паттернам, не добавлять лишнего
 3. **Ruff check**: запускается автоматически после каждого Edit/Write .py файлов (hook)
 4. **Тесты**: `pytest tests/ -x --tb=short` для быстрой проверки
-5. **Коммит**: только по запросу пользователя
+5. **Коммит**: только по запросу пользователя, всегда в формате Conventional Commits
+6. **Ветки**: вся работа ведётся на feature-ветках от develop (см. Git Flow ниже)
 
-## Текущее состояние и план на будущее
+---
 
-> **ВАЖНО**: Прочитай `AUDIT_NOTES.md` в корне проекта — там полный журнал аудита,
-> исправленных багов, и детальный план live-тестирования всех 112 плагинов.
+## Git Flow + Conventional Commits
 
-> **Приоритет**: серверные уязвимости, не требующие участия жертвы (SQLi, CMDi, SSRF, SSTI, LFI, XXE, etc.)
-> Клиентские уязвимости (XSS, CSRF, Clickjacking) — вторичные.
+### Структура веток
 
-### Что сделано (v3.1.0 — deterministic decision runtime)
-- [x] Decision model: `Decision`, `ContextSnapshot`, `EvaluatedOption` — полная запись каждого решения
-- [x] KnowledgeState: delta-tracking wrapper — `apply_observation()` → `ObservationOutcome` с confidence before/after
-- [x] Memory/History: лог решений, repetition penalty (base * decay * unproductive_multiplier), JSON persistence
-- [x] Scorer: `score_breakdown` dict (novelty, knowledge_gain, cost, noise, repetition_penalty, raw_score)
-- [x] Scorer: опциональная `History` для адаптивного repetition penalty (вместо binary 5.0)
-- [x] SafetyLimits: cooldown tracking — `record_run()`, `is_cooled_down()`
-- [x] EventBus: `DECISION_MADE` event с decision_id, reasoning
-- [x] AutonomousLoop: decision traces, KnowledgeState integration, real confidence deltas (было 0.0)
-- [x] Facade: wire History в autonomous mode, persist `decision_history.json`
-- [x] 59 новых тестов (1441 всего), ruff чисто, pipeline mode не затронут
+```
+master          ← стабильные релизы, каждый merge = тег версии
+  └── develop   ← интеграционная ветка, сюда мержатся feature branches
+       ├── feature/<name>   ← от develop, для каждой задачи
+       └── hotfix/<name>    ← от master, критические фиксы → master + develop
+```
 
-### Что сделано (v3.0.0 — autonomous engine)
-- [x] Knowledge Graph: entities (7 типов), relations (7 типов), in-memory граф, SQLite persistence
-- [x] Observation adapter: PluginResult → list[Observation] для всех data keys
-- [x] Capability mapping: 175 плагинов → requires/produces/cost/noise с auto-inference
-- [x] Scoring engine: формула priority с novelty, knowledge_gain, cost, noise, repetition_penalty
-- [x] Orchestrator: planner (7 gap rules), selector, executor, autonomous loop, safety limits, timeline
-- [x] Event bus: subscribe/emit для lifecycle events
-- [x] Attack graph: визуализация exploit chains
-- [x] CLI --autonomous + facade.autonomous() fluent API
-- [x] SQLite persistence: kg_entities + kg_relations таблицы
-- [x] Полная обратная совместимость с pipeline режимом
-- [x] 131 новых тестов v3, все 1382 проходят, ruff чисто
+| Ветка | Создаётся от | Мержится в | Назначение |
+|-------|-------------|------------|------------|
+| `master` | — | — | Стабильные релизы. Только merge из develop/hotfix |
+| `develop` | `master` | `master` (при релизе) | Интеграция. Default branch на GitHub |
+| `feature/<name>` | `develop` | `develop` | Одна задача = одна ветка |
+| `hotfix/<name>` | `master` | `master` + `develop` | Критические фиксы в продакшене |
+| `release/<version>` | `develop` | `master` + `develop` | Опционально, при подготовке релиза |
 
-### Что было сделано (v2.0.0 refactoring)
-- [x] Глубокий аудит всей кодовой базы (3 параллельных ревью)
-- [x] 5 критических багов исправлено (race condition, progress math, etc.)
-- [x] DI-контейнер улучшен (типизация, requires_http, ProviderPool setup/teardown)
-- [x] DRY: централизованы SECRET_PATTERNS (utils/secrets.py), extract_plugin_stats (reporting/utils.py), resolve_base_url консолидация
-- [x] Фасад: decomposed Audit.run() God Method → 7 приватных методов
-- [x] Subdomain-плагины: аудит, исправление 4 сломанных, 2 новых провайдера (certspotter, anubis)
-- [x] Recon batch (18 плагинов): live-тест, 8 файлов исправлено, 24 теста добавлено
-- [x] Analysis/Scanning batch (10 плагинов): live-тест, сравнение с проф-инструментами, 7 багов исправлено, 39 тестов
-- [x] Тесты: 883 (было 664), 110/110 плагинов покрыты, ruff чисто
-- [x] Базы сигнатур расширены до уровня профессиональных инструментов (3 раунда)
+### Conventional Commits
 
-### Базы сигнатур (текущее состояние)
+Формат каждого коммита:
+```
+<type>(<scope>): <description>
+
+[optional body]
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+```
+
+**Типы:**
+| Тип | Когда использовать | Bump |
+|-----|--------------------|------|
+| `feat` | Новая функциональность | minor |
+| `fix` | Исправление бага | patch |
+| `refactor` | Рефакторинг без изменения поведения | — |
+| `test` | Добавление/изменение тестов | — |
+| `docs` | Документация (CLAUDE.md, README, etc.) | — |
+| `chore` | Конфиги, зависимости, CI | — |
+| `perf` | Оптимизация производительности | patch |
+| `style` | Форматирование, линтинг (без логики) | — |
+| `ci` | CI/CD конфигурация | — |
+
+**Scopes** (один из):
+`plugins`, `orchestrator`, `knowledge`, `pipeline`, `tui`, `cli`, `storage`, `reporting`,
+`utils`, `models`, `core`, `scoring`, `observations`, `capabilities`, `decisions`, `memory`,
+`events`, `data`, `config`
+
+**Примеры:**
+```
+feat(plugins): add redis_exploit plugin
+fix(orchestrator): prevent infinite loop when no gaps found
+refactor(knowledge): extract entity merge logic into separate method
+test(plugins): add functional tests for xss_advanced
+docs: update CLAUDE.md with git flow rules
+chore: bump aiohttp to 3.9.5
+```
+
+### Правила для Claude Code (ОБЯЗАТЕЛЬНЫЕ)
+
+**При каждом коммите:**
+1. Формат — строго Conventional Commits (type, scope, description)
+2. Scope берётся из списка выше; если изменения затрагивают несколько — использовать основной
+3. Description — на английском, императив, lowercase, без точки в конце
+4. Body — опционально, если нужен контекст
+5. Всегда заканчивать `Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>`
+
+**При создании ветки:**
+1. Всегда от `develop` (кроме hotfix — от master)
+2. Имя: `feature/<short-kebab-case>` или `hotfix/<short-kebab-case>`
+3. Пример: `feature/redis-exploit`, `hotfix/fix-ssl-crash`
+
+**При создании PR:**
+1. Target branch = `develop` (кроме hotfix → target = master)
+2. Title = тот же формат что commit message (type(scope): description)
+3. После merge — удалить feature-ветку
+
+**Lifecycle задачи:**
+```bash
+# 1. Создать ветку
+git checkout develop && git pull origin develop
+git checkout -b feature/my-feature
+
+# 2. Работать, коммитить
+git add <files>
+git commit -m "feat(scope): description
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
+
+# 3. Push + PR
+git push -u origin feature/my-feature
+gh pr create --base develop --title "feat(scope): description" --body "..."
+
+# 4. После merge — cleanup
+git checkout develop && git pull origin develop
+git branch -d feature/my-feature
+```
+
+**Release flow:**
+```bash
+# На develop, когда готов релиз:
+git checkout master && git pull origin master
+git merge develop
+git tag -a v3.2.0 -m "v3.2.0"
+git push origin master --tags
+```
+
+**Hotfix flow:**
+```bash
+git checkout master && git checkout -b hotfix/fix-critical-bug
+# ... fix ...
+git commit -m "fix(core): prevent crash on empty input"
+# PR → master, после merge:
+git checkout develop && git merge master
+```
+
+---
+
+## Автономный движок — обзор
+
+Автономный движок — основной режим работы Basilisk. Вместо жёсткого pipeline он строит
+**knowledge graph** о цели и итеративно обнаруживает пробелы в знаниях (gaps), выбирает
+оптимальные плагины для их заполнения, выполняет их и обогащает граф результатами.
+Каждое решение детерминированно записывается с полным контекстом.
+
+### Цикл работы
+
+```
+                          ┌─────────────────────────────────────────────────┐
+                          │                 AUTONOMOUS LOOP                  │
+                          │                                                 │
+  Targets ──► SEED ──►    │  ┌─────────┐    ┌──────────┐    ┌───────────┐  │
+  (hosts)   (create       │  │ PLANNER │───►│ SELECTOR │───►│  SCORER   │  │
+             Host         │  │ 11 gap  │    │ match +  │    │ rank by   │  │
+             entities)    │  │ rules   │    │ pick     │    │ priority  │  │
+                          │  └────┬────┘    └──────────┘    └─────┬─────┘  │
+                          │       │                               │        │
+                          │       │    ┌───────────────┐          │        │
+                          │       │    │   DECISION    │◄─────────┘        │
+                          │       │    │ context snap  │                   │
+                          │       │    │ eval options  │                   │
+                          │       │    │ reasoning     │                   │
+                          │       │    └───────┬───────┘                   │
+                          │       │            │                           │
+                          │       │    ┌───────▼───────┐                   │
+                          │       │    │   EXECUTE     │                   │
+                          │       │    │ plugin.run()  │                   │
+                          │       │    └───────┬───────┘                   │
+                          │       │            │                           │
+                          │       │    ┌───────▼───────┐                   │
+                          │       │    │   OBSERVE     │                   │
+                          │       │    │ adapt_result  │                   │
+                          │       │    │ → Observation │                   │
+                          │       │    └───────┬───────┘                   │
+                          │       │            │                           │
+                          │       │    ┌───────▼───────┐                   │
+                          │       ◄────│ APPLY to KG   │                   │
+                          │            │ entities +    │                   │
+                          │            │ relations     │                   │
+                          │            └───────────────┘                   │
+                          └─────────────────────────────────────────────────┘
+```
+
+### Условия завершения (termination_reason)
+
+| Reason | Описание |
+|--------|----------|
+| `no_gaps` | Все пробелы в знаниях заполнены — аудит завершён |
+| `limit_reached` | Превышен `max_steps` или `max_duration_seconds` |
+| `no_capabilities` | Оставшиеся gaps не могут быть заполнены доступными плагинами |
+| `no_candidates` | Все кандидаты отфильтрованы (уже выполнены или на cooldown) |
+| `all_executed` | Весь батч уже был выполнен ранее |
+
+### Ключевые принципы
+- **Детерминированные ID**: `Entity.make_id()` и `Decision.make_id()` — SHA256 от ключевых полей
+- **Probabilistic confidence merge**: `1 - (1-old)*(1-new)` — каждое наблюдение увеличивает уверенность
+- **Decision traces**: каждое решение записывается ДО выполнения, outcome — ПОСЛЕ
+- **Gap-driven**: движок работает пока есть knowledge gaps; нет gaps = аудит завершён
+
+### Fluent API
+```python
+results = await Audit("example.com").autonomous(max_steps=50).run()      # автономный
+results = await Audit("example.com").discover().scan().analyze().pentest().run()  # pipeline
+results = await Audit.run_plugin("ssl_check", ["example.com"])           # один плагин
+```
+
+---
+
+## Knowledge Graph
+
+Центральное хранилище всей информации о целях аудита. Типизированные узлы (Entity) и
+связи (Relation) образуют граф, который обогащается с каждой итерацией автономного цикла.
+
+### EntityType — 7 типов узлов
+
+| EntityType | Key Fields (для make_id) | Типичные data fields | Factory method |
+|-----------|-------------------------|---------------------|---------------|
+| `HOST` | `host` | `host`, `type`, `dns_records`, `ssl_info` | `Entity.host("example.com")` |
+| `SERVICE` | `host`, `port`, `protocol` | `host`, `port`, `protocol`, `service`, `banner` | `Entity.service("example.com", 443, "tcp")` |
+| `ENDPOINT` | `host`, `path` | `host`, `path`, `has_params`, `is_api`, `is_upload`, `is_graphql`, `is_admin`, `scan_path` | `Entity.endpoint("example.com", "/api/v1")` |
+| `TECHNOLOGY` | `host`, `name`, `version` | `host`, `name`, `version`, `is_cms`, `is_waf` | `Entity.technology("example.com", "nginx", "1.24")` |
+| `CREDENTIAL` | `host`, `username` | `host`, `username`, `password`, `source` | `Entity.credential("example.com", "admin")` |
+| `FINDING` | `host`, `title` | `host`, `title`, `severity`, `description`, `evidence` | `Entity.finding("example.com", "XSS in /search")` |
+| `VULNERABILITY` | `host`, `name` | `host`, `name`, `severity`, `cve` | `Entity.vulnerability("example.com", "CVE-2024-1234")` |
+
+### RelationType — 7 типов связей
+
+| RelationType | Семантика | Направление | Пример |
+|-------------|-----------|-------------|--------|
+| `EXPOSES` | Хост предоставляет сервис | HOST -> SERVICE | example.com EXPOSES :443/tcp |
+| `RUNS` | Сервис использует технологию | SERVICE -> TECHNOLOGY | :443 RUNS nginx/1.24 |
+| `HAS_ENDPOINT` | Сервис имеет endpoint | SERVICE -> ENDPOINT | :443 HAS_ENDPOINT /api/v1 |
+| `HAS_VULNERABILITY` | Технология имеет уязвимость | TECHNOLOGY -> VULNERABILITY | nginx HAS_VULNERABILITY CVE-... |
+| `ACCESSES` | Credential даёт доступ | CREDENTIAL -> HOST | admin:pass ACCESSES example.com |
+| `RELATES_TO` | Finding связан с entity | FINDING -> any | XSS RELATES_TO example.com |
+| `PARENT_OF` | Домен является родителем | HOST -> HOST | example.com PARENT_OF sub.example.com |
+
+### Генерация ID и дедупликация
+
+```python
+Entity.make_id(EntityType.HOST, host="example.com")
+# -> sha256("host:host=example.com")[:16] -> "a1b2c3d4e5f6g7h8"
+```
+
+Детерминированные ID обеспечивают автоматическую дедупликацию: entity с тем же ID
+мержится вместо дублирования.
+
+### Confidence merge (probabilistic OR)
+
+```
+merged = 1.0 - (1.0 - existing.confidence) * (1.0 - new.confidence)
+```
+При merge также: `data` — новые ключи перезаписывают, `evidence` — объединение с дедупликацией,
+`observation_count` — суммируется, `last_seen` — берётся максимальное.
+
+### Graph Query API (`knowledge/graph.py`)
+
+| Метод | Описание |
+|-------|----------|
+| `add_entity(entity)` | Добавить entity; если ID уже есть — merge |
+| `add_relation(relation)` | Добавить связь; дедупликация по `(source_id, target_id, type)` |
+| `get(entity_id)` | Получить entity по ID |
+| `query(entity_type, **filters)` | Фильтр entities по типу и data-полям |
+| `neighbors(entity_id, relation_type)` | Исходящие связи (FROM entity) |
+| `reverse_neighbors(entity_id, relation_type)` | Входящие связи (TO entity) |
+| `hosts()` / `services()` / `endpoints()` / `technologies()` / `findings()` | Shortcut-методы |
+| `record_execution(fingerprint)` / `was_executed(fingerprint)` | Трекинг выполнений |
+| `to_targets()` | Конвертация Host entities -> list[Target] |
+
+### KnowledgeState — delta-tracking wrapper (`knowledge/state.py`)
+
+Обёртка над `KnowledgeGraph`, отслеживающая delta при каждом apply:
+
+```python
+state = KnowledgeState(graph, planner)
+outcome = state.apply_observation(obs)
+# -> ObservationOutcome(entity_id, was_new, confidence_before, confidence_after)
+
+snapshot = state.snapshot(step=5, elapsed=42.0, gap_count=3)
+# -> ContextSnapshot(entity_count, relation_count, host_count, ...)
+
+gaps = state.find_gaps()  # делегирует в planner.find_gaps(graph)
+```
+
+### KnowledgeStore — SQLite persistence (`knowledge/store.py`)
+
+Две таблицы: `kg_entities` и `kg_relations`. Entity сохранение через upsert.
+Загрузка: `store.load() -> KnowledgeGraph`.
+
+---
+
+## Observation Bridge
+
+Мост между плагинами (`PluginResult`) и knowledge graph (`Entity`/`Relation`).
+
+### Модель Observation (`observations/observation.py`)
+
+```python
+class Observation(BaseModel):
+    entity_type: EntityType
+    entity_data: dict[str, Any]
+    key_fields: dict[str, str]       # ключевые поля для Entity.make_id()
+    relation: Relation | None        # связь с родительским entity
+    evidence: str = ""
+    confidence: float = 1.0
+    source_plugin: str = ""
+    timestamp: datetime
+```
+
+### Маппинг data keys -> Entity + Relation (`observations/adapter.py`)
+
+`adapt_result(result)` обрабатывает все ключи из `result.data`:
+
+| Data Key | Entity Type | Relation |
+|----------|-------------|----------|
+| *(всегда)* | HOST | — |
+| `open_ports` | SERVICE | EXPOSES (HOST->SERVICE) |
+| `services` | SERVICE | EXPOSES (HOST->SERVICE) |
+| `technologies` | TECHNOLOGY | RUNS (HOST->TECHNOLOGY) |
+| `cms` | TECHNOLOGY (`is_cms=True`) | RUNS |
+| `waf` | TECHNOLOGY (`is_waf=True`) | RUNS |
+| `subdomains` | HOST (`type="subdomain"`) | PARENT_OF |
+| `crawled_urls` / `found_paths` / `urls` | ENDPOINT | HAS_ENDPOINT |
+| `api_endpoints` | ENDPOINT (`is_api=True`) | HAS_ENDPOINT |
+| `upload_endpoints` | ENDPOINT (`is_upload=True`) | HAS_ENDPOINT |
+| `forms` | ENDPOINT | HAS_ENDPOINT |
+| `credentials` | CREDENTIAL | ACCESSES (CREDENTIAL->HOST) |
+| `ssl_info` / `records` | HOST (enriched) | — |
+| `result.findings` | FINDING | RELATES_TO (FINDING->HOST) |
+
+### Полный pipeline данных
+
+```
+Plugin.run() -> PluginResult
+    -> adapt_result(result) -> list[Observation]
+        -> KnowledgeState.apply_observation(obs) -> ObservationOutcome
+            -> Entity в граф (add/merge)
+            -> Relation в граф (add/dedup)
+```
+
+---
+
+## Capabilities и Scoring
+
+### Модель Capability (`capabilities/capability.py`)
+
+```python
+class Capability(BaseModel):
+    name: str                              # display name
+    plugin_name: str                       # имя плагина в registry
+    category: str                          # PluginCategory
+    requires_knowledge: list[str] = []     # что нужно в графе для запуска
+    produces_knowledge: list[str] = []     # что плагин добавит в граф
+    cost_score: float = 1.0               # 1-10
+    noise_score: float = 1.0              # 1-10
+    execution_time_estimate: float = 10.0  # секунды
+```
+
+### Синтаксис requires_knowledge
+
+| Паттерн | Значение | Пример плагинов |
+|---------|----------|-----------------|
+| `"Host"` | Нужен любой хост | dns_enum, whois |
+| `"Service:http"` | Нужен HTTP-сервис | tech_detect, http_headers |
+| `"Service:ssh"` | Нужен SSH-сервис | ssh_brute |
+| `"Endpoint:params"` | Endpoint с параметрами | sqli_check, xss_check |
+| `"Technology:waf"` | Обнаружен WAF | waf_bypass |
+| `"Technology:cms"` | Обнаружена CMS | wp_deep_scan |
+| `"Credential"` | Найдены credentials | credential_spray |
+
+### CAPABILITY_MAP (`capabilities/mapping.py`)
+
+138 плагинов явно маппятся. Для остальных — auto-inference из `PluginMeta`:
+- `requires`: `["Host"]` + `"Service:http"` если `meta.requires_http`
+- `produces`: из `meta.produces` или `["Finding"]`
+- `cost_score`: `min(meta.timeout / 10.0, 10.0)`
+- `noise_score`: из `meta.risk_level`
+
+### Формула скоринга (`scoring/scorer.py`)
+
+```
+priority = (novelty * knowledge_gain) / (cost + noise + repetition_penalty)
+```
+
+| Компонент | Формула |
+|-----------|---------|
+| `novelty` | `1.0 / (1.0 + (observation_count - 1) * 0.3)` |
+| `knowledge_gain` | `len(produces) * (1.0 - confidence)`, min 0.1 |
+| `cost` | `cap.cost_score` (1-10) |
+| `noise` | `cap.noise_score` (1-10) |
+| `repetition_penalty` | Adaptive из History или binary 5.0 из графа |
+
+**Adaptive repetition penalty** (с History):
+```
+penalty = base_penalty * time_decay * (unproductive_multiplier if unproductive else 1.0)
+```
+
+### Добавление маппинга для нового плагина
+
+В `capabilities/mapping.py` добавить в `CAPABILITY_MAP`:
+```python
+"my_plugin": {
+    "requires": ["Host", "Service:http"],
+    "produces": ["Finding", "Vulnerability"],
+    "cost": 3.0,
+    "noise": 2.0,
+},
+```
+
+---
+
+## Gap Detection — Planner
+
+Planner (`orchestrator/planner.py`) анализирует knowledge graph и обнаруживает пробелы
+в знаниях — `KnowledgeGap(entity, missing, priority, description)`.
+
+### 11 правил обнаружения gaps
+
+| # | Правило | missing | Приоритет | Условие |
+|---|---------|---------|-----------|---------|
+| 1 | `_host_without_services` | `"services"` | **10.0** | Host без EXPOSES-связей |
+| 2 | `_host_without_dns` | `"dns"` | **8.0** | Host без `dns_records`, type != "ip" |
+| 3 | `_http_service_without_tech` | `"technology"` | **7.0** | HTTP-хост без RUNS-связей |
+| 4 | `_http_service_without_endpoints` | `"endpoints"` | **6.0** | HTTP-хост без HAS_ENDPOINT |
+| 5 | `_http_endpoints_without_forms` | `"forms"` | **5.5** | HTTP-хост с endpoints, но без `forms_checked` |
+| 6 | `_endpoint_without_testing` | `"vulnerability_testing"` | **5.0** | Endpoint с `has_params`/`is_api`/`scan_path` |
+| 7 | `_http_host_without_vuln_testing` | `"host_vulnerability_testing"` | **4.5** | HTTP-хост (каждый step, dedup через fingerprints) |
+| 8 | `_service_without_exploitation` | `"service_exploitation"` | **6.5** | Non-HTTP сервис без `service_tested` |
+| 9 | `_credential_without_exploitation` | `"credential_exploitation"` | **7.5** | Существует Credential |
+| 10 | `_technology_without_version` | `"version"` | **4.0** | Technology без `version` |
+| 11 | `_low_confidence_entity` | `"confirmation"` | **3.0** | Entity с `confidence < 0.5` |
+
+### Gap satisfaction flags
+
+| Флаг | Предотвращает повторное срабатывание | Устанавливается когда |
+|------|--------------------------------------|----------------------|
+| `services_checked` | `_host_without_services` | Плагин produces "Service" |
+| `tech_checked` | `_http_service_without_tech` | Плагин produces "Technology" |
+| `endpoints_checked` | `_http_service_without_endpoints` | Плагин produces "Endpoint" |
+| `forms_checked` | `_http_endpoints_without_forms` | form_analyzer / web_crawler / link_extractor |
+| `version_checked` | `_technology_without_version` | Плагин produces для TECHNOLOGY |
+
+---
+
+## Selector и механика цикла
+
+### Selector.match() (`orchestrator/selector.py`)
+
+Для каждого gap перебирает capabilities и проверяет:
+1. **produces_match**: capability производит то, что требует gap
+2. **requirements_met**: prerequisites удовлетворены графом
+3. **IP/domain exclusion**: domain-only плагины не запускаются на IP/localhost
+4. **Dedup**: один `(plugin, target)` не дублируется
+
+### Selector.pick() — выбор батча
+
+Greedy top-N с дедупликацией:
+- Для `ENDPOINT`: ключ = `(plugin_name, host)` — один pentesting-плагин на хост
+- Для остальных: ключ = `(plugin_name, entity.id)`
+- Budget = `safety.batch_size` (default 5)
+
+### Пошаговый lifecycle итерации
+
+```
+ 1. safety.can_continue(step)          -> проверка лимитов
+ 2. state.find_gaps()                  -> обнаружение knowledge gaps
+ 3. selector.match(gaps, graph)        -> поиск кандидатов
+ 4. scorer.rank(candidates)            -> скоринг
+ 5. filter: was_executed + cooldown    -> отсечение выполненных
+ 6. selector.pick(scored, budget)      -> выбор батча (greedy top-N)
+ 7. for each chosen:
+    a. _build_decision()              -> Decision ДО выполнения
+    b. history.record(decision)       -> запись в memory
+    c. emit DECISION_MADE event
+    d. graph.record_execution(fp)     -> fingerprint
+    e. create async task              -> executor.execute(cap, entity, graph)
+ 8. asyncio.gather(*tasks)            -> параллельное выполнение
+ 9. for each result:
+    a. state.apply_observation(obs)   -> обновление графа
+    b. emit ENTITY events
+    c. update decision outcome
+10. _mark_gap_satisfied(sc)           -> satisfaction flags
+11. emit STEP_COMPLETED event
+```
+
+---
+
+## Decision Tracing
+
+### Decision model (`decisions/decision.py`)
+
+**Pre-execution** (заполняются ДО запуска плагина):
+- `id` — SHA256(step:timestamp:plugin:target)[:16]
+- `step`, `goal` (gap.missing), `goal_priority`, `triggering_entity_id`
+- `context` — ContextSnapshot (entity_count, relation_count, host/service/finding_count, gap_count)
+- `evaluated_options` — все кандидаты (max 20) с score_breakdown
+- `chosen_capability`, `chosen_plugin`, `chosen_target`, `chosen_score`
+- `reasoning_trace` — "Gap: X. Selected Y (score=Z) from N candidates."
+
+**Post-execution** (заполняются ПОСЛЕ):
+- `outcome_observations`, `outcome_new_entities`, `outcome_confidence_delta`, `outcome_duration`
+- `was_productive` — new_entities > 0 or confidence_delta > 0.01
+
+### History — decision memory (`memory/history.py`)
+
+- `record(decision)` — запись решения
+- `update_outcome(decision_id, ...)` — обновление post-execution полей
+- `repetition_penalty(plugin, entity_id)` — adaptive penalty
+- `save(path)` / `load(path)` — JSON persistence (`decision_history.json`)
+
+### EventBus — 9 типов событий (`events/bus.py`)
+
+| EventType | Когда |
+|-----------|-------|
+| `ENTITY_CREATED` | Новый entity добавлен в граф |
+| `ENTITY_UPDATED` | Entity обновлён (merge) |
+| `OBSERVATION_APPLIED` | Observation применён к графу |
+| `PLUGIN_STARTED` / `PLUGIN_FINISHED` | Начало/конец выполнения плагина |
+| `GAP_DETECTED` | Обнаружены knowledge gaps |
+| `STEP_COMPLETED` | Шаг цикла завершён |
+| `DECISION_MADE` | Принято решение о запуске |
+
+### SafetyLimits (`orchestrator/safety.py`)
+
+```python
+class SafetyLimits(BaseModel):
+    max_steps: int = 100
+    max_duration_seconds: float = 3600.0    # 1 час
+    batch_size: int = 5
+    cooldown_per_capability: float = 0.0
+```
+
+### Timeline (`orchestrator/timeline.py`)
+
+Структурированный лог: `TimelineEntry` с step, timestamp, capability, target_entity,
+knowledge_gained, confidence_delta, duration. `summary()` -> human-readable лог.
+
+---
+
+## Классический Pipeline
+
+Pipeline (`core/pipeline.py`) — последовательное выполнение плагинов по фазам.
+
+### Фазы
+- **По умолчанию** (4): `recon -> scanning -> analysis -> pentesting`
+- **Offensive** (10): + `exploitation, post_exploit, privesc, lateral, crypto, forensics`
+
+### Порядок выполнения
+1. Топологическая сортировка (Kahn's algorithm, `depends_on`)
+2. Recon расширяет target scope (subdomains -> новые цели)
+3. Каждая фаза: resolve_order -> run_batch -> emit findings -> save to DB
+
+### Inter-phase intelligence injection
+
+| После фазы | Инъекция | Что делает |
+|-------------|----------|------------|
+| `recon` | `_inject_crawl_data()` | `ctx.state["crawled_urls"]`, `ctx.state["discovered_forms"]` |
+| `recon` | `_check_http_reachability()` | HEAD-проверка хостов -> `ctx.state["http_scheme"]` |
+| `analysis` | `_inject_waf_data()` | `ctx.state["waf_map"]` |
+| `analysis` | `_inject_api_paths()` | `ctx.state["discovered_api_paths"]` |
+
+---
+
+## Базы сигнатур
 
 | База | Файл | Кол-во | Аналог |
 |------|------|--------|--------|
 | TECH_FINGERPRINTS | data/fingerprints.py | 594 | Wappalyzer top-500 |
-| _VULNERABLE_VERSIONS (CVE) | analysis/version_detect.py | 200+ | retire.js |
+| _VULNERABLE_VERSIONS | analysis/version_detect.py | 200+ | retire.js |
 | WAF_SIGNATURES | analysis/waf_detect.py | 125 | wafw00f 100+ |
 | CMS_SIGNATURES | analysis/cms_detect.py | 83 | WPScan/CMSmap |
 | TAKEOVER_FINGERPRINTS | data/fingerprints.py | 80 | can-i-take-over-xyz |
-| CSP_BYPASS_DOMAINS | data/fingerprints.py | 52 | Google CSP Evaluator (3.5x) |
+| CSP_BYPASS_DOMAINS | data/fingerprints.py | 52 | Google CSP Evaluator |
 | KNOWN_FAVICONS + MMH3 | analysis/favicon_hash.py | 300+ | Shodan |
-| CLOUD_SIGNATURES | analysis/cloud_detect.py | 33 | — |
-| CDN_SIGNATURES | scanning/cdn_detect.py | 40 | — |
-| WEAK_CIPHERS | scanning/tls_cipher_scan.py | 55 | testssl.sh |
-| XSS payloads | pentesting/xss_*.py | 35+ basic, 49 DOM sinks | XSStrike/Dalfox |
-| SQLi payloads | utils/payloads.py | 489 | sqlmap (~30%) |
-| SSTI probes | pentesting/ssti_*.py | 32 math + 48 fingerprints | tplmap |
-| SSRF bypasses | pentesting/ssrf_check.py | 40 IP + 31 cloud meta | — |
-| XXE payloads | pentesting/xxe_check.py | 22 file + 12 SSRF + 5 blind | — |
-| JWT attacks | pentesting/jwt_attack.py | 18 none + 60 secrets + 17 kid | — |
-| HTTP smuggling | pentesting/http_smuggling.py | 45 TE obfuscations | — |
-| NoSQLi payloads | pentesting/nosqli_check.py | 92 total | — |
+| SQLi payloads | utils/payloads.py | 489 | sqlmap |
+| SSTI probes | pentesting/ssti_*.py | 32 + 48 | tplmap |
+| SSRF bypasses | pentesting/ssrf_check.py | 40 + 31 | — |
+| XSS payloads | pentesting/xss_*.py | 35 + 49 DOM | XSStrike/Dalfox |
+| NoSQLi payloads | pentesting/nosqli_check.py | 92 | — |
 | Command injection | pentesting/command_injection.py | 90 | commix |
-| Path traversal | pentesting/path_traversal.py | 62 | — |
+| JWT attacks | pentesting/jwt_attack.py | 18 + 60 + 17 | — |
+| HTTP smuggling | pentesting/http_smuggling.py | 45 | — |
 | Default credentials | pentesting/default_creds.py | 75 | — |
 | WP plugins/themes | pentesting/wp_deep_scan.py | 86 + 52 | WPScan |
-| Actuator endpoints | pentesting/actuator_exploit.py | 31 + 22 OpenAPI + 15 GraphQL | — |
-
-### Что нужно сделать (план в AUDIT_NOTES.md)
-
-#### Следующий шаг: Live-аудит плагинов по батчам
-Методология проверена на subdomain-плагинах: прочитать код → протестировать живьём →
-сравнить с профессиональными инструментами → исправить сломанное → написать тесты.
-
-Порядок батчей:
-1. ~~**Батч 1: Recon** (12 плагинов)~~ — ВЫПОЛНЕНО 2026-02-12
-2. ~~**Батч 2/3: Analysis + Scanning** (10 плагинов)~~ — ВЫПОЛНЕНО 2026-02-13
-3. **Батч 3 остаток: Analysis** (11 плагинов) — waf_bypass, js_api_extract, js_secret_scan, openapi_parser, api_detect, security_txt, meta_extract, link_extractor, form_analyzer, cloud_detect, prometheus_scrape
-4. **Батч 2 остаток: Scanning** (7 плагинов) — ssl_check (God Plugin!), tls_cipher_scan, redirect_chain, graphql_detect, websocket_detect, dnssec_check, ipv6_scan
-5. **Батч 4: Pentesting** (55 плагинов, разбить на подбатчи) — sqli, xss, ssrf, ssti, etc.
-
-#### Архитектурные задачи (отложены)
-- Разделение ssl_check.py (2563 строки → 4-5 плагинов)
-- Экстернализация payload data (payloads.py 1933 строки, waf_bypass.py 1331 строка → YAML)
-- Миграции БД (нет версионирования schema)
-- CORS/CSP overlap между http_headers и dedicated плагинами
-- ASN lookup дублирование (asn_lookup.py + whois.py)
-
-#### Ожидаемые паттерны проблем
-- Сломанные внешние API (rate limits, auth requirements) — как было с HackerTarget, AlienVault, VirusTotal
-- Тихие провалы (`except Exception: pass`) — нужно добавить информативные сообщения
-- Дублирование findings между плагинами (ssl_check ↔ tls_cipher_scan, lfi_check ↔ path_traversal)
-- Устаревшие fingerprints/сигнатуры

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from basilisk.knowledge.entities import Entity, EntityType
@@ -208,6 +209,26 @@ class KnowledgeGraph:
     def all_relations(self) -> list[Relation]:
         """Return all relations."""
         return list(self._relations)
+
+    def apply_decay(
+        self, max_age_hours: float = 24.0, decay_rate: float = 0.01,
+    ) -> int:
+        """Decay confidence of entities based on age since last observation.
+
+        Entities not seen recently lose confidence, encouraging re-verification.
+        Returns the number of entities affected.
+        """
+        now = datetime.now(UTC)
+        affected = 0
+        for entity in self._entities.values():
+            age_hours = (now - entity.last_seen).total_seconds() / 3600
+            if age_hours > 1.0:
+                old_conf = entity.confidence
+                entity.confidence *= 1.0 - decay_rate * min(age_hours, max_age_hours)
+                entity.confidence = max(entity.confidence, 0.1)
+                if entity.confidence < old_conf:
+                    affected += 1
+        return affected
 
     def clear(self) -> None:
         """Reset the graph."""

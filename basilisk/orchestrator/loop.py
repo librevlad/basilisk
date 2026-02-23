@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import random
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -65,6 +66,8 @@ class AutonomousLoop:
         safety: SafetyLimits,
         on_progress: Callable | None = None,
         history: Any = None,  # History | None
+        exploration_rate: float = 0.15,
+        cost_tracker: Any = None,  # CostTracker | None
     ) -> None:
         self.graph = graph
         self.planner = planner
@@ -77,6 +80,8 @@ class AutonomousLoop:
         self.timeline = Timeline()
         self._history = history
         self._state = KnowledgeState(graph, planner)
+        self._exploration_rate = exploration_rate
+        self._cost_tracker = cost_tracker
 
     async def run(self, initial_targets: list) -> LoopResult:
         """Main autonomous loop."""
@@ -127,8 +132,13 @@ class AutonomousLoop:
                 and self.safety.is_cooled_down(self._fingerprint(sc))
             ]
 
-            # 5. Select batch
-            chosen = self.selector.pick(scored, budget=self.safety.batch_size)
+            # 5. Select batch (exploration vs exploitation)
+            if scored and random.random() < self._exploration_rate:
+                # Exploration: random sample for diversity
+                k = min(len(scored), self.safety.batch_size)
+                chosen = random.sample(scored, k)
+            else:
+                chosen = self.selector.pick(scored, budget=self.safety.batch_size)
             if not chosen:
                 termination_reason = "no_candidates"
                 break
@@ -218,6 +228,14 @@ class AutonomousLoop:
                             confidence_delta=total_confidence_delta,
                             duration=decision.outcome_duration,
                         )
+                    # Record stats for cost learning
+                    if self._cost_tracker is not None:
+                        self._cost_tracker.record(
+                            decision.chosen_plugin,
+                            new_entities=new_entities,
+                            findings=obs_count,
+                            runtime=decision.outcome_duration,
+                        )
 
             total_obs += step_obs_count
 
@@ -232,6 +250,10 @@ class AutonomousLoop:
                 "entities": self.graph.entity_count,
                 "relations": self.graph.relation_count,
             }))
+
+            # Apply knowledge decay every 10 steps
+            if step % 10 == 0:
+                self.graph.apply_decay()
 
             logger.info(
                 "Step %d: %d tasks, +%d observations, %d entities total",

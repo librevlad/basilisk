@@ -103,6 +103,7 @@ class Audit:
         self._force_phases: list[str] = []
         self._autonomous: bool = False
         self._max_steps: int = 100
+        self._campaign_enabled: bool = False
 
     @classmethod
     def targets(cls, target_list: list[str], **kwargs: Any) -> Audit:
@@ -164,6 +165,11 @@ class Audit:
         """Enable autonomous orchestration (replaces fixed pipeline)."""
         self._autonomous = True
         self._max_steps = max_steps
+        return self
+
+    def enable_campaign(self) -> Audit:
+        """Enable persistent campaign memory for cross-audit learning."""
+        self._campaign_enabled = True
         return self
 
     def plugins(self, *names: str) -> Audit:
@@ -276,7 +282,22 @@ class Audit:
         capabilities = build_capabilities(registry)
         selector = Selector(capabilities)
         history = History()
-        scorer = Scorer(graph, history=history)
+
+        # Campaign memory (opt-in cross-audit learning)
+        campaign_memory = None
+        campaign_store = None
+        if settings.campaign.enabled or self._campaign_enabled:
+            from basilisk.campaign.memory import CampaignMemory
+            from basilisk.campaign.store import CampaignStore
+
+            db_path = settings.campaign.data_dir / settings.campaign.db_name
+            campaign_store = await CampaignStore.open(db_path)
+            campaign_memory = CampaignMemory()
+            await campaign_memory.load(
+                campaign_store, [t.host for t in scope],
+            )
+
+        scorer = Scorer(graph, history=history, campaign_memory=campaign_memory)
         core_executor = AsyncExecutor(max_concurrency=settings.scan.max_concurrency)
         orch_executor = OrchestratorExecutor(registry, core_executor, ctx)
         bus = EventBus()
@@ -405,6 +426,11 @@ class Audit:
                 history_path = self._project.db_path.parent / "decision_history.json"
                 result.history.save(history_path)
 
+            # Update and persist campaign memory
+            if campaign_memory is not None and result.history:
+                campaign_memory.update_from_graph(result.graph, result.history)
+                await campaign_memory.save(campaign_store)
+
             state = self._loop_result_to_pipeline_state(result)
 
             # Fire progress callback with final state so LiveReportEngine writes files
@@ -413,6 +439,8 @@ class Audit:
 
             return state
         finally:
+            if campaign_store:
+                await campaign_store.close()
             if db:
                 await db.close()
             if ctx.http:
