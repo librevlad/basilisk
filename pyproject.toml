@@ -1,6 +1,6 @@
 [project]
 name = "basilisk"
-version = "3.4.0"
+version = "3.5.0"
 description = "Professional modular security audit framework for domain reconnaissance, analysis, and pentesting"
 readme = "README.md"
 requires-python = ">=3.12"
