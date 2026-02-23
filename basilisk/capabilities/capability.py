@@ -2,7 +2,19 @@
 
 from __future__ import annotations
 
+from enum import StrEnum
+from typing import Any
+
 from pydantic import BaseModel, Field
+
+
+class ActionType(StrEnum):
+    """Classification of what a capability does."""
+
+    ENUMERATION = "enumeration"     # recon, scanning — discover new entities
+    EXPERIMENT = "experiment"       # analysis, pentesting — test hypotheses
+    EXPLOIT = "exploit"             # exploitation — needs confirmed vulnerability
+    VERIFICATION = "verification"   # re-test to confirm/reject findings
 
 
 class Capability(BaseModel):
@@ -18,3 +30,5 @@ class Capability(BaseModel):
     execution_time_estimate: float = 10.0  # seconds
     reduces_uncertainty: list[str] = Field(default_factory=list)  # knowledge confirmed
     risk_domain: str = "general"  # recon|web|network|auth|crypto|forensics|general
+    action_type: ActionType = ActionType.ENUMERATION
+    expected_state_delta: dict[str, Any] = Field(default_factory=dict)

@@ -69,6 +69,8 @@ class AutonomousLoop:
         exploration_rate: float = 0.15,
         cost_tracker: Any = None,  # CostTracker | None
         goal_engine: Any = None,  # GoalEngine | None
+        hypothesis_engine: Any = None,  # HypothesisEngine | None
+        evidence_aggregator: Any = None,  # EvidenceAggregator | None
     ) -> None:
         self.graph = graph
         self.planner = planner
@@ -84,6 +86,8 @@ class AutonomousLoop:
         self._exploration_rate = exploration_rate
         self._cost_tracker = cost_tracker
         self._goal_engine = goal_engine
+        self._hypothesis_engine = hypothesis_engine
+        self._evidence_aggregator = evidence_aggregator
 
     async def run(self, initial_targets: list) -> LoopResult:
         """Main autonomous loop."""
@@ -247,9 +251,84 @@ class AutonomousLoop:
 
             total_obs += step_obs_count
 
-            # 7b. Mark gap rules as satisfied for executed capabilities
-            for sc in chosen:
-                self._mark_gap_satisfied(sc)
+            # 7a. Hypothesis generation from updated graph
+            if self._hypothesis_engine is not None:
+                new_hypotheses = self._hypothesis_engine.generate_hypotheses(self.graph)
+                for hyp in new_hypotheses:
+                    self.graph.add_hypothesis(hyp)
+                    logger.debug("Hypothesis created: %s", hyp.statement[:80])
+
+            # 7b. Record evidence in aggregator
+            if self._evidence_aggregator is not None:
+                for idx, obs_list in enumerate(results):
+                    if isinstance(obs_list, BaseException):
+                        continue
+                    d = step_decisions[idx] if idx < len(step_decisions) else None
+                    plugin_name = d.chosen_plugin if d else ""
+                    for obs in obs_list:
+                        entity_id = Entity.make_id(obs.entity_type, **obs.key_fields)
+                        self._evidence_aggregator.record_evidence(
+                            entity_id, plugin_name, 0.0,
+                        )
+
+            # 7c. Run belief revision
+            if self._evidence_aggregator is not None:
+                revisions = self._evidence_aggregator.revise_beliefs()
+                for entity_id, old_conf, new_conf in revisions:
+                    if new_conf > old_conf:
+                        self.bus.emit(Event(EventType.BELIEF_STRENGTHENED, {
+                            "entity_id": entity_id,
+                            "old_confidence": old_conf,
+                            "new_confidence": new_conf,
+                        }))
+                    else:
+                        self.bus.emit(Event(EventType.BELIEF_WEAKENED, {
+                            "entity_id": entity_id,
+                            "old_confidence": old_conf,
+                            "new_confidence": new_conf,
+                        }))
+
+            # 7d. Update hypothesis confidence from observations
+            if self._hypothesis_engine is not None:
+                for idx, obs_list in enumerate(results):
+                    if isinstance(obs_list, BaseException):
+                        continue
+                    d = step_decisions[idx] if idx < len(step_decisions) else None
+                    plugin_name = d.chosen_plugin if d else ""
+                    for obs in obs_list:
+                        entity_id = Entity.make_id(obs.entity_type, **obs.key_fields)
+                        from basilisk.reasoning.belief import get_source_family
+                        family = get_source_family(plugin_name)
+                        changed = self._hypothesis_engine.update_from_observation(
+                            entity_id=entity_id,
+                            source_plugin=plugin_name,
+                            source_family=family,
+                            was_new=True,
+                            confidence_delta=0.0,
+                        )
+                        for hyp in changed:
+                            if hyp.status == "confirmed":
+                                self.bus.emit(Event(EventType.HYPOTHESIS_CONFIRMED, {
+                                    "hypothesis_id": hyp.id,
+                                    "statement": hyp.statement,
+                                }))
+                            elif hyp.status == "rejected":
+                                self.bus.emit(Event(EventType.HYPOTHESIS_REJECTED, {
+                                    "hypothesis_id": hyp.id,
+                                    "statement": hyp.statement,
+                                }))
+
+            # 7e. Reset aggregator for next step
+            if self._evidence_aggregator is not None:
+                self._evidence_aggregator.reset_step()
+
+            # 7f. Mark gap rules as satisfied for executed capabilities
+            for idx, sc in enumerate(chosen):
+                produced = False
+                if idx < len(results) and not isinstance(results[idx], BaseException):
+                    d = step_decisions[idx] if idx < len(step_decisions) else None
+                    produced = d.was_productive if d else False
+                self._mark_gap_satisfied(sc, produced=produced)
 
             # 8. Emit step event
             self.bus.emit(Event(EventType.STEP_COMPLETED, {
@@ -395,6 +474,27 @@ class AutonomousLoop:
             step, self.safety.elapsed, len(gaps),
         )
 
+        # Hypothesis context
+        related_hyp_ids: list[str] = []
+        hyp_resolution_gain = 0.0
+        action_type_str = ""
+        if self._hypothesis_engine is not None:
+            related = self._hypothesis_engine.hypotheses_for_entity(chosen.target_entity.id)
+            related_hyp_ids = [h.id for h in related[:5]]
+            hyp_resolution_gain = self._hypothesis_engine.resolution_gain(
+                chosen.capability.plugin_name, chosen.target_entity.id,
+            )
+        if hasattr(chosen.capability, "action_type"):
+            action_type_str = str(chosen.capability.action_type)
+
+        # Add hypothesis counts to context snapshot
+        if self._hypothesis_engine is not None:
+            context.active_hypothesis_count = len(self._hypothesis_engine.active_hypotheses)
+            context.confirmed_hypothesis_count = sum(
+                1 for h in self._hypothesis_engine.all_hypotheses
+                if h.status == "confirmed"
+            )
+
         return Decision(
             id=Decision.make_id(step, now, chosen.capability.plugin_name, target_host),
             timestamp=now,
@@ -410,14 +510,21 @@ class AutonomousLoop:
             chosen_target=target_host,
             chosen_score=chosen.score,
             reasoning_trace=reasoning,
+            related_hypothesis_ids=related_hyp_ids,
+            hypothesis_resolution_gain=hyp_resolution_gain,
+            action_type=action_type_str,
         )
 
-    def _mark_gap_satisfied(self, sc: ScoredCapability) -> None:
+    def _mark_gap_satisfied(self, sc: ScoredCapability, *, produced: bool = False) -> None:
         """Mark knowledge gap rules as satisfied for this (cap, entity) pair.
 
         This prevents gap rules from generating the same gaps endlessly.
         For host-level capabilities, mark the host.
         For endpoint-level, the dedup logic prevents re-execution.
+
+        Args:
+            sc: The scored capability that was executed.
+            produced: Whether the execution actually produced new entities.
         """
         cap = sc.capability
         entity = sc.target_entity
@@ -428,16 +535,31 @@ class AutonomousLoop:
         # prevents re-running the same plugin, and the loop terminates naturally with
         # no_candidates when all matching plugins have been executed.
 
-        # Mark service discovery complete
-        if "Service" in cap.produces_knowledge and entity.type == EntityType.HOST:
+        # Mark service discovery complete — only if execution actually produced
+        # entities, so that other service-producing plugins (port_scan, shodan_lookup)
+        # still get a chance to run on this host if the first one found nothing.
+        if (
+            "Service" in cap.produces_knowledge
+            and entity.type == EntityType.HOST
+            and produced
+        ):
             entity.data["services_checked"] = True
 
-        # Mark tech detection complete
-        if "Technology" in cap.produces_knowledge and entity.type == EntityType.HOST:
+        # Mark tech detection complete — only if execution actually produced entities,
+        # so that other tech-producing plugins still get a chance to run
+        if (
+            "Technology" in cap.produces_knowledge
+            and entity.type == EntityType.HOST
+            and produced
+        ):
             entity.data["tech_checked"] = True
 
-        # Mark endpoint discovery complete
-        if "Endpoint" in cap.produces_knowledge and entity.type == EntityType.HOST:
+        # Mark endpoint discovery complete — only if execution produced entities
+        if (
+            "Endpoint" in cap.produces_knowledge
+            and entity.type == EntityType.HOST
+            and produced
+        ):
             entity.data["endpoints_checked"] = True
             # form_analyzer / web_crawler also produce Endpoint — mark forms checked
             if cap.plugin_name in (

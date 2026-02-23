@@ -30,6 +30,7 @@ class KnowledgeGraph:
         self._relation_index: dict[str, list[Relation]] = defaultdict(list)
         self._reverse_index: dict[str, list[Relation]] = defaultdict(list)
         self._execution_log: dict[str, float] = {}  # fingerprint → timestamp
+        self._hypotheses: dict[str, Any] = {}  # hypothesis_id → Hypothesis
 
     @property
     def entity_count(self) -> int:
@@ -238,6 +239,30 @@ class KnowledgeGraph:
                     affected += 1
         return affected
 
+    def add_hypothesis(self, hypothesis: Any) -> None:
+        """Store a hypothesis (by ID). Skips if already exists."""
+        self._hypotheses[hypothesis.id] = hypothesis
+
+    def get_hypothesis(self, hypothesis_id: str) -> Any | None:
+        """Get a hypothesis by ID."""
+        return self._hypotheses.get(hypothesis_id)
+
+    def active_hypotheses(self) -> list:
+        """Return all hypotheses with 'active' status."""
+        return [h for h in self._hypotheses.values() if h.status == "active"]
+
+    def all_hypotheses(self) -> list:
+        """Return all hypotheses regardless of status."""
+        return list(self._hypotheses.values())
+
+    def hypotheses_for_entity(self, entity_id: str) -> list:
+        """Return hypotheses related to a specific entity."""
+        return [
+            h for h in self._hypotheses.values()
+            if entity_id in getattr(h, "related_entity_ids", [])
+            or entity_id in getattr(h, "target_entity_ids", [])
+        ]
+
     def clear(self) -> None:
         """Reset the graph."""
         self._entities.clear()
@@ -245,3 +270,4 @@ class KnowledgeGraph:
         self._relation_index.clear()
         self._reverse_index.clear()
         self._execution_log.clear()
+        self._hypotheses.clear()
