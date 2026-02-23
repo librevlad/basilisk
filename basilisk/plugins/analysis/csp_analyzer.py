@@ -426,6 +426,7 @@ class CspAnalyzerPlugin(BasePlugin):
         ):
             findings.append(Finding.high(
                 "CSP has no script-src or default-src",
+                evidence=f"CSP: {effective_csp[:200]}",
                 description=(
                     "Scripts can be loaded from any origin"
                 ),

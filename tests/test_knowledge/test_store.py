@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import aiosqlite
 
-from basilisk.knowledge.entities import Entity, EntityType
+from basilisk.knowledge.entities import Entity
 from basilisk.knowledge.graph import KnowledgeGraph
 from basilisk.knowledge.relations import Relation, RelationType
 from basilisk.knowledge.store import KnowledgeStore

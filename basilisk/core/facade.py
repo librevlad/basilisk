@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import logging
 from collections.abc import Callable
 from pathlib import Path
@@ -9,7 +11,13 @@ from typing import TYPE_CHECKING, Any
 
 from basilisk.config import Settings
 from basilisk.core.executor import AsyncExecutor, PluginContext
-from basilisk.core.pipeline import OnProgressCallback, Pipeline, PipelineState, _noop_progress
+from basilisk.core.pipeline import (
+    OnProgressCallback,
+    Pipeline,
+    PipelineState,
+    _is_ip_or_local,
+    _noop_progress,
+)
 from basilisk.core.providers import ProviderPool
 from basilisk.core.registry import PluginRegistry
 from basilisk.models.result import Finding
@@ -24,6 +32,36 @@ if TYPE_CHECKING:
     from basilisk.models.project import Project
 
 logger = logging.getLogger(__name__)
+
+
+def _split_host_port(raw: str) -> tuple[str, int | None]:
+    """Split 'host:port' into (host, port). Returns (raw, None) if no port."""
+    if raw.startswith("["):
+        # [::1]:8080 → ::1, 8080
+        bracket_end = raw.find("]")
+        if bracket_end != -1 and bracket_end + 1 < len(raw) and raw[bracket_end + 1] == ":":
+            host = raw[1:bracket_end]
+            try:
+                return host, int(raw[bracket_end + 2:])
+            except ValueError:
+                return raw, None
+        return raw[1:bracket_end] if bracket_end != -1 else raw, None
+    if "." in raw and ":" in raw:
+        # 127.0.0.1:4280 → 127.0.0.1, 4280 (IPv4 with port)
+        host, _, port_s = raw.rpartition(":")
+        try:
+            return host, int(port_s)
+        except ValueError:
+            return raw, None
+    if raw == "localhost":
+        return raw, None
+    # localhost:8080
+    if raw.startswith("localhost:"):
+        try:
+            return "localhost", int(raw[len("localhost:"):])
+        except ValueError:
+            return raw, None
+    return raw, None
 
 
 class Audit:
@@ -279,6 +317,83 @@ class Audit:
             if ctx.browser:
                 await ctx.browser.start()
 
+            # Probe HTTP scheme for each target
+            http_scheme: dict[str, str | None] = {}
+            for target in scope:
+                scheme = await self._probe_target_scheme(ctx, target.host)
+                http_scheme[target.host] = scheme
+            ctx.state["http_scheme"] = http_scheme
+
+            # Auth phase (same as pipeline mode)
+            if ctx.auth:
+                for target in scope:
+                    host_key = target.host
+                    scheme = http_scheme.get(host_key, "http") or "http"
+                    base = f"{scheme}://{host_key}"
+                    try:
+                        session = await ctx.auth.login(host_key, ctx)
+                        if session.is_authenticated:
+                            if ctx.http and session.cookies:
+                                await ctx.http.set_cookies(base, session.cookies)
+                            extra = settings.auth.extra_cookies
+                            if ctx.http and extra:
+                                session.cookies.update(extra)
+                                await ctx.http.set_cookies(base, extra)
+                            logger.info("Autonomous auth OK for %s", host_key)
+                        else:
+                            logger.warning("Autonomous auth failed for %s", host_key)
+                    except Exception:
+                        logger.warning("Autonomous auth error for %s", host_key, exc_info=True)
+
+            # Inject scan_paths from config into ctx.state and graph
+            scan_paths = settings.scan.scan_paths
+            if scan_paths:
+                from datetime import UTC, datetime
+
+                from basilisk.knowledge.entities import Entity, EntityType
+                from basilisk.knowledge.relations import Relation, RelationType
+
+                now = datetime.now(UTC)
+                for target in scope:
+                    host_key = target.host
+                    scheme = http_scheme.get(host_key, "http") or "http"
+                    base = f"{scheme}://{host_key}"
+                    urls = ctx.state.setdefault("crawled_urls", {}).setdefault(host_key, [])
+                    urls_set = set(urls)
+                    for sp in scan_paths:
+                        if not sp.startswith("/"):
+                            sp = f"/{sp}"
+                        url = f"{base}{sp}"
+                        if url not in urls_set:
+                            urls.append(url)
+                            urls_set.add(url)
+                    # Create ENDPOINT entities in graph for scan_paths
+                    for sp in scan_paths:
+                        if not sp.startswith("/"):
+                            sp = f"/{sp}"
+                        path_part = sp.split("?")[0]
+                        has_params = "?" in sp
+                        ep = Entity(
+                            id=Entity.make_id(EntityType.ENDPOINT, host=host_key, path=path_part),
+                            type=EntityType.ENDPOINT,
+                            data={
+                                "host": host_key, "path": path_part,
+                                "has_params": has_params,
+                                "scan_path": True,
+                            },
+                            first_seen=now, last_seen=now,
+                        )
+                        graph.add_entity(ep)
+                        host_id = Entity.make_id(EntityType.HOST, host=host_key)
+                        graph.add_relation(Relation(
+                            source_id=host_id, target_id=ep.id,
+                            type=RelationType.HAS_ENDPOINT,
+                        ))
+                    logger.info(
+                        "Injected %d scan_paths as endpoints for %s",
+                        len(scan_paths), host_key,
+                    )
+
             result = await loop.run(list(scope))
 
             # Persist knowledge graph to SQLite
@@ -290,7 +405,13 @@ class Audit:
                 history_path = self._project.db_path.parent / "decision_history.json"
                 result.history.save(history_path)
 
-            return self._loop_result_to_pipeline_state(result)
+            state = self._loop_result_to_pipeline_state(result)
+
+            # Fire progress callback with final state so LiveReportEngine writes files
+            if self._on_progress:
+                self._on_progress(state)
+
+            return state
         finally:
             if db:
                 await db.close()
@@ -306,12 +427,10 @@ class Audit:
         """Convert LoopResult to PipelineState for backward compat with reporting."""
         from basilisk.core.pipeline import PhaseProgress
         from basilisk.models.result import PluginResult
+        from basilisk.reporting.autonomous import prepare_autonomous_data
 
         state = PipelineState()
         state.status = "completed"
-
-        all_results = []
-        state.total_findings = len(result.graph.findings())
 
         # Build a single "autonomous" phase
         state.phases["autonomous"] = PhaseProgress(
@@ -322,18 +441,29 @@ class Audit:
         )
 
         # Collect PluginResults stored during execution
+        all_results = []
         for pr in result.plugin_results.values():
             if isinstance(pr, PluginResult):
                 all_results.append(pr)
 
         state.results = all_results
+        state.total_findings = sum(len(pr.findings) for pr in all_results)
+
+        # Build autonomous-specific report data
+        state.autonomous = prepare_autonomous_data(result)
+
         return state
 
     def _build_scope(self, settings: Settings) -> TargetScope:
         """Build target scope from configured targets."""
         scope = TargetScope()
         for t in self._targets:
-            scope.add(Target.domain(t))
+            if _is_ip_or_local(t):
+                bare, port = _split_host_port(t)
+                # Keep original "host:port" as host so HTTP URLs and pipeline keys match
+                scope.add(Target.ip(t if port else bare, ports=[port] if port else []))
+            else:
+                scope.add(Target.domain(t))
         if self._ports:
             settings.scan.default_ports = self._ports
         return scope
@@ -431,6 +561,21 @@ class Audit:
         if settings.auth.session_file:
             auth_manager.load(Path(settings.auth.session_file))
         return auth_manager
+
+    @staticmethod
+    async def _probe_target_scheme(ctx: PluginContext, host: str) -> str:
+        """Quick probe to determine if host uses HTTPS or HTTP."""
+        if ctx.http is None:
+            return "http"
+        for scheme in ("https", "http"):
+            try:
+                await asyncio.wait_for(
+                    ctx.http.head(f"{scheme}://{host}/"), timeout=5.0,
+                )
+                return scheme
+            except Exception:
+                continue
+        return "http"
 
     @staticmethod
     def _build_callback(settings: Settings):
@@ -550,10 +695,8 @@ class Audit:
                 await ctx.browser.stop()
             # Close global cache DB (but not project DB used as cache)
             if cache and not db:
-                try:
+                with contextlib.suppress(Exception):
                     await cache.close()
-                except Exception:
-                    pass
             if db:
                 from basilisk.storage.db import close_db
                 await close_db(db)

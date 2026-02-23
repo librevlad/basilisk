@@ -670,6 +670,7 @@ class VersionDetectPlugin(BasePlugin):
                     }.get(sev, Finding.medium)
                     findings.append(factory(
                         f"Vulnerable {tech} {ver}: {desc}",
+                        evidence=f"Detected {tech} {ver} (threshold: {hit['threshold']})",
                         description=(
                             f"{tech} {ver} is below the safe threshold "
                             f"{hit['threshold']}. "

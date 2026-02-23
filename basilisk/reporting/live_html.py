@@ -231,6 +231,7 @@ class LiveReportEngine:
             quality_metrics=quality_metrics,
             skipped_plugins=state.skipped_plugins,
             host_schemes=host_schemes,
+            autonomous=state.autonomous,
         )
 
         self.html_path.write_text(html, encoding="utf-8")
@@ -273,6 +274,9 @@ class LiveReportEngine:
                 for r in state.results
             ],
         }
+
+        if state.autonomous:
+            data["autonomous"] = state.autonomous
 
         from basilisk.storage.repo import _SafeEncoder
 

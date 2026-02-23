@@ -110,16 +110,29 @@ def collect_injection_points(
         if action:
             parsed = urlparse(action)
             path = parsed.path or "/"
+            if path and not path.startswith("/"):
+                path = f"/{path}"
         else:
             path = "/"
 
         if inputs:
-            # inputs can be dict[str, str] (name→value) or list[str] (legacy)
+            # inputs can be:
+            #   dict[str, str]  — from form_analyzer (name→value)
+            #   list[str]       — legacy format (just names)
+            #   list[dict]      — from web_crawler ({"name": ..., "type": ..., "value": ...})
             if isinstance(inputs, dict):
                 params = inputs
+            elif isinstance(inputs, list) and inputs and isinstance(inputs[0], dict):
+                params = {
+                    inp["name"]: inp.get("value", "")
+                    for inp in inputs if isinstance(inp, dict) and "name" in inp
+                }
             else:
                 params = {inp: "" for inp in inputs}
-            _add(InjectionPoint(path=path, params=params, method=method, source="form"), skip_filter=True)
+            _add(
+                InjectionPoint(path=path, params=params, method=method, source="form"),
+                skip_filter=True,
+            )
 
     # ── 2. Crawled URLs (full path + actual query params) ────────────
     crawled_urls = state.get("crawled_urls", {}).get(host, [])
@@ -175,6 +188,19 @@ def collect_injection_points(
         if hpath not in seen_paths:
             seen_paths.add(hpath)
             all_paths.append((hpath, "hardcoded"))
+
+    # ── 4b. POST variants for extensionless crawled paths ─────────────
+    # Only for crawled paths (scan_paths → crawled_urls); hardcoded plugin
+    # paths are GET-only by convention — plugins handle POST themselves.
+    for apath, asource in all_paths:
+        if asource != "crawled":
+            continue
+        last_seg = apath.rsplit("/", 1)[-1]
+        if "." not in last_seg:  # extensionless = likely API/form
+            for param in (hardcoded_params or [])[:4]:
+                _add(InjectionPoint(
+                    path=apath, params={param: "1"}, method="POST", source=asource,
+                ))
 
     # Iterate params first so each path gets at least one test
     for param in (hardcoded_params or [])[:8]:

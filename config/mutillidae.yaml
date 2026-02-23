@@ -1,0 +1,54 @@
+# OWASP Mutillidae II scan config
+# Usage: .venv/Scripts/python.exe -m basilisk audit 127.0.0.1:8280 --autonomous --config config/mutillidae.yaml -v
+
+http:
+  timeout: 15.0
+  verify_ssl: false
+
+rate_limit:
+  requests_per_second: 50.0
+  burst: 10
+
+scan:
+  scan_paths:
+    # A1 - Injection
+    - /index.php?page=user-info.php&username=test&password=test&user-info-php-submit-button=View+Account+Details
+    - /index.php?page=login.php
+    - /index.php?page=user-poll.php&csrf-token=&choice=nmap&initials=test&user-poll-php-submit-button=Submit+Vote
+    - /index.php?page=dns-lookup.php&target_host=127.0.0.1&dns-lookup-php-submit-button=Lookup+DNS
+    - /index.php?page=text-file-viewer.php&textfile=robots.txt&text-file-viewer-php-submit-button=View+File
+    # A2 - Broken Auth
+    - /index.php?page=register.php
+    - /index.php?page=password-generator.php&username=admin
+    # A3 - XSS
+    - /index.php?page=add-to-your-blog.php
+    - /index.php?page=user-info.php
+    - /index.php?page=browser-info.php
+    - /index.php?page=back-button-discussion.php
+    - /index.php?page=pen-test-tool-lookup.php&ToolID=1
+    - /index.php?page=set-background-color.php&color=white
+    # A4 - IDOR
+    - /index.php?page=source-viewer.php&phpfile=login.php
+    - /index.php?page=view-someones-blog.php
+    # A5 - Security Misconfig
+    - /index.php?page=secret-administrative-pages.php
+    - /index.php?page=phpinfo.php
+    - /index.php?page=robots-txt.php
+    # A6 - Sensitive Data Exposure
+    - /index.php?page=credits.php
+    - /index.php?page=client-side-control-challenge.php
+    # A7 - CSRF
+    - /index.php?page=register.php
+    # A8 - File Inclusion
+    - /index.php?page=arbitrary-file-inclusion.php
+    # A9 - Components with Known Vulns
+    - /index.php?page=document-viewer.php&PathToDocument=documentation/how-to-access-Mutillidae-over-Virtual-Box-network.php
+    # Other interesting endpoints
+    - /index.php?page=xml-validator.php
+    - /index.php?page=capture-data.php
+    - /index.php?page=user-agent-impersonation.php
+    - /webservices/rest/ws-user-account.php
+    - /webservices/soap/ws-hello-world.php
+    - /phpmyadmin/
+
+log_level: DEBUG

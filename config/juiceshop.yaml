@@ -1,5 +1,5 @@
 # OWASP Juice Shop scan config
-# Usage: .venv/Scripts/python.exe -m basilisk audit 127.0.0.1:4280 --config config/juiceshop.yaml -v
+# Usage: .venv/Scripts/python.exe -m basilisk audit 127.0.0.1:3000 --config config/juiceshop.yaml -v
 # Docker: docker-compose -f docker-compose.juiceshop.yml up -d
 
 http:
@@ -14,43 +14,46 @@ scan:
   scan_paths:
     # ── SQLi targets ─────────────────────────────────────────────────
     - /rest/products/search?q=test
-    - /rest/user/login
+    - /rest/user/login?email=test@test.com&password=test
 
     # ── XSS targets ──────────────────────────────────────────────────
     - /rest/track-order/test
     - /#/track-result?id=test
 
     # ── NoSQL injection ──────────────────────────────────────────────
-    - /rest/products/reviews
+    - /rest/products/reviews?message=test
+    - /rest/user/login?email=test&password=test
 
     # ── Open redirect ────────────────────────────────────────────────
     - /redirect?to=https://owasp.org
 
     # ── REST API (access control, info disclosure) ───────────────────
-    - /api/Products
-    - /api/Feedbacks
-    - /api/Users
-    - /api/Challenges
-    - /api/Quantitys
-    - /api/SecurityQuestions
-    - /api/SecurityAnswers
-    - /api/Complaints
-    - /api/Recycles
-    - /api/Deliverys
-    - /api/Cards
-    - /api/Addresss
+    - /api/Products?d=test
+    - /api/Feedbacks?comment=test&rating=5
+    - /api/Users?id=1
+    - /api/Challenges?name=test
+    - /api/Quantitys?id=1
+    - /api/SecurityQuestions?id=1
+    - /api/SecurityAnswers?id=1
+    - /api/Complaints?message=test
+    - /api/Recycles?id=1
+    - /api/Deliverys?id=1
+    - /api/Cards?id=1
+    - /api/Addresss?id=1
+
+    # ── IDOR / business logic ────────────────────────────────────────
+    - /rest/basket/1
+    - /rest/basket/2
+    - /rest/saveLoginIp
+    - /rest/deluxe-membership
 
     # ── Admin / auth endpoints ───────────────────────────────────────
     - /rest/admin/application-version
     - /rest/admin/application-configuration
 
-    # ── IDOR / business logic ────────────────────────────────────────
-    - /rest/basket/1
-    - /rest/saveLoginIp
-    - /rest/deluxe-membership
-
     # ── File access / info disclosure ────────────────────────────────
     - /ftp
+    - /ftp?doc=package.json
     - /encryptionkeys
     - /support/logs
     - /assets/public/images/uploads/
@@ -62,7 +65,7 @@ scan:
     - /snippet
 
     # ── SSRF / file upload ───────────────────────────────────────────
-    - /profile
+    - /profile?imageUrl=https://example.com/test.png
     - /file-upload
     - /rest/memories
     - /video
@@ -72,7 +75,7 @@ scan:
 
     # ── Chatbot ──────────────────────────────────────────────────────
     - /rest/chatbot/status
-    - /rest/chatbot/respond
+    - /rest/chatbot/respond?message=test
 
     # ── Misc ─────────────────────────────────────────────────────────
     - /promotion

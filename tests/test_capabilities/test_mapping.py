@@ -27,6 +27,15 @@ class TestCapabilityMap:
             assert 1 <= entry["noise"] <= 10, f"{name} noise out of range: {entry['noise']}"
 
 
+class TestXxeCheckMapping:
+    def test_xxe_check_is_host_level(self):
+        """xxe_check requires Host+Service:http, not Endpoint:params."""
+        entry = CAPABILITY_MAP["xxe_check"]
+        assert "Host" in entry["requires"]
+        assert "Service:http" in entry["requires"]
+        assert "Endpoint:params" not in entry["requires"]
+
+
 class TestBuildCapabilities:
     def test_builds_for_all_plugins(self):
         registry = PluginRegistry()

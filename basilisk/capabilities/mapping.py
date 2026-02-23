@@ -339,7 +339,7 @@ CAPABILITY_MAP: dict[str, dict] = {
         "cost": 5, "noise": 6,
     },
     "xxe_check": {
-        "requires": ["Endpoint:params"],
+        "requires": ["Host", "Service:http"],
         "produces": ["Vulnerability"],
         "cost": 5, "noise": 6,
     },
@@ -461,6 +461,16 @@ CAPABILITY_MAP: dict[str, dict] = {
         "requires": ["Host", "Service:http"],
         "produces": ["Vulnerability"],
         "cost": 4, "noise": 5,
+    },
+    "file_upload_check": {
+        "requires": ["Host", "Service:http"],
+        "produces": ["Finding", "Vulnerability"],
+        "cost": 4, "noise": 5,
+    },
+    "session_check": {
+        "requires": ["Host", "Service:http"],
+        "produces": ["Finding"],
+        "cost": 2, "noise": 2,
     },
     "graphql_exploit": {
         "requires": ["Endpoint:graphql"],

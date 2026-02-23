@@ -455,7 +455,11 @@ class FaviconHashPlugin(BasePlugin):
         findings: list[Finding] = []
         favicon_data: dict = {}
 
-        for scheme in ("https", "http"):
+        # Use pre-probed scheme from autonomous mode when available
+        _pre = ctx.state.get("http_scheme", {}).get(target.host)
+        _schemes = (_pre,) if _pre else ("https", "http")
+
+        for scheme in _schemes:
             for path in ("/favicon.ico", "/static/favicon.ico"):
                 url = f"{scheme}://{target.host}{path}"
                 try:

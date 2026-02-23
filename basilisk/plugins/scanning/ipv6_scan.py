@@ -278,8 +278,12 @@ class Ipv6ScanPlugin(BasePlugin):
         ipv4_body_len = 0
         ipv6_body_len = 0
 
+        # Use pre-probed scheme from autonomous mode when available
+        _pre = ctx.state.get("http_scheme", {}).get(target.host)
+        _schemes = (_pre,) if _pre else ("https", "http")
+
         # Fetch via normal hostname (IPv4 will typically be preferred)
-        for scheme in ("https", "http"):
+        for scheme in _schemes:
             if ctx.should_stop:
                 return False
             try:
@@ -298,7 +302,7 @@ class Ipv6ScanPlugin(BasePlugin):
                 continue
 
         # Fetch via IPv6 literal with Host header
-        for scheme in ("https", "http"):
+        for scheme in _schemes:
             if ctx.should_stop:
                 return False
             try:

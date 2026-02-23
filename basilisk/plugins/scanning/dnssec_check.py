@@ -501,6 +501,7 @@ class DnssecCheckPlugin(BasePlugin):
         else:
             findings.append(Finding.high(
                 "DNSSEC chain broken: DS does not match any DNSKEY",
+                evidence=f"Domain: {domain}, DS records: {len(ds_records)}, DNSKEYs: {len(dnskey_answer)}",
                 description=(
                     "The DS record at the parent zone does not match "
                     "any KSK in the child zone. This causes DNSSEC "

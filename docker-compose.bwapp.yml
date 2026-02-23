@@ -1,0 +1,6 @@
+services:
+  bwapp:
+    image: raesene/bwapp
+    ports:
+      - "8180:80"
+    restart: unless-stopped

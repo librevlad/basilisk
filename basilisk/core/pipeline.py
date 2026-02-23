@@ -103,6 +103,7 @@ class PipelineState:
     current_plugin: str = ""
     skipped_plugins: list[str] = field(default_factory=list)
     http_schemes: dict[str, str | None] = field(default_factory=dict)
+    autonomous: dict | None = None
 
     def init_phases(self, categories: list[str]) -> None:
         for cat in categories:

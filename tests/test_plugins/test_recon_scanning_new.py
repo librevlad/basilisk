@@ -586,6 +586,7 @@ class TestWebSocketDetect:
         from basilisk.plugins.scanning.websocket_detect import WebSocketDetectPlugin
 
         target = Target.domain("example.com")
+        mock_ctx.state["http_scheme"] = {}
         mock_ctx.http.get = AsyncMock(side_effect=Exception("Connection refused"))
 
         plugin = WebSocketDetectPlugin()

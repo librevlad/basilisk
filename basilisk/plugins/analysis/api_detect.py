@@ -45,17 +45,23 @@ class ApiDetectPlugin(BasePlugin):
         discovered: list[dict] = []
         base_url = ""
 
-        for scheme in ("https", "http"):
-            try:
-                async with ctx.rate:
-                    resp = await ctx.http.head(
-                        f"{scheme}://{target.host}/", timeout=5.0,
-                    )
-                    base_url = f"{scheme}://{target.host}"
-                    break
-            except Exception as e:
-                logger.debug("api_detect: %s probe failed: %s", scheme, e)
-                continue
+        # Use pre-probed scheme from autonomous mode when available
+        _pre = ctx.state.get("http_scheme", {}).get(target.host)
+        if _pre:
+            base_url = f"{_pre}://{target.host}"
+
+        if not base_url:
+            for scheme in ("https", "http"):
+                try:
+                    async with ctx.rate:
+                        resp = await ctx.http.head(
+                            f"{scheme}://{target.host}/", timeout=5.0,
+                        )
+                        base_url = f"{scheme}://{target.host}"
+                        break
+                except Exception as e:
+                    logger.debug("api_detect: %s probe failed: %s", scheme, e)
+                    continue
 
         if not base_url:
             return PluginResult.success(

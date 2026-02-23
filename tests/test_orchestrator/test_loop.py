@@ -8,6 +8,7 @@ from basilisk.capabilities.capability import Capability
 from basilisk.events.bus import EventBus, EventType
 from basilisk.knowledge.entities import Entity, EntityType
 from basilisk.knowledge.graph import KnowledgeGraph
+from basilisk.knowledge.relations import RelationType
 from basilisk.memory.history import History
 from basilisk.models.target import Target
 from basilisk.observations.observation import Observation
@@ -99,9 +100,9 @@ class TestLoopTermination:
         )
 
         result = await loop.run([Target.domain("test.com")])
-        # Should stop after max_steps
+        # With only 1 capability, after step 1 executes it, step 2 has no candidates
         reason = result.termination_reason
-        assert "limit_reached" in reason or "all_executed" in reason
+        assert "limit_reached" in reason or "no_candidates" in reason
 
 
 class TestLoopSeedTargets:
@@ -115,6 +116,41 @@ class TestLoopSeedTargets:
         await loop.run([Target.domain("seed.com")])
         hosts = graph.hosts()
         assert hosts[0].data["host"] == "seed.com"
+
+
+class TestLoopSeedWithPort:
+    async def test_seed_with_port_creates_service(self):
+        loop, graph = _make_loop()
+        await loop.run([Target.ip("127.0.0.1:4280", ports=[4280])])
+        hosts = graph.hosts()
+        assert len(hosts) == 1
+        assert hosts[0].data["host"] == "127.0.0.1:4280"
+        services = graph.services()
+        assert len(services) == 1
+        assert services[0].data["port"] == 4280
+        assert services[0].data["service"] == "http"
+
+    async def test_seed_with_port_creates_exposes_relation(self):
+        loop, graph = _make_loop()
+        await loop.run([Target.ip("10.0.0.1:8080", ports=[8080])])
+        host = graph.hosts()[0]
+        neighbors = graph.neighbors(host.id, RelationType.EXPOSES)
+        assert len(neighbors) == 1
+        assert neighbors[0].data["port"] == 8080
+
+    async def test_seed_with_multiple_ports(self):
+        loop, graph = _make_loop()
+        await loop.run([Target.ip("10.0.0.1:80", ports=[80, 443])])
+        services = graph.services()
+        assert len(services) == 2
+        ports = {s.data["port"] for s in services}
+        assert ports == {80, 443}
+
+    async def test_seed_domain_no_ports(self):
+        loop, graph = _make_loop()
+        await loop.run([Target.domain("example.com")])
+        services = graph.services()
+        assert len(services) == 0
 
 
 class TestLoopExecution:
@@ -285,3 +321,85 @@ class TestLoopWithHistory:
         loop, graph = _make_loop(gaps=[gap], observations=[obs], history=history)
         await loop.run([Target.domain("out.com")])
         assert history.decisions[0].outcome_observations >= 1
+
+
+class TestLoopPreFiltering:
+    async def test_executed_pairs_filtered_before_pick(self):
+        """Already-executed (plugin, entity) pairs are filtered before pick(),
+        so the loop picks fresh candidates instead of terminating with all_executed."""
+        host_entity = Entity.host("filter.com")
+        gap = KnowledgeGap(
+            entity=host_entity, missing="services", priority=10.0, description="need scan",
+        )
+
+        graph = KnowledgeGraph()
+        # Create two capabilities so selector can match both
+        cap1 = Capability(
+            name="cap_a", plugin_name="cap_a", category="scanning",
+            requires_knowledge=["Host"], produces_knowledge=["Service"],
+            cost_score=2.0, noise_score=1.0,
+        )
+        cap2 = Capability(
+            name="cap_b", plugin_name="cap_b", category="scanning",
+            requires_knowledge=["Host"], produces_knowledge=["Service"],
+            cost_score=3.0, noise_score=1.0,
+        )
+
+        planner = MagicMock(spec=Planner)
+        # Return gaps twice, then empty (converged after 2 steps)
+        planner.find_gaps.side_effect = [[gap], [gap], []]
+
+        selector = Selector({"cap_a": cap1, "cap_b": cap2})
+        scorer = Scorer(graph)
+        executor = AsyncMock()
+        executor.execute.return_value = []
+        executor.ctx = MagicMock()
+        executor.ctx.pipeline = {}
+
+        loop = AutonomousLoop(
+            graph=graph, planner=planner, selector=selector, scorer=scorer,
+            executor=executor, bus=EventBus(),
+            safety=SafetyLimits(max_steps=5, batch_size=1),
+        )
+
+        result = await loop.run([Target.domain("filter.com")])
+        # With budget=1, step1 picks cap_a, step2 picks cap_b (cap_a already executed).
+        # Without pre-filtering, step2 would pick cap_a again and skip → all_executed.
+        assert result.termination_reason != "all_executed"
+        assert executor.execute.call_count == 2
+
+
+class TestMarkGapSatisfied:
+    async def test_host_vuln_tested_not_set(self):
+        """_mark_gap_satisfied should NOT set host_vuln_tested, allowing
+        multiple pentesting plugins (xxe, jwt, git_exposure, etc.) to run."""
+        host_entity = Entity.host("vuln.com")
+        obs = Observation(
+            entity_type=EntityType.SERVICE,
+            entity_data={"host": "vuln.com", "port": 80, "protocol": "tcp"},
+            key_fields={"host": "vuln.com", "port": "80", "protocol": "tcp"},
+            source_plugin="test",
+        )
+        gap = KnowledgeGap(
+            entity=host_entity, missing="services", priority=10.0, description="need scan",
+        )
+        loop, graph = _make_loop(gaps=[gap], observations=[obs])
+
+        # Use a capability that produces Finding (like pentesting plugins do)
+        finding_cap = Capability(
+            name="http_headers", plugin_name="http_headers", category="analysis",
+            requires_knowledge=["Host"], produces_knowledge=["Finding"],
+            cost_score=1.0, noise_score=0.0,
+        )
+        from basilisk.scoring.scorer import ScoredCapability
+        sc = ScoredCapability(
+            capability=finding_cap,
+            target_entity=host_entity,
+            score=5.0,
+            reason="test",
+        )
+        graph.add_entity(host_entity)
+        loop._mark_gap_satisfied(sc)
+
+        # host_vuln_tested should NOT be in host data
+        assert "host_vuln_tested" not in host_entity.data

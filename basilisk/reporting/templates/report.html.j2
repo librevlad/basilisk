@@ -903,6 +903,129 @@
     .radar-section { flex-direction: column; }
   }
 
+  /* --- Autonomous Mode: Decision Timeline --- */
+  .decision-timeline { position: relative; padding-left: 2.5rem; }
+  .decision-timeline::before {
+    content: ''; position: absolute; left: 1rem; top: 0; bottom: 0;
+    width: 2px; background: linear-gradient(180deg, var(--neon-green), var(--neon-cyan), var(--neon-purple));
+    opacity: 0.3;
+  }
+  .dt-step {
+    position: relative; margin-bottom: 1rem; padding: 0.75rem 1rem;
+    background: var(--surface-1); border-radius: var(--radius);
+    border-left: 3px solid var(--border); transition: background 0.15s;
+  }
+  .dt-step:hover { background: var(--surface-2); }
+  .dt-step.productive { border-left-color: var(--neon-green); }
+  .dt-step.unproductive { border-left-color: var(--neon-orange); }
+  .dt-step-num {
+    position: absolute; left: -2.25rem; top: 0.75rem;
+    width: 1.5rem; height: 1.5rem; border-radius: 50%;
+    background: var(--bg3); border: 2px solid var(--neon-green);
+    display: flex; align-items: center; justify-content: center;
+    font-size: var(--text-xs); font-weight: 700; color: var(--neon-green);
+  }
+  .dt-step.unproductive .dt-step-num { border-color: var(--neon-orange); color: var(--neon-orange); }
+  .dt-header { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.3rem; }
+  .dt-plugin { font-weight: 700; color: var(--neon-cyan); font-size: var(--text-base); }
+  .dt-target { color: var(--fg-dim); font-size: var(--text-sm); }
+  .dt-badge {
+    padding: 1px 6px; border-radius: 3px; font-size: var(--text-xs); font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .dt-badge.productive { background: rgba(0,255,106,0.12); color: var(--neon-green); }
+  .dt-badge.unproductive { background: rgba(255,138,0,0.12); color: var(--neon-orange); }
+  .dt-badge.score-badge { background: var(--bg4); color: var(--neon-purple); border: 1px solid var(--border); }
+  .dt-goal { font-size: var(--text-sm); color: var(--fg-dim); margin-top: 0.2rem; }
+  .dt-metrics {
+    display: flex; gap: 0.75rem; margin-top: 0.4rem; font-size: var(--text-xs); color: var(--fg-dim);
+  }
+  .dt-metrics span { display: flex; align-items: center; gap: 0.2rem; }
+
+  /* --- Autonomous Mode: KG Growth Chart --- */
+  .kg-growth-chart { display: flex; align-items: flex-end; gap: 2px; height: 120px; padding: 0.5rem 0; }
+  .kg-bar {
+    flex: 1; min-width: 8px; max-width: 40px; border-radius: 3px 3px 0 0;
+    background: linear-gradient(180deg, var(--neon-cyan), var(--neon-blue));
+    transition: height 0.3s; position: relative; cursor: default;
+  }
+  .kg-bar:hover { opacity: 0.8; }
+  .kg-bar-label {
+    position: absolute; bottom: -1.2rem; left: 50%; transform: translateX(-50%);
+    font-size: 7px; color: var(--fg-dim); white-space: nowrap;
+  }
+
+  /* --- Autonomous Mode: Decision Cards --- */
+  .decision-card {
+    background: var(--surface-1); border-radius: var(--radius);
+    margin-bottom: 0.5rem; transition: background 0.15s;
+  }
+  .decision-card summary {
+    padding: 0.6rem 0.8rem; cursor: pointer; display: flex; align-items: center; gap: 0.5rem;
+    font-size: var(--text-base); list-style: none; flex-wrap: wrap;
+  }
+  .decision-card summary::-webkit-details-marker { display: none; }
+  .decision-card summary::before { content: '\25B6'; font-size: 8px; color: var(--fg-dim); transition: transform 0.15s; }
+  .decision-card[open] summary::before { transform: rotate(90deg); }
+  .decision-card:hover { background: var(--surface-2); }
+  .decision-body { padding: 0 0.8rem 0.8rem; }
+  .decision-reasoning {
+    background: var(--bg3); border-radius: var(--radius-sm); padding: 0.5rem 0.7rem;
+    font-size: var(--text-sm); color: var(--fg); line-height: 1.5; margin-bottom: 0.5rem;
+    border-left: 2px solid var(--neon-purple);
+  }
+  .decision-chips { display: flex; gap: 0.4rem; flex-wrap: wrap; margin: 0.4rem 0; }
+  .decision-chip {
+    padding: 2px 6px; border-radius: 3px; font-size: var(--text-xs);
+    background: var(--bg4); color: var(--fg-dim); border: 1px solid var(--border);
+  }
+  .options-table { width: 100%; font-size: var(--text-xs); margin-top: 0.5rem; }
+  .options-table th {
+    text-align: left; padding: 3px 6px; color: var(--fg-dim);
+    border-bottom: 1px solid var(--border); font-weight: 600;
+  }
+  .options-table td { padding: 3px 6px; border-bottom: 1px solid var(--border); }
+  .options-table tr.chosen { background: rgba(0,255,106,0.05); }
+  .options-table tr.chosen td:first-child { font-weight: 700; color: var(--neon-green); }
+  .conf-badge {
+    display: inline-block; padding: 1px 5px; border-radius: 3px;
+    font-size: var(--text-xs); font-weight: 600;
+  }
+  .conf-badge.high { background: rgba(0,255,106,0.12); color: var(--neon-green); }
+  .conf-badge.medium { background: rgba(255,184,0,0.12); color: var(--medium); }
+  .conf-badge.low { background: rgba(77,124,255,0.12); color: var(--info); }
+
+  /* --- Autonomous Mode: Entity Map --- */
+  .entity-host {
+    background: var(--surface-1); border-radius: var(--radius);
+    margin-bottom: 0.5rem;
+  }
+  .entity-host summary {
+    padding: 0.5rem 0.8rem; cursor: pointer; display: flex; align-items: center; gap: 0.5rem;
+    font-size: var(--text-base); list-style: none;
+  }
+  .entity-host summary::-webkit-details-marker { display: none; }
+  .entity-host summary::before { content: '\25B6'; font-size: 8px; color: var(--fg-dim); transition: transform 0.15s; }
+  .entity-host[open] summary::before { transform: rotate(90deg); }
+  .entity-body { padding: 0 0.8rem 0.8rem; }
+  .entity-section-label { font-size: var(--text-xs); color: var(--fg-dim); text-transform: uppercase; letter-spacing: 0.08em; margin: 0.5rem 0 0.3rem; }
+  .entity-items { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+  .entity-item {
+    padding: 3px 8px; border-radius: 4px; font-size: var(--text-xs);
+    background: var(--bg3); border: 1px solid var(--border); color: var(--fg);
+  }
+  .entity-item .port { color: var(--neon-cyan); font-weight: 700; }
+  .entity-item .tech-name { color: var(--neon-purple); font-weight: 600; }
+  .entity-item .path { color: var(--neon-green); }
+
+  /* --- Autonomous Mode: Scoring Insights --- */
+  .goal-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; }
+  .goal-chip {
+    padding: 3px 8px; border-radius: 4px; font-size: var(--text-xs);
+    background: var(--bg4); border: 1px solid var(--border); color: var(--fg);
+  }
+  .goal-chip .goal-count { color: var(--neon-cyan); font-weight: 700; margin-left: 0.3rem; }
+
   /* --- Utility classes --- */
   .label { font-size:var(--text-xs); color:var(--fg-muted); text-transform:uppercase; letter-spacing:0.08em; font-weight:600; }
   .mt-1 { margin-top:var(--sp-1); } .mt-2 { margin-top:var(--sp-2); } .mt-3 { margin-top:var(--sp-3); } .mt-4 { margin-top:var(--sp-4); }
@@ -1010,7 +1133,7 @@
 |  _ \ / _` / __| | | / __| |/ /
 | |_) | (_| \__ \ | | \__ \   &lt;
 |____/ \__,_|___/_|_|_|___/_|\_\</pre>
-    <div class="brand-sub">War Room v2.0</div>
+    <div class="brand-sub">{% if autonomous %}Autonomous Engine v3.1{% else %}War Room v2.0{% endif %}</div>
   </div>
   <div class="risk-indicator">
     <div class="risk-val" style="color:var(--{{ risk_label|lower }})">{{ risk_score }}</div>
@@ -1019,7 +1142,15 @@
   <nav>
     <a href="#command-center">Command Center</a>
     <a href="#threat-radar">Threat Radar</a>
+    {% if autonomous %}
+    <a href="#decision-timeline">Decision Timeline<span class="cnt">{{ autonomous.decision_timeline|length }}</span></a>
+    <a href="#kg-growth">Knowledge Graph</a>
+    <a href="#decision-audit">Decision Audit<span class="cnt">{{ autonomous.decisions|length }}</span></a>
+    <a href="#entity-map">Entity Map<span class="cnt">{{ autonomous.graph_summary.entities }}</span></a>
+    <a href="#scoring-insights">Scoring Insights</a>
+    {% else %}
     <a href="#kill-chain">Kill Chain</a>
+    {% endif %}
     {% if exploit_chains %}<a href="#exploit-chains">Exploit Chains<span class="cnt">{{ exploit_chains|length }}</span></a>{% endif %}
     <div class="sep"></div>
     <a href="#attack-surface">Attack Surface</a>
@@ -1031,7 +1162,7 @@
     {% if ssl_details or dns_details %}<a href="#intelligence">Intelligence</a>{% endif %}
     {% if plugin_stats %}<a href="#plugin-perf">Plugin Ops</a>{% endif %}
     {% if timeline %}<a href="#timeline">Timeline<span class="cnt">{{ timeline|length }}</span></a>{% endif %}
-    {% if skipped_plugins %}<a href="#skipped-plugins">Skipped<span class="cnt">{{ skipped_plugins|length }}</span></a>{% endif %}
+    {% if not autonomous and skipped_plugins %}<a href="#skipped-plugins">Skipped<span class="cnt">{{ skipped_plugins|length }}</span></a>{% endif %}
     {% if remediation_priority %}<a href="#remediation">Remediation</a>{% endif %}
     {% if quality_metrics %}<a href="#scan-quality">Scan Quality</a>{% endif %}
     <div class="sep"></div>
@@ -1093,6 +1224,28 @@
         <div class="meta-label">Total Findings</div>
         <div class="meta-value">{{ total_aggregated_count }}</div>
       </div>
+      {% if autonomous %}
+      <div class="meta-item">
+        <div class="meta-label">Mode</div>
+        <div class="meta-value" style="font-size:var(--text-md);color:var(--neon-purple)">Autonomous</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Steps</div>
+        <div class="meta-value">{{ autonomous.steps }}</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Entities</div>
+        <div class="meta-value">{{ autonomous.graph_summary.entities }}</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Productive</div>
+        <div class="meta-value" style="color:var(--neon-green)">{{ autonomous.productive_pct }}%</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Termination</div>
+        <div class="meta-value" style="font-size:var(--text-sm);color:var(--fg)">{{ autonomous.termination_reason }}</div>
+      </div>
+      {% endif %}
     </div>
 
     {% set c = severity_counts.get('CRITICAL', 0) %}
@@ -1187,8 +1340,235 @@
   </div>
   {% endif %}
 
+  <!-- ===== DECISION TIMELINE (autonomous) ===== -->
+  {% if autonomous and autonomous.decision_timeline %}
+  <div class="section" id="decision-timeline">
+    <div class="section-hdr">
+      <span class="icon">[>]</span>
+      <h2>Decision Timeline</h2>
+      <span class="cnt">({{ autonomous.decision_timeline|length }} decisions)</span>
+    </div>
+    <div class="decision-timeline">
+      {% for dt in autonomous.decision_timeline %}
+      <div class="dt-step {{ 'productive' if dt.was_productive else 'unproductive' }}">
+        <div class="dt-step-num">{{ dt.step }}</div>
+        <div class="dt-header">
+          <span class="dt-plugin">{{ dt.plugin }}</span>
+          <span class="dt-target">--> {{ dt.target }}</span>
+          <span class="dt-badge score-badge">{{ dt.score }}</span>
+          <span class="dt-badge {{ 'productive' if dt.was_productive else 'unproductive' }}">{{ 'productive' if dt.was_productive else 'unproductive' }}</span>
+        </div>
+        <div class="dt-goal">{{ dt.goal_description }}</div>
+        <div class="dt-metrics">
+          <span>+{{ dt.outcome_observations }} obs</span>
+          <span>+{{ dt.outcome_new_entities }} entities</span>
+          <span>{{ dt.outcome_duration }}s</span>
+          {% if dt.outcome_confidence_delta > 0 %}<span style="color:var(--neon-green)">+{{ dt.outcome_confidence_delta }} conf</span>{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- ===== KNOWLEDGE GRAPH GROWTH (autonomous) ===== -->
+  {% if autonomous and autonomous.growth %}
+  <div class="section" id="kg-growth">
+    <div class="section-hdr">
+      <span class="icon">[~]</span>
+      <h2>Knowledge Graph Growth</h2>
+    </div>
+    <div class="grid-auto">
+      <div class="stat-card">
+        <div class="label">Entities</div>
+        <div class="stat-val" style="color:var(--neon-cyan)">{{ autonomous.graph_summary.entities }}</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Relations</div>
+        <div class="stat-val" style="color:var(--neon-blue)">{{ autonomous.graph_summary.relations }}</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Confidence Gained</div>
+        <div class="stat-val" style="color:var(--neon-green)">+{{ autonomous.total_confidence_gained }}</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Observations</div>
+        <div class="stat-val" style="color:var(--neon-purple)">{{ autonomous.total_observations }}</div>
+      </div>
+    </div>
+    {% set max_ent = autonomous.growth|map(attribute='entities')|max if autonomous.growth else 1 %}
+    {% set max_ent = max_ent if max_ent > 0 else 1 %}
+    <div class="label mt-4">Entity Count per Step</div>
+    <div class="kg-growth-chart mt-2">
+      {% for g in autonomous.growth %}
+      <div class="kg-bar" style="height:{{ (g.entities / max_ent * 100)|round|int }}%;" title="Step {{ g.step }}: {{ g.entities }} entities, {{ g.relations }} relations">
+        <div class="kg-bar-label">{{ g.step }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- ===== DECISION AUDIT TRAIL (autonomous) ===== -->
+  {% if autonomous and autonomous.decisions %}
+  <div class="section" id="decision-audit">
+    <div class="section-hdr">
+      <span class="icon">[?]</span>
+      <h2>Decision Audit Trail</h2>
+      <span class="cnt">({{ autonomous.decisions|length }})</span>
+    </div>
+    {% for dec in autonomous.decisions %}
+    <details class="decision-card">
+      <summary>
+        <span class="dt-badge score-badge">Step {{ dec.step }}</span>
+        <span class="dt-badge {{ 'productive' if dec.was_productive else 'unproductive' }}">{{ 'OK' if dec.was_productive else '--' }}</span>
+        <span class="dt-plugin">{{ dec.chosen_plugin }}</span>
+        <span class="dt-target">--> {{ dec.chosen_target }}</span>
+        <span style="color:var(--fg-dim);font-size:var(--text-xs);margin-left:auto">{{ dec.chosen_score }} | {{ dec.goal }}</span>
+      </summary>
+      <div class="decision-body">
+        <div class="decision-reasoning">{{ dec.reasoning_trace }}</div>
+        <div class="decision-chips">
+          <span class="decision-chip">Entities: {{ dec.context.entities }}</span>
+          <span class="decision-chip">Relations: {{ dec.context.relations }}</span>
+          <span class="decision-chip">Hosts: {{ dec.context.hosts }}</span>
+          <span class="decision-chip">Gaps: {{ dec.context.gaps }}</span>
+          <span class="decision-chip">Elapsed: {{ dec.context.elapsed }}s</span>
+        </div>
+        {% if dec.evaluated_options %}
+        <table class="options-table">
+          <tr>
+            <th>Plugin</th><th>Target</th><th>Score</th>
+            <th>Novelty</th><th>Gain</th><th>Cost</th><th>Noise</th><th>Penalty</th>
+          </tr>
+          {% for opt in dec.evaluated_options %}
+          <tr class="{{ 'chosen' if opt.was_chosen else '' }}">
+            <td>{{ opt.plugin }}</td>
+            <td style="color:var(--fg-dim)">{{ opt.target|truncate(20) }}</td>
+            <td style="color:var(--neon-cyan);font-weight:700">{{ opt.score }}</td>
+            <td>{{ opt.novelty }}</td>
+            <td>{{ opt.knowledge_gain }}</td>
+            <td>{{ opt.cost }}</td>
+            <td>{{ opt.noise }}</td>
+            <td>{{ opt.repetition_penalty }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+        {% endif %}
+        <div class="decision-chips mt-2">
+          <span class="decision-chip">+{{ dec.outcome.observations }} obs</span>
+          <span class="decision-chip">+{{ dec.outcome.new_entities }} new</span>
+          <span class="decision-chip">conf: {{ dec.outcome.confidence_delta }}</span>
+          <span class="decision-chip">{{ dec.outcome.duration }}s</span>
+        </div>
+      </div>
+    </details>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- ===== ENTITY DISCOVERY MAP (autonomous) ===== -->
+  {% if autonomous and autonomous.entity_map %}
+  <div class="section" id="entity-map">
+    <div class="section-hdr">
+      <span class="icon">[#]</span>
+      <h2>Entity Discovery Map</h2>
+      <span class="cnt">({{ autonomous.entity_map|length }} hosts)</span>
+    </div>
+    {% for host in autonomous.entity_map %}
+    <details class="entity-host"{% if loop.first %} open{% endif %}>
+      <summary>
+        <span style="font-weight:700;color:var(--neon-cyan)">{{ host.host }}</span>
+        <span class="conf-badge {{ 'high' if host.confidence >= 0.8 else ('medium' if host.confidence >= 0.5 else 'low') }}">{{ (host.confidence * 100)|round|int }}%</span>
+        <span style="color:var(--fg-dim);font-size:var(--text-xs);margin-left:auto">
+          {{ host.services|length }} services, {{ host.endpoints|length }} endpoints, {{ host.technologies|length }} tech
+        </span>
+      </summary>
+      <div class="entity-body">
+        {% if host.services %}
+        <div class="entity-section-label">Services</div>
+        <div class="entity-items">
+          {% for svc in host.services %}
+          <span class="entity-item"><span class="port">{{ svc.port }}</span>/{{ svc.protocol }}{% if svc.service %} ({{ svc.service }}){% endif %}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% if host.technologies %}
+        <div class="entity-section-label">Technologies</div>
+        <div class="entity-items">
+          {% for tech in host.technologies %}
+          <span class="entity-item"><span class="tech-name">{{ tech.name }}</span>{% if tech.version %} {{ tech.version }}{% endif %}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% if host.endpoints %}
+        <div class="entity-section-label">Endpoints ({{ host.endpoints|length }})</div>
+        <div class="entity-items">
+          {% for ep in host.endpoints %}
+          <span class="entity-item"><span class="path">{{ ep.path }}</span>{% if ep.status %} [{{ ep.status }}]{% endif %}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </details>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- ===== SCORING INSIGHTS (autonomous) ===== -->
+  {% if autonomous and autonomous.scoring_insights %}
+  {% set si = autonomous.scoring_insights %}
+  <div class="section" id="scoring-insights">
+    <div class="section-hdr">
+      <span class="icon">[%]</span>
+      <h2>Scoring Insights</h2>
+    </div>
+    <div class="grid-auto">
+      <div class="stat-card">
+        <div class="label">Total Evaluated</div>
+        <div class="stat-val" style="color:var(--neon-cyan)">{{ si.total_evaluated }}</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Avg Score</div>
+        <div class="stat-val" style="color:var(--neon-green)">{{ si.avg_score }}</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Score Range</div>
+        <div class="stat-val" style="color:var(--neon-purple)">{{ si.min_score }} - {{ si.max_score }}</div>
+      </div>
+    </div>
+    {% if si.top_scored_plugins %}
+    <div class="label mt-4">Top Plugins by Score</div>
+    <table class="plugin-table sortable mt-2">
+      <tr>
+        <th style="width:30px">#</th>
+        <th>Plugin</th>
+        <th style="text-align:center">Avg Score</th>
+        <th style="text-align:center">Times Chosen</th>
+      </tr>
+      {% for tp in si.top_scored_plugins %}
+      <tr>
+        <td class="pnum">{{ loop.index }}</td>
+        <td class="pname">{{ tp.plugin }}</td>
+        <td class="pnum" style="color:var(--neon-cyan);font-weight:700">{{ tp.avg_score }}</td>
+        <td class="pnum">{{ tp.times_chosen }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% endif %}
+    {% if si.goal_distribution %}
+    <div class="label mt-4">Goal Distribution</div>
+    <div class="goal-chips">
+      {% for goal, cnt in si.goal_distribution.items() %}
+      <span class="goal-chip">{{ goal }}<span class="goal-count">{{ cnt }}</span></span>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
   <!-- ===== KILL CHAIN PROGRESS ===== -->
-  {% if phases %}
+  {% if not autonomous and phases %}
   <div class="section" id="kill-chain">
     <div class="section-hdr">
       <span class="icon">>_</span>
@@ -1974,7 +2354,7 @@
   {% endif %}
 
   <!-- ===== SKIPPED PLUGINS ===== -->
-  {% if skipped_plugins %}
+  {% if not autonomous and skipped_plugins %}
   <div class="section" id="skipped-plugins">
     <div class="section-hdr">
       <span class="icon">[—]</span>

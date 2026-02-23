@@ -55,7 +55,11 @@ class PrometheusScrapePlugin(BasePlugin):
 
         if not metrics_url:
             # Try common metrics paths directly
-            for scheme in ("https", "http"):
+            # Use pre-probed scheme from autonomous mode when available
+            _pre = ctx.state.get("http_scheme", {}).get(target.host)
+            _schemes = (_pre,) if _pre else ("https", "http")
+
+            for scheme in _schemes:
                 test_url = f"{scheme}://{target.host}/metrics"
                 try:
                     async with ctx.rate:

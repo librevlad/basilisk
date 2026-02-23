@@ -207,9 +207,10 @@ class FormAnalyzerPlugin(BasePlugin):
                 if type_m:
                     inp_type = type_m.group(1).lower()
                 # Skip non-injectable types (but keep testable hidden fields)
-                if inp_type in _SKIP_INPUT_TYPES:
-                    if inp_type != "hidden" or name.lower() not in _TESTABLE_HIDDEN_NAMES:
-                        continue
+                if inp_type in _SKIP_INPUT_TYPES and (
+                    inp_type != "hidden" or name.lower() not in _TESTABLE_HIDDEN_NAMES
+                ):
+                    continue
                 value = ""
                 val_m = re.search(r'value\s*=\s*["\']([^"\']*)', inp_attrs, re.IGNORECASE)
                 if val_m:
