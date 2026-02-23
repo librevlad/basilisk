@@ -283,6 +283,112 @@ def _is_http_service(entity: Entity) -> bool:
     return any(kw in banner for kw in ("http/", "apache", "nginx", "iis"))
 
 
+def _finding_without_verification(graph: KnowledgeGraph) -> list[KnowledgeGap]:
+    """High/critical findings without verification → need verify plugin.
+
+    Only fires for findings with severity high/critical that are not yet verified
+    and have confidence below 0.95 (probabilistic merge hasn't confirmed them).
+    """
+    gaps = []
+    for finding in graph.findings():
+        severity = finding.data.get("severity", "info")
+        if severity not in ("high", "critical"):
+            continue
+        if finding.data.get("verified"):
+            continue
+        if finding.confidence >= 0.95:
+            continue
+        title = finding.data.get("title", "?")
+        host = finding.data.get("host", "?")
+        gaps.append(KnowledgeGap(
+            entity=finding,
+            missing="finding_verification",
+            priority=6.0,
+            description=f"Finding '{title}' on {host} needs verification",
+        ))
+    return gaps
+
+
+def _host_without_container_check(graph: KnowledgeGraph) -> list[KnowledgeGap]:
+    """Host with Docker/container indicators but no runtime check performed.
+
+    Triggers when a host has services on Docker ports (2375, 2376, 2377, 5000, 10250)
+    or has Technology(is_container_runtime=True) linked via RUNS.
+    """
+    docker_ports = {2375, 2376, 2377, 5000, 10250}
+    gaps = []
+    for host in graph.hosts():
+        if "container_runtime_checked" in host.data:
+            continue
+        # Check services on docker-related ports
+        services = graph.neighbors(host.id, RelationType.EXPOSES)
+        has_docker_port = any(s.data.get("port") in docker_ports for s in services)
+        # Check existing container runtime technologies
+        techs = graph.neighbors(host.id, RelationType.RUNS)
+        has_runtime = any(t.data.get("is_container_runtime") for t in techs)
+        if has_docker_port or has_runtime:
+            gaps.append(KnowledgeGap(
+                entity=host,
+                missing="container_runtime",
+                priority=6.0,
+                description=f"Host {host.data.get('host', '?')} has container indicators",
+            ))
+    return gaps
+
+
+def _container_runtime_without_enumeration(graph: KnowledgeGraph) -> list[KnowledgeGap]:
+    """Container runtime detected but containers not yet enumerated."""
+    gaps = []
+    for tech in graph.technologies():
+        if not tech.data.get("is_container_runtime"):
+            continue
+        if "containers_enumerated" in tech.data:
+            continue
+        gaps.append(KnowledgeGap(
+            entity=tech,
+            missing="container_enumeration",
+            priority=7.0,
+            description=f"Runtime {tech.data.get('name', '?')} — containers not enumerated",
+        ))
+    return gaps
+
+
+def _container_without_config_audit(graph: KnowledgeGraph) -> list[KnowledgeGap]:
+    """Containers exist but config not audited (one gap per host)."""
+    gaps = []
+    seen_hosts: set[str] = set()
+    for container in graph.containers():
+        if "config_audited" in container.data:
+            continue
+        host = container.data.get("host", "")
+        if host in seen_hosts:
+            continue
+        seen_hosts.add(host)
+        gaps.append(KnowledgeGap(
+            entity=container,
+            missing="container_config_audit",
+            priority=5.5,
+            description=f"Container on {host} — config not audited",
+        ))
+    return gaps
+
+
+def _container_without_image_analysis(graph: KnowledgeGraph) -> list[KnowledgeGap]:
+    """Image exists but vulnerabilities not checked."""
+    gaps = []
+    for image in graph.images():
+        if "vulnerabilities_checked" in image.data:
+            continue
+        image_name = image.data.get("image_name", "?")
+        gaps.append(KnowledgeGap(
+            entity=image,
+            missing="image_analysis",
+            priority=5.0,
+            description=f"Image {image_name} — vulnerabilities not checked",
+        ))
+    return gaps
+
+
 def _attack_path_gaps(graph: KnowledgeGraph) -> list[KnowledgeGap]:
     """Suggest actions from available attack paths that haven't been executed yet.
 
@@ -323,5 +429,10 @@ _RULES = [
     _credential_without_exploitation,
     _technology_without_version,
     _low_confidence_entity,
+    _finding_without_verification,
+    _host_without_container_check,
+    _container_runtime_without_enumeration,
+    _container_without_config_audit,
+    _container_without_image_analysis,
     _attack_path_gaps,
 ]

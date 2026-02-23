@@ -24,6 +24,7 @@ class EventType(StrEnum):
     GAP_DETECTED = "gap_detected"
     STEP_COMPLETED = "step_completed"
     DECISION_MADE = "decision_made"
+    FINDING_VERIFIED = "finding_verified"
 
 
 @dataclass

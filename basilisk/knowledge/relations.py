@@ -15,6 +15,8 @@ class RelationType(StrEnum):
     ACCESSES = "accesses"            # CREDENTIAL → HOST
     RELATES_TO = "relates_to"        # FINDING → any Entity
     PARENT_OF = "parent_of"          # HOST → HOST (domain → subdomain)
+    RUNS_CONTAINER = "runs_container"  # TECHNOLOGY(runtime) → CONTAINER
+    USES_IMAGE = "uses_image"          # CONTAINER → IMAGE
 
 
 class Relation(BaseModel):

@@ -18,6 +18,8 @@ class EntityType(StrEnum):
     CREDENTIAL = "credential"
     FINDING = "finding"
     VULNERABILITY = "vulnerability"
+    CONTAINER = "container"
+    IMAGE = "image"
 
 
 class Entity(BaseModel):
@@ -143,6 +145,40 @@ class Entity(BaseModel):
         return cls(
             id=cls.make_id(EntityType.VULNERABILITY, host=host, name=name),
             type=EntityType.VULNERABILITY,
+            data=data,
+            first_seen=now,
+            last_seen=now,
+        )
+
+    @classmethod
+    def container(
+        cls, host: str, container_id: str, **extra_data: Any,
+    ) -> Entity:
+        """Create a Container entity."""
+        now = datetime.now(UTC)
+        data = {"host": host, "container_id": container_id, **extra_data}
+        return cls(
+            id=cls.make_id(EntityType.CONTAINER, host=host, container_id=container_id),
+            type=EntityType.CONTAINER,
+            data=data,
+            first_seen=now,
+            last_seen=now,
+        )
+
+    @classmethod
+    def image(
+        cls, host: str, image_name: str, image_tag: str = "latest", **extra_data: Any,
+    ) -> Entity:
+        """Create an Image entity."""
+        now = datetime.now(UTC)
+        data = {
+            "host": host, "image_name": image_name, "image_tag": image_tag, **extra_data,
+        }
+        return cls(
+            id=cls.make_id(
+                EntityType.IMAGE, host=host, image_name=image_name, image_tag=image_tag,
+            ),
+            type=EntityType.IMAGE,
             data=data,
             first_seen=now,
             last_seen=now,

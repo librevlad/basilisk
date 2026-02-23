@@ -29,7 +29,8 @@ class ScoredCapability(BaseModel):
 class Scorer:
     """Score and rank (capability, entity) candidates.
 
-    priority = (novelty * knowledge_gain) / (cost + noise + repetition_penalty)
+    priority = (novelty * knowledge_gain * success_probability + unlock_value + prior_bonus)
+             / (cost + noise + repetition_penalty)
     """
 
     def __init__(
@@ -126,11 +127,17 @@ class Scorer:
                     if tech_rate is not None and tech_rate > 0.5:
                         prior_bonus = tech_rate * 0.2
 
-        raw_score = (novelty * knowledge_gain + unlock_value + prior_bonus) / denominator
+        # Success probability — learned from past runs
+        success_probability = self._compute_success_probability(cap)
+
+        raw_score = (
+            novelty * knowledge_gain * success_probability + unlock_value + prior_bonus
+        ) / denominator
 
         breakdown = {
             "novelty": novelty,
             "knowledge_gain": knowledge_gain,
+            "success_probability": success_probability,
             "unlock_value": unlock_value,
             "prior_bonus": prior_bonus,
             "cost": cost,
@@ -140,6 +147,24 @@ class Scorer:
         }
 
         return raw_score, breakdown
+
+    def _compute_success_probability(self, cap: Capability) -> float:
+        """Estimate probability that the plugin will produce useful results.
+
+        Priority: CostTracker (runtime stats) > CampaignMemory (cross-audit) > default 0.5.
+        Floor at 0.05 to prevent zeroing out the score entirely.
+        """
+        if self._cost_tracker:
+            stats = self._cost_tracker.get_stats(cap.plugin_name)
+            if stats is not None and stats.runs >= 2:
+                return max(stats.success_rate, 0.05)
+
+        if self._campaign:
+            rate = self._campaign.plugin_success_rate(cap.plugin_name)
+            if rate > 0:
+                return max(rate, 0.05)
+
+        return 0.5  # uninformative prior
 
     def _compute_unlock_value(self, cap: Capability, entity: Entity) -> float:
         """Compute future value: how many attack paths this capability would unlock.

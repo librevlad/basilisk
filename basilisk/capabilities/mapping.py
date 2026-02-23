@@ -16,7 +16,7 @@ CAPABILITY_MAP: dict[str, dict] = {
     # -- Recon -------------------------------------------------------
     "dns_enum": {
         "requires": ["Host"], "produces": ["Host:dns_data"],
-        "cost": 1, "noise": 1,
+        "cost": 1, "noise": 1, "risk_domain": "recon",
     },
     "dns_zone_transfer": {
         "requires": ["Host"], "produces": ["Host:zone_data"],
@@ -114,7 +114,7 @@ CAPABILITY_MAP: dict[str, dict] = {
     # -- Scanning ----------------------------------------------------
     "port_scan": {
         "requires": ["Host"], "produces": ["Service"],
-        "cost": 3, "noise": 4,
+        "cost": 3, "noise": 4, "risk_domain": "network",
     },
     "service_detect": {
         "requires": ["Service"], "produces": ["Technology"],
@@ -196,7 +196,7 @@ CAPABILITY_MAP: dict[str, dict] = {
     "tech_detect": {
         "requires": ["Host", "Service:http"],
         "produces": ["Technology"],
-        "cost": 1, "noise": 1,
+        "cost": 1, "noise": 1, "risk_domain": "web",
     },
     "waf_detect": {
         "requires": ["Host", "Service:http"],
@@ -296,7 +296,7 @@ CAPABILITY_MAP: dict[str, dict] = {
     "sqli_basic": {
         "requires": ["Endpoint:params"],
         "produces": ["Finding:sqli", "Vulnerability"],
-        "cost": 5, "noise": 7,
+        "cost": 5, "noise": 7, "risk_domain": "web",
     },
     "sqli_advanced": {
         "requires": ["Endpoint:params"],
@@ -330,8 +330,9 @@ CAPABILITY_MAP: dict[str, dict] = {
     },
     "ssti_verify": {
         "requires": ["Endpoint:params"],
-        "produces": ["Vulnerability"],
+        "produces": ["Finding", "Vulnerability"],
         "cost": 4, "noise": 5,
+        "reduces_uncertainty": ["Finding:ssti", "Vulnerability"],
     },
     "lfi_check": {
         "requires": ["Endpoint:params"],
@@ -355,8 +356,9 @@ CAPABILITY_MAP: dict[str, dict] = {
     },
     "nosqli_verify": {
         "requires": ["Endpoint:params"],
-        "produces": ["Vulnerability"],
+        "produces": ["Finding", "Vulnerability"],
         "cost": 4, "noise": 5,
+        "reduces_uncertainty": ["Finding:nosqli", "Vulnerability"],
     },
     "dir_brute": {
         "requires": ["Host", "Service:http"],
@@ -391,7 +393,7 @@ CAPABILITY_MAP: dict[str, dict] = {
     "default_creds": {
         "requires": ["Host", "Service:http"],
         "produces": ["Credential"],
-        "cost": 3, "noise": 4,
+        "cost": 3, "noise": 4, "risk_domain": "auth",
     },
     "jwt_attack": {
         "requires": ["Host", "Service:http"],
@@ -518,7 +520,7 @@ CAPABILITY_MAP: dict[str, dict] = {
     "credential_spray": {
         "requires": ["Host", "Service:http", "Credential"],
         "produces": ["Credential"],
-        "cost": 6, "noise": 8,
+        "cost": 6, "noise": 8, "risk_domain": "auth",
     },
     "oauth_attack": {
         "requires": ["Host", "Service:http"],
@@ -553,7 +555,7 @@ CAPABILITY_MAP: dict[str, dict] = {
     "ssh_brute": {
         "requires": ["Service:ssh"],
         "produces": ["Credential"],
-        "cost": 6, "noise": 8,
+        "cost": 6, "noise": 8, "risk_domain": "auth",
     },
     "service_brute": {
         "requires": ["Service"], "produces": ["Credential"],
@@ -573,6 +575,38 @@ CAPABILITY_MAP: dict[str, dict] = {
         "requires": ["Endpoint:params"],
         "produces": ["Vulnerability"],
         "cost": 5, "noise": 6,
+    },
+    # -- Container Security ------------------------------------------
+    "container_discovery": {
+        "requires": ["Host"], "produces": ["Technology:container_runtime"],
+        "cost": 2, "noise": 2, "risk_domain": "container",
+    },
+    "container_enumeration": {
+        "requires": ["Host", "Technology:docker"],
+        "produces": ["Container", "Image"],
+        "cost": 3, "noise": 3, "risk_domain": "container",
+    },
+    "image_fingerprint": {
+        "requires": ["Image"], "produces": ["Finding", "Vulnerability"],
+        "cost": 3, "noise": 1, "risk_domain": "container",
+    },
+    "container_config_audit": {
+        "requires": ["Container"], "produces": ["Finding"],
+        "cost": 3, "noise": 2, "risk_domain": "container",
+    },
+    "container_escape_probe": {
+        "requires": ["Container"], "produces": ["Finding", "Vulnerability"],
+        "cost": 5, "noise": 7, "risk_domain": "container",
+    },
+    "registry_lookup": {
+        "requires": ["Host", "Technology:docker"],
+        "produces": ["Finding", "Endpoint"],
+        "cost": 2, "noise": 2, "risk_domain": "container",
+    },
+    "container_verification": {
+        "requires": ["Finding"], "produces": ["Finding", "Vulnerability"],
+        "cost": 3, "noise": 3, "risk_domain": "container",
+        "reduces_uncertainty": ["Finding:container", "Finding:escape", "Finding:privileged"],
     },
     # -- Exploitation ------------------------------------------------
     "cve_exploit": {
@@ -767,7 +801,7 @@ CAPABILITY_MAP: dict[str, dict] = {
     },
     "kerberoast": {
         "requires": ["Host"], "produces": ["Credential"],
-        "cost": 4, "noise": 5,
+        "cost": 4, "noise": 5, "risk_domain": "auth",
     },
     "ntlm_relay": {
         "requires": ["Host"], "produces": ["Finding"],
@@ -800,7 +834,7 @@ CAPABILITY_MAP: dict[str, dict] = {
     },
     "hash_crack": {
         "requires": ["Host"], "produces": ["Credential"],
-        "cost": 6, "noise": 1,
+        "cost": 6, "noise": 1, "risk_domain": "crypto",
     },
     "hash_extension": {
         "requires": ["Host"], "produces": ["Finding"],
@@ -829,7 +863,7 @@ CAPABILITY_MAP: dict[str, dict] = {
     },
     "log_analyze": {
         "requires": ["Host"], "produces": ["Finding"],
-        "cost": 3, "noise": 1,
+        "cost": 3, "noise": 1, "risk_domain": "forensics",
     },
     "memory_analyze": {
         "requires": ["Host"],
@@ -851,6 +885,25 @@ CAPABILITY_MAP: dict[str, dict] = {
 def _noise_from_risk(risk_level: str) -> float:
     """Derive noise score from plugin risk_level."""
     return {"safe": 1.0, "noisy": 5.0, "destructive": 9.0}.get(risk_level, 1.0)
+
+
+_CATEGORY_TO_DOMAIN: dict[str, str] = {
+    "recon": "recon",
+    "scanning": "network",
+    "analysis": "web",
+    "pentesting": "web",
+    "exploitation": "web",
+    "lateral": "auth",
+    "privesc": "auth",
+    "post_exploit": "general",
+    "crypto": "crypto",
+    "forensics": "forensics",
+}
+
+
+def _infer_risk_domain(category: str) -> str:
+    """Auto-infer risk_domain from plugin category."""
+    return _CATEGORY_TO_DOMAIN.get(category, "general")
 
 
 def build_capabilities(registry: PluginRegistry) -> dict[str, Capability]:
@@ -876,6 +929,8 @@ def build_capabilities(registry: PluginRegistry) -> dict[str, Capability]:
                 cost_score=m["cost"],
                 noise_score=m["noise"],
                 execution_time_estimate=meta.timeout,
+                reduces_uncertainty=m.get("reduces_uncertainty", []),
+                risk_domain=m.get("risk_domain", _infer_risk_domain(meta.category.value)),
             )
         else:
             # Auto-infer from PluginMeta
@@ -892,6 +947,7 @@ def build_capabilities(registry: PluginRegistry) -> dict[str, Capability]:
                 cost_score=min(meta.timeout / 10.0, 10.0),
                 noise_score=_noise_from_risk(meta.risk_level),
                 execution_time_estimate=meta.timeout,
+                risk_domain=_infer_risk_domain(meta.category.value),
             )
 
         capabilities[name] = cap

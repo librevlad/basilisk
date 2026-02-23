@@ -160,6 +160,14 @@ class KnowledgeGraph:
         """Get all Finding entities."""
         return self.query(EntityType.FINDING)
 
+    def containers(self) -> list[Entity]:
+        """Get all Container entities."""
+        return self.query(EntityType.CONTAINER)
+
+    def images(self) -> list[Entity]:
+        """Get all Image entities."""
+        return self.query(EntityType.IMAGE)
+
     def to_targets(self) -> list[Target]:
         """Convert Host entities back to Target objects for plugin execution."""
         targets = []
