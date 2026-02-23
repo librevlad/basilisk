@@ -102,6 +102,16 @@ class CallbackSettings(BaseSettings):
     domain: str = ""
 
 
+class CampaignSettings(BaseSettings):
+    """Persistent campaign memory — opt-in cross-audit learning."""
+
+    enabled: bool = False
+    data_dir: Path = Field(default_factory=lambda: Path.home() / ".basilisk" / "campaigns")
+    db_name: str = "campaign.db"
+    max_profile_age_days: int = 90
+    tech_stack_min_runs: int = 3
+
+
 class Settings(BaseSettings):
     """Root settings — merges defaults, YAML config, and env vars."""
 
@@ -113,6 +123,7 @@ class Settings(BaseSettings):
     auth: AuthSettings = Field(default_factory=AuthSettings)
     browser: BrowserSettings = Field(default_factory=BrowserSettings)
     callback: CallbackSettings = Field(default_factory=CallbackSettings)
+    campaign: CampaignSettings = Field(default_factory=CampaignSettings)
     projects_dir: Path = PROJECTS_DIR
     wordlists_dir: Path = WORDLISTS_DIR
     log_level: str = "INFO"

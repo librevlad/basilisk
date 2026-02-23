@@ -251,6 +251,9 @@ def auto(
     project_name: str | None = typer.Option(
         None, "--project", "-p", help="Save to project",
     ),
+    campaign: bool = typer.Option(
+        False, "--campaign/--no-campaign", help="Enable persistent campaign memory",
+    ),
     format: str = typer.Option("json", help="Output formats: json,csv,html"),  # noqa: A002
     verbose: bool = typer.Option(False, "-v", "--verbose"),
 ):
@@ -273,6 +276,8 @@ def auto(
     )
 
     audit_builder = Audit(target).autonomous(max_steps=max_steps)
+    if campaign:
+        audit_builder = audit_builder.enable_campaign()
     if config:
         audit_builder = audit_builder.with_config(config)
     if plugins:
