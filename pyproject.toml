@@ -1,0 +1,99 @@
+[project]
+name = "basilisk"
+version = "3.1.0"
+description = "Professional modular security audit framework for domain reconnaissance, analysis, and pentesting"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+authors = [
+    { name = "librevlad" },
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Security",
+    "Topic :: Internet :: WWW/HTTP",
+    "Typing :: Typed",
+]
+dependencies = [
+    "typer>=0.12",
+    "rich>=13.0",
+    "textual>=1.0",
+    "pydantic>=2.5",
+    "pydantic-settings>=2.0",
+    "pyyaml>=6.0",
+    "aiohttp>=3.9",
+    "aiolimiter>=1.1",
+    "aiofiles>=24.0",
+    "aiosqlite>=0.20",
+    "dnspython>=2.5",
+    "cryptography>=42.0",
+    "beautifulsoup4>=4.12",
+    "jinja2>=3.1",
+]
+
+[project.optional-dependencies]
+full = [
+    "python-whois>=0.9",
+    "ipwhois>=1.2",
+    "python-nmap>=0.7",
+    "shodan>=1.30",
+]
+browser = [
+    "playwright>=1.40",
+]
+offensive = [
+    "impacket>=0.12",
+    "asyncssh>=2.14",
+    "ldap3>=2.9",
+    "scapy>=2.5",
+    "pycryptodome>=3.20",
+    "passlib>=1.7",
+]
+crypto = [
+    "pycryptodome>=3.20",
+    "sympy>=1.12",
+]
+forensics = [
+    "scapy>=2.5",
+    "python-magic>=0.4",
+    "pillow>=10.0",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pytest-cov>=4.1",
+    "ruff>=0.3",
+    "aioresponses>=0.7",
+]
+
+[project.scripts]
+basilisk = "basilisk.cli:app"
+
+[project.urls]
+Homepage = "https://github.com/librevlad/basilisk"
+Repository = "https://github.com/librevlad/basilisk"
+Issues = "https://github.com/librevlad/basilisk/issues"
+Changelog = "https://github.com/librevlad/basilisk/blob/main/CHANGELOG.md"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "SIM"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

@@ -1,0 +1,15 @@
+services:
+  mutillidae:
+    image: pentestlab/mutillidae
+    ports:
+      - "8280:80"
+    depends_on:
+      - mutillidae-db
+    links:
+      - "mutillidae-db:mysql"
+    restart: unless-stopped
+  mutillidae-db:
+    image: mysql:5.7
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    restart: unless-stopped

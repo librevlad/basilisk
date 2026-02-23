@@ -1,0 +1,82 @@
+# bWAPP (buggy web application) scan config
+# Usage: .venv/Scripts/python.exe -m basilisk audit 127.0.0.1:8180 --autonomous --config config/bwapp.yaml -v
+
+http:
+  timeout: 15.0
+  verify_ssl: false
+
+rate_limit:
+  requests_per_second: 50.0
+  burst: 10
+
+auth:
+  enabled: true
+  username: bee
+  password: bug
+  login_url: /login.php
+  extra_cookies:
+    security_level: "0"
+
+scan:
+  scan_paths:
+    # A1 - Injection
+    - /sqli_1.php        # SQL Injection (GET/Search)
+    - /sqli_2.php        # SQL Injection (GET/Select)
+    - /sqli_3.php        # SQL Injection (POST/Search)
+    - /sqli_4.php        # SQL Injection (POST/Select)
+    - /sqli_5.php        # SQL Injection (AJAX/JSON)
+    - /sqli_6.php        # SQL Injection (Login Form/Hero)
+    - /sqli_7.php        # SQL Injection (Login Form/User)
+    - /sqli_11.php       # SQL Injection - Stored (Blog)
+    - /sqli_13.php       # SQL Injection - Stored (User-Agent)
+    - /sqli_14.php       # SQL Injection - Blind Boolean
+    - /sqli_15.php       # SQL Injection - Blind Time
+    - /sqli_16.php       # SQL Injection - Blind (SOAP)
+    - /commandi.php      # OS Command Injection
+    - /commandi_blind.php # OS Command Injection - Blind
+    - /phpi.php          # PHP Code Injection
+    - /xmli_1.php        # XML/XPath Injection (Login)
+    - /xmli_2.php        # XML/XPath Injection (Search)
+    - /htmli_get.php     # HTML Injection - Reflected GET
+    - /htmli_post.php    # HTML Injection - Reflected POST
+    - /iframei.php       # iFrame Injection
+    - /ssii.php          # Server-Side Includes (SSI) Injection
+    # A3 - XSS
+    - /xss_get.php       # XSS Reflected (GET)
+    - /xss_post.php      # XSS Reflected (POST)
+    - /xss_json.php      # XSS Reflected (JSON)
+    - /xss_ajax_2-1.php  # XSS Reflected (AJAX/XML)
+    - /xss_eval.php      # XSS Reflected (Eval)
+    - /xss_href-1.php    # XSS Reflected (HREF)
+    - /xss_php_self.php  # XSS Reflected (PHP_SELF)
+    - /xss_stored_1.php  # XSS Stored (Blog)
+    # A4 - Insecure Direct Object References
+    - /insecure_direct_object_reference_1.php
+    # A5 - Security Misconfiguration
+    - /xst_2.php         # Cross-Site Tracing
+    # A6 - Sensitive Data Exposure
+    - /ba_insecure_login_1.php  # Insecure Login Forms
+    # A7 - Missing Functional Level Access Control
+    - /directory_traversal_1.php  # Directory Traversal - Dirs
+    - /directory_traversal_2.php  # Directory Traversal - Files
+    - /rlfi.php          # Remote & Local File Inclusion
+    # A8 - CSRF
+    - /csrf_1.php        # CSRF (Change Password)
+    - /csrf_2.php        # CSRF (Change Secret)
+    - /csrf_3.php        # CSRF (Transfer Amount)
+    # A9 - Vulnerable Components
+    - /shellshock.php    # Shellshock
+    # A10 - Redirects
+    - /unvalidated_redir_fwd_1.php  # Open Redirect
+    - /unvalidated_redir_fwd_2.php  # Open Redirect 2
+    # Other
+    - /xss_stored_1.php  # Stored XSS Blog
+    - /xxe-1.php         # XXE
+    - /xxe-2.php         # XXE 2
+    - /sm_xml.php        # SSRF
+    - /portal.php        # Main portal
+    - /password_change.php # Password Change
+    - /user_extra.php    # User Extra
+    - /admin/            # Admin Portal
+
+log_level: DEBUG

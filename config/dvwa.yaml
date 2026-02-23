@@ -1,0 +1,50 @@
+# DVWA (Damn Vulnerable Web Application) scan config
+# Usage: .venv/Scripts/python.exe -m basilisk audit 127.0.0.1:4280 --autonomous --config config/dvwa.yaml
+
+http:
+  timeout: 15.0
+  verify_ssl: false
+
+rate_limit:
+  requests_per_second: 50.0
+  burst: 10
+
+auth:
+  enabled: true
+  username: admin
+  password: password
+  login_url: /login.php
+  extra_cookies:
+    security: low
+
+scan:
+  scan_paths:
+    # SQLi
+    - /vulnerabilities/sqli/?id=1&Submit=Submit
+    - /vulnerabilities/sqli_blind/?id=1&Submit=Submit
+    # XSS
+    - /vulnerabilities/xss_r/?name=test
+    - /vulnerabilities/xss_s/?txtName=test&mtxMessage=test&btnSign=Sign+Guestbook
+    - /vulnerabilities/xss_d/?default=English
+    # Command Injection
+    - /vulnerabilities/exec/?ip=127.0.0.1&Submit=Submit
+    # File Inclusion
+    - /vulnerabilities/fi/?page=include.php
+    # File Upload (POST form — scan_path flag ensures testing)
+    - /vulnerabilities/upload/
+    # CSRF
+    - /vulnerabilities/csrf/?password_new=test&password_conf=test&Change=Change
+    # Brute Force
+    - /vulnerabilities/brute/?username=admin&password=test&Login=Login
+    # Weak Session IDs (POST form)
+    - /vulnerabilities/weak_id/
+    # Auth Bypass
+    - /vulnerabilities/authbypass/
+    # Open Redirect
+    - /vulnerabilities/open_redirect/?redirect=https://example.com
+    # JavaScript
+    - /vulnerabilities/javascript/?token=test&phrase=test&send=Submit
+    # CSP
+    - /vulnerabilities/csp/?include=https://example.com
+
+log_level: DEBUG

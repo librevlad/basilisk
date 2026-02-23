@@ -1,0 +1,59 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+nul
+
+# Project runtime
+reports/
+projects/
+data/
+*.db
+*.state.json
+
+# Temporary files
+*.tmp
+*.bak
+*.orig
+
+# Large data files (bulk scan datasets)
+examples/git/*.csv
+
+# Claude
+.claude/
+
+# uv
+uv.lock
+
+# Secrets / certificates
+.env
+.env.*
+*.key
+*.pem
+*.p12
+secrets.yaml
+
+# Coverage
+.coverage
+.coverage.*
+htmlcov/
+
+# Type checking
+.mypy_cache/
+.pyright/
+
+# Dev scripts
+audit_subdomains.py
