@@ -14,6 +14,7 @@ from basilisk.decisions.decision import Decision, EvaluatedOption
 from basilisk.events.bus import Event, EventBus, EventType
 from basilisk.knowledge.entities import Entity, EntityType
 from basilisk.knowledge.graph import KnowledgeGraph
+from basilisk.knowledge.relations import Relation, RelationType
 from basilisk.knowledge.state import KnowledgeState
 from basilisk.observations.observation import Observation
 from basilisk.orchestrator.planner import Planner
@@ -119,6 +120,13 @@ class AutonomousLoop:
             # 4. Score and rank
             scored = self.scorer.rank(candidates)
 
+            # 4b. Filter out already-executed pairs and cooldown
+            scored = [
+                sc for sc in scored
+                if not self.graph.was_executed(self._fingerprint(sc))
+                and self.safety.is_cooled_down(self._fingerprint(sc))
+            ]
+
             # 5. Select batch
             chosen = self.selector.pick(scored, budget=self.safety.batch_size)
             if not chosen:
@@ -130,13 +138,6 @@ class AutonomousLoop:
             step_decisions: list[Decision] = []
             for sc in chosen:
                 fingerprint = self._fingerprint(sc)
-
-                # Check cooldown
-                if not self.safety.is_cooled_down(fingerprint):
-                    continue
-
-                if self.graph.was_executed(fingerprint):
-                    continue
 
                 # Build decision BEFORE execution
                 decision = self._build_decision(step, sc, scored, gaps)
@@ -220,6 +221,10 @@ class AutonomousLoop:
 
             total_obs += step_obs_count
 
+            # 7b. Mark gap rules as satisfied for executed capabilities
+            for sc in chosen:
+                self._mark_gap_satisfied(sc)
+
             # 8. Emit step event
             self.bus.emit(Event(EventType.STEP_COMPLETED, {
                 "step": step,
@@ -265,6 +270,18 @@ class AutonomousLoop:
             )
             self.graph.add_entity(entity)
             self.bus.emit(Event(EventType.ENTITY_CREATED, {"entity_id": entity.id}))
+
+            # Bootstrap HTTP service if target has explicit port
+            for port in target.ports:
+                svc = Entity.service(target.host, port, "tcp")
+                svc.data["service"] = "http"
+                self.graph.add_entity(svc)
+                self.graph.add_relation(Relation(
+                    source_id=entity.id,
+                    target_id=svc.id,
+                    type=RelationType.EXPOSES,
+                ))
+                self.bus.emit(Event(EventType.ENTITY_CREATED, {"entity_id": svc.id}))
 
     async def _execute_one(
         self, sc: ScoredCapability, step: int, decision: Decision,
@@ -365,9 +382,60 @@ class AutonomousLoop:
             reasoning_trace=reasoning,
         )
 
+    def _mark_gap_satisfied(self, sc: ScoredCapability) -> None:
+        """Mark knowledge gap rules as satisfied for this (cap, entity) pair.
+
+        This prevents gap rules from generating the same gaps endlessly.
+        For host-level capabilities, mark the host.
+        For endpoint-level, the dedup logic prevents re-execution.
+        """
+        cap = sc.capability
+        entity = sc.target_entity
+
+        # NOTE: host_vuln_tested is NOT set here. Multiple host-level pentesting
+        # plugins (xxe_check, jwt_attack, git_exposure, cors_exploit, etc.) need to
+        # run on the same host. The execution fingerprint tracking (graph.was_executed)
+        # prevents re-running the same plugin, and the loop terminates naturally with
+        # no_candidates when all matching plugins have been executed.
+
+        # Mark service discovery complete
+        if "Service" in cap.produces_knowledge and entity.type == EntityType.HOST:
+            entity.data["services_checked"] = True
+
+        # Mark tech detection complete
+        if "Technology" in cap.produces_knowledge and entity.type == EntityType.HOST:
+            entity.data["tech_checked"] = True
+
+        # Mark endpoint discovery complete
+        if "Endpoint" in cap.produces_knowledge and entity.type == EntityType.HOST:
+            entity.data["endpoints_checked"] = True
+            # form_analyzer / web_crawler also produce Endpoint — mark forms checked
+            if cap.plugin_name in (
+                "form_analyzer", "web_crawler", "link_extractor",
+            ):
+                entity.data["forms_checked"] = True
+
+        # Mark technology version check complete
+        if entity.type == EntityType.TECHNOLOGY:
+            entity.data["version_checked"] = True
+
+        # NOTE: Service entities are NOT marked as tested here.
+        # Multiple service-specific plugins (redis_exploit, ssh_brute, etc.)
+        # need to run on the same service. The execution fingerprint tracking
+        # (graph.was_executed) prevents re-running the same plugin on the same
+        # entity, so the gap naturally resolves when all capabilities are exhausted.
+
     @staticmethod
     def _fingerprint(sc: Any) -> str:
-        """Create a unique fingerprint for a (capability, entity) pair."""
+        """Create a unique fingerprint for a (capability, entity) pair.
+
+        For Endpoint-targeted plugins (pentesting, exploitation), use plugin:host
+        because these plugins scan ALL injection points on the host in a single run.
+        For other entity types, use the full entity ID.
+        """
+        if sc.target_entity.type == EntityType.ENDPOINT:
+            host = sc.target_entity.data.get("host", sc.target_entity.id)
+            return f"{sc.capability.plugin_name}:{host}"
         return f"{sc.capability.plugin_name}:{sc.target_entity.id}"
 
     def _collect_results(self) -> dict[str, Any]:

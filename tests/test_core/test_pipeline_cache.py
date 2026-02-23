@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock
-
 import pytest
 
 from basilisk.config import Settings
 from basilisk.core.executor import AsyncExecutor, PluginContext
-from basilisk.core.pipeline import Pipeline, PipelineState
+from basilisk.core.pipeline import Pipeline
 from basilisk.core.plugin import BasePlugin, PluginCategory, PluginMeta
 from basilisk.core.registry import PluginRegistry
 from basilisk.models.result import Finding, PluginResult

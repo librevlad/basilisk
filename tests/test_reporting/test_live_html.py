@@ -135,6 +135,7 @@ class TestLiveHtmlRenderer:
         state.total_findings = 0
         state.results = []
         state.phases = {}
+        state.autonomous = None
 
         renderer.update(state)
         assert path.exists()
@@ -157,6 +158,7 @@ class TestLiveHtmlRenderer:
         state.total_findings = 1
         state.results = [result]
         state.phases = {}
+        state.autonomous = None
 
         renderer.update(state)
         content = path.read_text(encoding="utf-8")
@@ -171,6 +173,7 @@ class TestLiveHtmlRenderer:
         state.total_findings = 0
         state.results = []
         state.phases = {}
+        state.autonomous = None
 
         renderer.update(state)
         assert path.exists()
@@ -188,6 +191,7 @@ class TestLiveReportEngine:
         state.total_findings = 0
         state.results = []
         state.phases = {}
+        state.autonomous = None
 
         engine.update(state)
         assert engine.html_path.exists()
@@ -205,6 +209,7 @@ class TestLiveReportEngine:
         state.total_findings = 5
         state.results = []
         state.phases = {}
+        state.autonomous = None
 
         engine.update(state)
         data = json.loads(engine.json_path.read_text(encoding="utf-8"))

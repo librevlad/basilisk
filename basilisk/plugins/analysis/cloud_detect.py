@@ -180,7 +180,12 @@ class CloudDetectPlugin(BasePlugin):
 
         headers: dict = {}
         http_reachable = False
-        for scheme in ("https", "http"):
+
+        # Use pre-probed scheme from autonomous mode when available
+        _pre = ctx.state.get("http_scheme", {}).get(target.host)
+        _schemes = (_pre,) if _pre else ("https", "http")
+
+        for scheme in _schemes:
             try:
                 async with ctx.rate:
                     resp = await ctx.http.get(

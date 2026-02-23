@@ -29,63 +29,88 @@ def adapt_result(result: PluginResult) -> list[Observation]:
     # Always emit the host entity
     observations.append(_host_observation(host, plugin))
 
+    # Helper: data.get() can return None when key exists but value is None
+    def _safe_list(key: str) -> list:
+        val = data.get(key)
+        return val if isinstance(val, list) else []
+
     # open_ports → Service entities
-    for port_info in data.get("open_ports", []):
+    for port_info in _safe_list("open_ports"):
         obs = _service_from_port(host, port_info, plugin)
         if obs:
             observations.append(obs)
 
     # services → Service entities
-    for svc in data.get("services", []):
+    for svc in _safe_list("services"):
         obs = _service_from_dict(host, svc, plugin)
         if obs:
             observations.append(obs)
 
     # technologies → Technology entities
-    for tech in data.get("technologies", []):
+    for tech in _safe_list("technologies"):
         obs = _technology_observation(host, tech, plugin)
         if obs:
             observations.append(obs)
 
     # cms → Technology entities
-    for cms in data.get("cms", []):
+    for cms in _safe_list("cms"):
         obs = _cms_observation(host, cms, plugin)
         if obs:
             observations.append(obs)
 
     # subdomains → Host entities with PARENT_OF relation
-    for sub in data.get("subdomains", []):
+    for sub in _safe_list("subdomains"):
         observations.append(_subdomain_observation(sub, host, plugin))
 
     # Endpoint sources: crawled_urls, found_paths, api_endpoints, internal_links
-    for url in data.get("crawled_urls", []):
+    for url in _safe_list("crawled_urls"):
         obs = _endpoint_from_url(host, url, plugin)
         if obs:
             observations.append(obs)
 
-    for path_entry in data.get("found_paths", []):
+    for path_entry in _safe_list("found_paths"):
         obs = _endpoint_from_path(host, path_entry, plugin)
         if obs:
             observations.append(obs)
 
-    for ep in data.get("api_endpoints", []):
+    for ep in _safe_list("api_endpoints"):
         obs = _endpoint_from_api(host, ep, plugin)
         if obs:
             observations.append(obs)
 
-    for url in data.get("internal_links", []):
+    for url in _safe_list("internal_links"):
         obs = _endpoint_from_url(host, url, plugin)
         if obs:
             observations.append(obs)
 
+    # urls → Endpoint entities (from sitemap_parser)
+    for url in _safe_list("urls"):
+        obs = _endpoint_from_url(host, url, plugin)
+        if obs:
+            observations.append(obs)
+
+    # upload_endpoints → Endpoint entities (from file_upload_check)
+    for path in _safe_list("upload_endpoints"):
+        if isinstance(path, str) and path:
+            obs = _make_endpoint_observation(host, path, plugin, is_upload=True)
+            observations.append(obs)
+
+    # forms → Endpoint entities (from form_analyzer)
+    for form in _safe_list("forms"):
+        if isinstance(form, dict):
+            action = form.get("action", "")
+            if action:
+                obs = _make_endpoint_observation(host, action, plugin)
+                observations.append(obs)
+
     # credentials → Credential entities
-    for cred in data.get("credentials", []):
+    for cred in _safe_list("credentials"):
         obs = _credential_observation(host, cred, plugin)
         if obs:
             observations.append(obs)
 
     # waf → Technology entities
-    for waf in data.get("waf", []):
+    for waf in _safe_list("waf"):
         obs = _waf_observation(host, waf, plugin)
         if obs:
             observations.append(obs)
@@ -121,24 +146,34 @@ def _service_from_port(host: str, port_info: Any, plugin: str) -> Observation | 
         port = port_info.get("port")
         protocol = port_info.get("protocol", "tcp")
         service_name = port_info.get("service", "")
+        banner = port_info.get("banner", "")
     elif isinstance(port_info, int):
         port = port_info
         protocol = "tcp"
         service_name = ""
+        banner = ""
     else:
         return None
 
     if not port:
         return None
 
+    # Infer service name from banner if not already set
+    if not service_name and banner:
+        service_name = _infer_service_from_banner(banner)
+
     host_id = Entity.make_id(EntityType.HOST, host=host)
     service_id = Entity.make_id(EntityType.SERVICE, host=host, port=str(port), protocol=protocol)
 
+    entity_data: dict[str, Any] = {
+        "host": host, "port": port, "protocol": protocol, "service": service_name,
+    }
+    if banner:
+        entity_data["banner"] = banner
+
     return Observation(
         entity_type=EntityType.SERVICE,
-        entity_data={
-            "host": host, "port": port, "protocol": protocol, "service": service_name,
-        },
+        entity_data=entity_data,
         key_fields={"host": host, "port": str(port), "protocol": protocol},
         relation=Relation(
             source_id=host_id, target_id=service_id,
@@ -146,6 +181,30 @@ def _service_from_port(host: str, port_info: Any, plugin: str) -> Observation | 
         ),
         source_plugin=plugin,
     )
+
+
+def _infer_service_from_banner(banner: str) -> str:
+    """Infer service name from banner string."""
+    b = banner.lower()
+    if b.startswith("ssh-"):
+        return "ssh"
+    if b.startswith("220") and ("ftp" in b or "vsftpd" in b or "proftpd" in b):
+        return "ftp"
+    if "mysql" in b or "mariadb" in b:
+        return "mysql"
+    if "postgresql" in b:
+        return "postgresql"
+    if "redis" in b:
+        return "redis"
+    if "mongodb" in b or "mongo" in b:
+        return "mongodb"
+    if "elasticsearch" in b or "elastic" in b:
+        return "elasticsearch"
+    if "samba" in b or "smb" in b:
+        return "smb"
+    if "http" in b:
+        return "http"
+    return ""
 
 
 def _service_from_dict(host: str, svc: Any, plugin: str) -> Observation | None:
@@ -297,6 +356,7 @@ def _endpoint_from_api(host: str, ep: Any, plugin: str) -> Observation | None:
 def _make_endpoint_observation(
     host: str, path: str, plugin: str, *,
     status: int = 0, params: bool = False, is_api: bool = False,
+    is_upload: bool = False,
 ) -> Observation:
     """Create an Endpoint observation with SERVICE → ENDPOINT relation."""
     host_id = Entity.make_id(EntityType.HOST, host=host)
@@ -309,6 +369,8 @@ def _make_endpoint_observation(
         data["has_params"] = True
     if is_api:
         data["is_api"] = True
+    if is_upload:
+        data["is_upload"] = True
 
     return Observation(
         entity_type=EntityType.ENDPOINT,

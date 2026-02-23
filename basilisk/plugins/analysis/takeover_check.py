@@ -298,7 +298,12 @@ class TakeoverCheckPlugin(BasePlugin):
         # Phase 3: HTTP response fingerprint matching
         body = ""
         resp_status = 0
-        for scheme in ("https", "http"):
+
+        # Use pre-probed scheme from autonomous mode when available
+        _pre = ctx.state.get("http_scheme", {}).get(target.host)
+        _schemes = (_pre,) if _pre else ("https", "http")
+
+        for scheme in _schemes:
             url = f"{scheme}://{target.host}"
             try:
                 async with ctx.rate:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from basilisk.knowledge.entities import EntityType
 from basilisk.knowledge.relations import RelationType
-from basilisk.models.result import Finding, PluginResult, Severity
+from basilisk.models.result import Finding, PluginResult
 from basilisk.observations.adapter import adapt_result
 
 
@@ -168,7 +168,10 @@ class TestAdapterWaf:
     def test_waf_string(self):
         result = _make_result(waf=["Cloudflare"])
         obs = adapt_result(result)
-        tech_obs = [o for o in obs if o.entity_type == EntityType.TECHNOLOGY and o.entity_data.get("is_waf")]
+        tech_obs = [
+            o for o in obs
+            if o.entity_type == EntityType.TECHNOLOGY and o.entity_data.get("is_waf")
+        ]
         assert len(tech_obs) == 1
         assert tech_obs[0].entity_data["name"] == "Cloudflare"
 
@@ -204,6 +207,84 @@ class TestAdapterFindings:
         obs = adapt_result(result)
         finding_obs = [o for o in obs if o.entity_type == EntityType.FINDING]
         assert len(finding_obs) == 3
+
+
+class TestAdapterSitemapUrls:
+    def test_sitemap_urls_create_endpoints(self):
+        result = _make_result(urls=[
+            "https://example.com/page1",
+            "https://example.com/page2",
+        ])
+        obs = adapt_result(result)
+        ep_obs = [o for o in obs if o.entity_type == EntityType.ENDPOINT]
+        assert len(ep_obs) == 2
+        paths = {o.entity_data["path"] for o in ep_obs}
+        assert "/page1" in paths
+        assert "/page2" in paths
+
+    def test_sitemap_empty_urls_skipped(self):
+        result = _make_result(urls=["", None])
+        obs = adapt_result(result)
+        ep_obs = [o for o in obs if o.entity_type == EntityType.ENDPOINT]
+        assert len(ep_obs) == 0
+
+
+class TestAdapterForms:
+    def test_forms_create_endpoint_entities(self):
+        result = _make_result(forms=[
+            {"action": "/login", "method": "POST"},
+            {"action": "/register", "method": "POST"},
+        ])
+        obs = adapt_result(result)
+        ep_obs = [o for o in obs if o.entity_type == EntityType.ENDPOINT]
+        assert len(ep_obs) == 2
+        paths = {o.entity_data["path"] for o in ep_obs}
+        assert "/login" in paths
+        assert "/register" in paths
+
+    def test_forms_skip_empty_action(self):
+        result = _make_result(forms=[{"action": "", "method": "POST"}])
+        obs = adapt_result(result)
+        ep_obs = [o for o in obs if o.entity_type == EntityType.ENDPOINT]
+        assert len(ep_obs) == 0
+
+    def test_forms_skip_non_dict(self):
+        result = _make_result(forms=["not-a-dict"])
+        obs = adapt_result(result)
+        ep_obs = [o for o in obs if o.entity_type == EntityType.ENDPOINT]
+        assert len(ep_obs) == 0
+
+
+class TestAdapterUploadEndpoints:
+    def test_upload_endpoint_creates_entity(self):
+        result = _make_result(upload_endpoints=["/upload", "/api/files"])
+        obs = adapt_result(result)
+        ep_obs = [o for o in obs if o.entity_type == EntityType.ENDPOINT]
+        assert len(ep_obs) == 2
+        paths = {o.entity_data["path"] for o in ep_obs}
+        assert "/upload" in paths
+        assert "/api/files" in paths
+
+    def test_upload_endpoint_has_is_upload_flag(self):
+        result = _make_result(upload_endpoints=["/upload"])
+        obs = adapt_result(result)
+        ep_obs = [o for o in obs if o.entity_type == EntityType.ENDPOINT]
+        assert len(ep_obs) == 1
+        assert ep_obs[0].entity_data.get("is_upload") is True
+
+    def test_upload_endpoint_has_relation(self):
+        result = _make_result(upload_endpoints=["/upload"])
+        obs = adapt_result(result)
+        ep_obs = [o for o in obs if o.entity_type == EntityType.ENDPOINT]
+        assert ep_obs[0].relation is not None
+        assert ep_obs[0].relation.type == RelationType.HAS_ENDPOINT
+
+    def test_upload_endpoint_skips_empty(self):
+        result = _make_result(upload_endpoints=["", None, "/valid"])
+        obs = adapt_result(result)
+        ep_obs = [o for o in obs if o.entity_type == EntityType.ENDPOINT]
+        assert len(ep_obs) == 1
+        assert ep_obs[0].entity_data["path"] == "/valid"
 
 
 class TestAdapterEnrichment:

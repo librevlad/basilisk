@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from basilisk.capabilities.capability import Capability
+from basilisk.core.pipeline import _is_domain_only_plugin, _is_ip_or_local
 from basilisk.knowledge.entities import Entity, EntityType
 from basilisk.knowledge.graph import KnowledgeGraph
 from basilisk.knowledge.relations import RelationType
@@ -15,7 +16,11 @@ _GAP_TO_PRODUCES: dict[str, list[str]] = {
     "dns": ["Host:dns_data"],
     "technology": ["Technology"],
     "endpoints": ["Endpoint"],
+    "forms": ["Endpoint", "Finding"],
     "vulnerability_testing": ["Finding", "Vulnerability", "Finding:sqli", "Finding:xss"],
+    "host_vulnerability_testing": ["Finding", "Vulnerability"],
+    "service_exploitation": ["Finding", "Vulnerability", "Credential", "Technology"],
+    "credential_exploitation": ["Credential", "Finding"],
     "version": ["Vulnerability", "Finding"],
     "confirmation": [],  # any capability that targets this entity
 }
@@ -37,6 +42,13 @@ class Selector:
         candidates: list[tuple[Capability, Entity]] = []
         seen: set[tuple[str, str]] = set()
 
+        # Pre-compute which host entity IDs are IPs/localhost
+        ip_host_ids: set[str] = set()
+        for entity in graph.query(EntityType.HOST):
+            host = entity.data.get("host", "")
+            if _is_ip_or_local(host):
+                ip_host_ids.add(entity.id)
+
         for gap in gaps:
             produces_patterns = _GAP_TO_PRODUCES.get(gap.missing, [])
 
@@ -56,7 +68,17 @@ class Selector:
                 if not _requirements_met(cap, gap.entity, graph):
                     continue
 
-                key = (cap.name, gap.entity.id)
+                # Skip domain-only plugins for IP/localhost targets
+                if gap.entity.id in ip_host_ids and _is_domain_only_plugin(cap.plugin_name):
+                    continue
+
+                # Dedup: for Endpoint entities, use (cap, host) because
+                # pentesting plugins scan ALL endpoints on a host in one run
+                if gap.entity.type == EntityType.ENDPOINT:
+                    host = gap.entity.data.get("host", gap.entity.id)
+                    key = (cap.name, host)
+                else:
+                    key = (cap.name, gap.entity.id)
                 if key not in seen:
                     seen.add(key)
                     candidates.append((cap, gap.entity))
@@ -75,7 +97,12 @@ class Selector:
         for sc in scored:
             if len(chosen) >= budget:
                 break
-            key = (sc.capability.plugin_name, sc.target_entity.id)
+            # For Endpoint entities, dedup by (plugin, host) not (plugin, entity)
+            if sc.target_entity.type == EntityType.ENDPOINT:
+                host = sc.target_entity.data.get("host", sc.target_entity.id)
+                key = (sc.capability.plugin_name, host)
+            else:
+                key = (sc.capability.plugin_name, sc.target_entity.id)
             if key in used:
                 continue
             used.add(key)
@@ -125,6 +152,11 @@ def _requirements_met(cap: Capability, entity: Entity, graph: KnowledgeGraph) ->
 
         if base_type == "Service":
             if entity.type == EntityType.SERVICE:
+                # Check service subtype (e.g. "Service:redis" must match redis)
+                if ":" in req:
+                    svc_type = req.split(":", 1)[1]
+                    if not _matches_service_type(entity, svc_type):
+                        return False
                 continue
             # Check if host has services
             if entity.type == EntityType.HOST:
@@ -144,7 +176,8 @@ def _requirements_met(cap: Capability, entity: Entity, graph: KnowledgeGraph) ->
                 # Check subtype (e.g. "Endpoint:params")
                 if ":" in req:
                     sub = req.split(":", 1)[1]
-                    if sub == "params" and not entity.data.get("has_params"):
+                    if sub == "params" and not entity.data.get("has_params") \
+                            and not entity.data.get("scan_path"):
                         return False
                     if sub == "graphql" and not entity.data.get("is_graphql"):
                         return False
@@ -160,6 +193,11 @@ def _requirements_met(cap: Capability, entity: Entity, graph: KnowledgeGraph) ->
 
         if base_type == "Technology":
             if entity.type == EntityType.TECHNOLOGY:
+                # Check subtype (e.g. "Technology:waf")
+                if ":" in req:
+                    sub = req.split(":", 1)[1]
+                    if sub == "waf" and not entity.data.get("is_waf"):
+                        return False
                 continue
             if entity.type == EntityType.HOST:
                 techs = graph.neighbors(entity.id, RelationType.RUNS)
@@ -192,17 +230,22 @@ def _matches_service_type(service_entity: Entity, svc_type: str) -> bool:
     port = service_entity.data.get("port")
     protocol = service_entity.data.get("protocol", "")
     service_name = str(service_entity.data.get("service", "")).lower()
+    banner = str(service_entity.data.get("banner", "")).lower()
 
     if svc_type == "http":
-        return port in (80, 443, 8080, 8443) or "http" in service_name
+        return (
+            port in (80, 443, 3000, 4280, 5000, 8000, 8080, 8180, 8280, 8443, 8888, 9090, 9200)
+            or "http" in service_name
+            or any(kw in banner for kw in ("http/", "apache", "nginx", "iis"))
+        )
     if svc_type == "https":
         return port in (443, 8443) or protocol == "https"
     if svc_type == "ssh":
-        return port == 22 or "ssh" in service_name
+        return port == 22 or "ssh" in service_name or "ssh" in banner
     if svc_type == "ftp":
         return port == 21 or "ftp" in service_name
     if svc_type == "smb":
-        return port in (445, 139) or "smb" in service_name
+        return port in (445, 139) or "smb" in service_name or "samba" in banner
     if svc_type == "redis":
         return port == 6379 or "redis" in service_name
     if svc_type == "mysql":
@@ -219,5 +262,13 @@ def _matches_service_type(service_entity: Entity, svc_type: str) -> bool:
         return port == 111 or "rpc" in service_name
     if svc_type == "winrm":
         return port in (5985, 5986) or "winrm" in service_name
+    if svc_type == "postgres":
+        return port == 5432 or "postgres" in service_name
+    if svc_type == "mongodb":
+        return port == 27017 or "mongo" in service_name
+    if svc_type == "memcached":
+        return port == 11211 or "memcache" in service_name
+    if svc_type == "elasticsearch":
+        return port == 9200 or "elastic" in service_name
 
     return svc_type in service_name

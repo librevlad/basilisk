@@ -61,6 +61,7 @@ class TestAllPluginsMeta:
             "wp_brute", "wp_deep_scan", "cache_poison", "xxe_check",
             "idor_check", "actuator_exploit", "api_logic_engine",
             "credential_spray", "prototype_pollution",
+            "file_upload_check", "session_check",
             # Exploitation (21)
             "credential_reuse", "cve_exploit", "docker_exploit", "file_upload_bypass",
             "jenkins_exploit", "ldap_enum", "lfi_harvest", "mssql_exploit",
@@ -87,7 +88,7 @@ class TestAllPluginsMeta:
             "memory_analyze", "pcap_analyze", "steganography",
         }
         assert expected.issubset(names), f"Missing: {expected - names}"
-        assert len(names) == 176, f"Expected 176 plugins, got {len(names)}"
+        assert len(names) == 178, f"Expected 178 plugins, got {len(names)}"
 
     def test_all_have_valid_meta(self):
         for plugin_cls in self._get_all_plugins():
@@ -137,7 +138,7 @@ class TestAllPluginsMeta:
         registry = PluginRegistry()
         registry.discover()
         pentesting = registry.by_category(PluginCategory.PENTESTING)
-        assert len(pentesting) == 55
+        assert len(pentesting) == 57
 
     def test_exploitation_count(self):
         registry = PluginRegistry()

@@ -1,5 +1,5 @@
 # bWAPP (buggy web application) scan config
-# Usage: .venv/Scripts/python.exe -m basilisk audit 127.0.0.1:4280 --config config/bwapp.yaml -v
+# Usage: .venv/Scripts/python.exe -m basilisk audit 127.0.0.1:8180 --autonomous --config config/bwapp.yaml -v
 
 http:
   timeout: 15.0

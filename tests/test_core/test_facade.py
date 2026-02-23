@@ -6,7 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from basilisk.config import Settings
-from basilisk.core.facade import Audit
+from basilisk.core.facade import Audit, _split_host_port
+from basilisk.models.target import TargetType
 
 
 class TestAuditInit:
@@ -189,6 +190,101 @@ class TestAuditRun:
                 "exploitation", "post_exploit", "privesc", "lateral",
                 "crypto", "forensics",
             ]
+
+
+class TestBuildScopeIpTargets:
+    def test_build_scope_ip_target(self):
+        audit = Audit("127.0.0.1")
+        scope = audit._build_scope(Settings())
+        assert scope.targets[0].type == TargetType.IP
+
+    def test_build_scope_ip_with_port(self):
+        audit = Audit("192.168.1.1:8080")
+        scope = audit._build_scope(Settings())
+        assert scope.targets[0].type == TargetType.IP
+        assert scope.targets[0].host == "192.168.1.1:8080"
+        assert scope.targets[0].ports == [8080]
+
+    def test_build_scope_localhost(self):
+        audit = Audit("localhost")
+        scope = audit._build_scope(Settings())
+        assert scope.targets[0].type == TargetType.IP
+
+    def test_build_scope_domain_unchanged(self):
+        audit = Audit("example.com")
+        scope = audit._build_scope(Settings())
+        assert scope.targets[0].type == TargetType.DOMAIN
+
+    def test_build_scope_ipv6_localhost(self):
+        audit = Audit("[::1]:4280")
+        scope = audit._build_scope(Settings())
+        assert scope.targets[0].type == TargetType.IP
+        assert scope.targets[0].host == "[::1]:4280"
+        assert scope.targets[0].ports == [4280]
+
+    def test_build_scope_ipv6_no_port(self):
+        audit = Audit("[::1]")
+        scope = audit._build_scope(Settings())
+        assert scope.targets[0].type == TargetType.IP
+        assert scope.targets[0].host == "::1"
+        assert scope.targets[0].ports == []
+
+
+class TestSplitHostPort:
+    def test_ipv4_with_port(self):
+        assert _split_host_port("192.168.1.1:8080") == ("192.168.1.1", 8080)
+
+    def test_ipv4_no_port(self):
+        assert _split_host_port("192.168.1.1") == ("192.168.1.1", None)
+
+    def test_localhost_no_port(self):
+        assert _split_host_port("localhost") == ("localhost", None)
+
+    def test_localhost_with_port(self):
+        assert _split_host_port("localhost:4280") == ("localhost", 4280)
+
+    def test_ipv6_with_port(self):
+        assert _split_host_port("[::1]:8080") == ("::1", 8080)
+
+    def test_ipv6_no_port(self):
+        assert _split_host_port("[::1]") == ("::1", None)
+
+
+class TestProbeTargetScheme:
+    async def test_returns_https_when_available(self):
+        ctx = MagicMock()
+        ctx.http = AsyncMock()
+        ctx.http.head = AsyncMock(return_value=MagicMock())
+        result = await Audit._probe_target_scheme(ctx, "example.com")
+        assert result == "https"
+
+    async def test_returns_http_fallback(self):
+        ctx = MagicMock()
+        ctx.http = AsyncMock()
+        ctx.http.head = AsyncMock(side_effect=Exception("Connection refused"))
+        result = await Audit._probe_target_scheme(ctx, "example.com")
+        assert result == "http"
+
+    async def test_returns_http_when_no_http_client(self):
+        ctx = MagicMock()
+        ctx.http = None
+        result = await Audit._probe_target_scheme(ctx, "example.com")
+        assert result == "http"
+
+
+class TestBuildScopePortPreservation:
+    def test_ip_with_port_preserves_full_host(self):
+        audit = Audit("127.0.0.1:4280")
+        scope = audit._build_scope(Settings())
+        assert scope.targets[0].host == "127.0.0.1:4280"
+        assert scope.targets[0].ports == [4280]
+        assert scope.targets[0].type == TargetType.IP
+
+    def test_ip_without_port_uses_bare_ip(self):
+        audit = Audit("192.168.1.1")
+        scope = audit._build_scope(Settings())
+        assert scope.targets[0].host == "192.168.1.1"
+        assert scope.targets[0].ports == []
 
 
 class TestRunPlugin:

@@ -12,7 +12,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from basilisk.models.target import Target
 
-
 # =====================================================================
 # Helpers
 # =====================================================================
@@ -278,6 +277,7 @@ class TestGraphqlDetect:
 class TestDnssecCheck:
     async def test_dnssec_not_enabled(self, mock_ctx):
         import dns.exception
+
         from basilisk.plugins.scanning.dnssec_check import DnssecCheckPlugin
 
         target = Target.domain("example.com")
@@ -302,7 +302,6 @@ class TestDnssecCheck:
         assert result.status == "error"
 
     async def test_weak_algorithm_detected(self, mock_ctx):
-        import dns.exception
         from basilisk.plugins.scanning.dnssec_check import DnssecCheckPlugin
 
         target = Target.domain("example.com")
@@ -332,7 +331,6 @@ class TestDnssecCheck:
                     for f in result.findings)
 
     async def test_dnssec_enabled_with_strong_keys(self, mock_ctx):
-        import dns.exception
         from basilisk.plugins.scanning.dnssec_check import DnssecCheckPlugin
 
         target = Target.domain("example.com")

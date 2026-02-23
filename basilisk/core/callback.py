@@ -321,8 +321,8 @@ class CallbackServer:
 
             # Build minimal DNS response (NXDOMAIN)
             response = bytearray(txn_id)
-            _DNS_FLAGS_NXDOMAIN = 0x8183  # response + recursion available + NXDOMAIN
-            response += struct.pack(">H", _DNS_FLAGS_NXDOMAIN)
+            dns_flags_nxdomain = 0x8183  # response + recursion available + NXDOMAIN
+            response += struct.pack(">H", dns_flags_nxdomain)
             # QDCOUNT=1, ANCOUNT=0, NSCOUNT=0, ARCOUNT=0
             response += struct.pack(">HHHH", 1, 0, 0, 0)
             # Echo back the question section
