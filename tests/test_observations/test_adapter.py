@@ -301,3 +301,33 @@ class TestAdapterEnrichment:
         host_obs = [o for o in obs if o.entity_type == EntityType.HOST]
         dns_enriched = [o for o in host_obs if "dns_records" in o.entity_data]
         assert len(dns_enriched) == 1
+
+
+class TestAdapterFindingVerification:
+    def test_finding_propagates_confidence_and_verified(self):
+        """Finding observation includes finding_confidence, verified, false_positive_risk."""
+        result = PluginResult.success(
+            "test", "example.com",
+            findings=[Finding.high("XSS in /search", evidence="<script>alert(1)</script>")],
+        )
+        obs = adapt_result(result)
+        finding_obs = [o for o in obs if o.entity_type == EntityType.FINDING]
+        assert len(finding_obs) == 1
+        data = finding_obs[0].entity_data
+        assert "finding_confidence" in data
+        assert "verified" in data
+        assert "false_positive_risk" in data
+        assert data["verified"] is False
+        assert data["false_positive_risk"] == "low"
+
+    def test_finding_default_confidence_one(self):
+        """Default finding confidence is 1.0 (standard Finding model)."""
+        result = PluginResult.success(
+            "test", "example.com",
+            findings=[Finding.info("Header info")],
+        )
+        obs = adapt_result(result)
+        finding_obs = [o for o in obs if o.entity_type == EntityType.FINDING]
+        assert len(finding_obs) == 1
+        assert finding_obs[0].entity_data["finding_confidence"] == 1.0
+        assert finding_obs[0].confidence == 1.0

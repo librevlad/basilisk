@@ -283,6 +283,32 @@ def _is_http_service(entity: Entity) -> bool:
     return any(kw in banner for kw in ("http/", "apache", "nginx", "iis"))
 
 
+def _finding_without_verification(graph: KnowledgeGraph) -> list[KnowledgeGap]:
+    """High/critical findings without verification → need verify plugin.
+
+    Only fires for findings with severity high/critical that are not yet verified
+    and have confidence below 0.95 (probabilistic merge hasn't confirmed them).
+    """
+    gaps = []
+    for finding in graph.findings():
+        severity = finding.data.get("severity", "info")
+        if severity not in ("high", "critical"):
+            continue
+        if finding.data.get("verified"):
+            continue
+        if finding.confidence >= 0.95:
+            continue
+        title = finding.data.get("title", "?")
+        host = finding.data.get("host", "?")
+        gaps.append(KnowledgeGap(
+            entity=finding,
+            missing="finding_verification",
+            priority=6.0,
+            description=f"Finding '{title}' on {host} needs verification",
+        ))
+    return gaps
+
+
 def _attack_path_gaps(graph: KnowledgeGraph) -> list[KnowledgeGap]:
     """Suggest actions from available attack paths that haven't been executed yet.
 
@@ -323,5 +349,6 @@ _RULES = [
     _credential_without_exploitation,
     _technology_without_version,
     _low_confidence_entity,
+    _finding_without_verification,
     _attack_path_gaps,
 ]

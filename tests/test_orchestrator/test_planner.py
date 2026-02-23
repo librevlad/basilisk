@@ -362,6 +362,63 @@ class TestIsHttpService:
         assert len(tech_gaps) == 0
 
 
+class TestFindingWithoutVerification:
+    def test_detects_high_severity_unverified(self):
+        """High severity finding without verification triggers gap."""
+        g = KnowledgeGraph()
+        finding = Entity.finding("test.com", "SQL Injection in /login")
+        finding.data["severity"] = "high"
+        finding.confidence = 0.7
+        g.add_entity(finding)
+        gaps = Planner().find_gaps(g)
+        verify_gaps = [gap for gap in gaps if gap.missing == "finding_verification"]
+        assert len(verify_gaps) == 1
+        assert verify_gaps[0].priority == 6.0
+
+    def test_critical_severity_triggers_gap(self):
+        """Critical severity finding also triggers verification gap."""
+        g = KnowledgeGraph()
+        finding = Entity.finding("test.com", "RCE via deserialization")
+        finding.data["severity"] = "critical"
+        finding.confidence = 0.6
+        g.add_entity(finding)
+        gaps = Planner().find_gaps(g)
+        verify_gaps = [gap for gap in gaps if gap.missing == "finding_verification"]
+        assert len(verify_gaps) == 1
+
+    def test_no_gap_for_info_severity(self):
+        """Info severity findings don't need verification."""
+        g = KnowledgeGraph()
+        finding = Entity.finding("test.com", "Server info disclosure")
+        finding.data["severity"] = "info"
+        g.add_entity(finding)
+        gaps = Planner().find_gaps(g)
+        verify_gaps = [gap for gap in gaps if gap.missing == "finding_verification"]
+        assert len(verify_gaps) == 0
+
+    def test_no_gap_when_already_verified(self):
+        """Already-verified findings don't trigger gap."""
+        g = KnowledgeGraph()
+        finding = Entity.finding("test.com", "XSS in /search")
+        finding.data["severity"] = "high"
+        finding.data["verified"] = True
+        g.add_entity(finding)
+        gaps = Planner().find_gaps(g)
+        verify_gaps = [gap for gap in gaps if gap.missing == "finding_verification"]
+        assert len(verify_gaps) == 0
+
+    def test_no_gap_when_high_confidence(self):
+        """Findings with confidence >= 0.95 don't need verification."""
+        g = KnowledgeGraph()
+        finding = Entity.finding("test.com", "XSS in /api")
+        finding.data["severity"] = "high"
+        finding.confidence = 0.98
+        g.add_entity(finding)
+        gaps = Planner().find_gaps(g)
+        verify_gaps = [gap for gap in gaps if gap.missing == "finding_verification"]
+        assert len(verify_gaps) == 0
+
+
 class TestPlannerSorting:
     def test_gaps_sorted_by_priority(self):
         g = KnowledgeGraph()

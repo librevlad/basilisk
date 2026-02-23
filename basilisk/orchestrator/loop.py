@@ -68,6 +68,7 @@ class AutonomousLoop:
         history: Any = None,  # History | None
         exploration_rate: float = 0.15,
         cost_tracker: Any = None,  # CostTracker | None
+        goal_engine: Any = None,  # GoalEngine | None
     ) -> None:
         self.graph = graph
         self.planner = planner
@@ -82,6 +83,7 @@ class AutonomousLoop:
         self._state = KnowledgeState(graph, planner)
         self._exploration_rate = exploration_rate
         self._cost_tracker = cost_tracker
+        self._goal_engine = goal_engine
 
     async def run(self, initial_targets: list) -> LoopResult:
         """Main autonomous loop."""
@@ -112,6 +114,12 @@ class AutonomousLoop:
                 termination_reason = "no_gaps"
                 logger.info("Autonomous loop: no knowledge gaps remain")
                 break
+
+            # 2b. Goal-driven gap prioritization
+            if self._goal_engine is not None:
+                if self._goal_engine.should_advance(gaps):
+                    self._goal_engine.advance()
+                gaps = self._goal_engine.prioritize_gaps(gaps)
 
             self.bus.emit(Event(EventType.GAP_DETECTED, {"count": len(gaps), "step": step}))
 
@@ -440,6 +448,14 @@ class AutonomousLoop:
         # Mark technology version check complete
         if entity.type == EntityType.TECHNOLOGY:
             entity.data["version_checked"] = True
+
+        # Mark findings as verified when a verification plugin runs
+        if cap.reduces_uncertainty and entity.type == EntityType.FINDING:
+            entity.data["verified"] = True
+            self.bus.emit(Event(EventType.FINDING_VERIFIED, {
+                "entity_id": entity.id,
+                "plugin": cap.plugin_name,
+            }))
 
         # NOTE: Service entities are NOT marked as tested here.
         # Multiple service-specific plugins (redis_exploit, ssh_brute, etc.)

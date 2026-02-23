@@ -16,3 +16,5 @@ class Capability(BaseModel):
     cost_score: float = 1.0       # relative execution cost (1-10)
     noise_score: float = 1.0      # detectability (1-10)
     execution_time_estimate: float = 10.0  # seconds
+    reduces_uncertainty: list[str] = Field(default_factory=list)  # knowledge confirmed
+    risk_domain: str = "general"  # recon|web|network|auth|crypto|forensics|general

@@ -462,6 +462,10 @@ def _finding_observation(host: str, finding: Any, plugin: str) -> Observation:
 
     finding_id = Entity.make_id(EntityType.FINDING, host=host, title=title)
 
+    finding_confidence = getattr(finding, "confidence", 1.0)
+    verified = getattr(finding, "verified", False)
+    false_positive_risk = getattr(finding, "false_positive_risk", "low")
+
     return Observation(
         entity_type=EntityType.FINDING,
         entity_data={
@@ -470,6 +474,9 @@ def _finding_observation(host: str, finding: Any, plugin: str) -> Observation:
             "severity": severity,
             "description": getattr(finding, "description", ""),
             "evidence": evidence,
+            "finding_confidence": finding_confidence,
+            "verified": verified,
+            "false_positive_risk": false_positive_risk,
         },
         key_fields={"host": host, "title": title},
         relation=Relation(
@@ -477,5 +484,6 @@ def _finding_observation(host: str, finding: Any, plugin: str) -> Observation:
             type=RelationType.RELATES_TO, source_plugin=plugin,
         ),
         evidence=evidence,
+        confidence=finding_confidence,
         source_plugin=plugin,
     )

@@ -24,6 +24,7 @@ _GAP_TO_PRODUCES: dict[str, list[str]] = {
     "version": ["Vulnerability", "Finding"],
     "confirmation": [],  # any capability that targets this entity
     "attack_path": ["Finding", "Vulnerability", "Credential", "Endpoint"],
+    "finding_verification": ["Finding", "Vulnerability"],
 }
 
 

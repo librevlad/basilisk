@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 from basilisk.capabilities.capability import Capability
-from basilisk.capabilities.mapping import CAPABILITY_MAP, build_capabilities
+from basilisk.capabilities.mapping import (
+    CAPABILITY_MAP,
+    _infer_risk_domain,
+    build_capabilities,
+)
 from basilisk.core.registry import PluginRegistry
 
 
@@ -78,3 +82,58 @@ class TestBuildCapabilities:
         )
         assert cap.name == "test"
         assert cap.cost_score == 2.0
+
+    def test_new_fields_default_safe(self):
+        """reduces_uncertainty and risk_domain have safe defaults."""
+        registry = PluginRegistry()
+        registry.discover()
+        caps = build_capabilities(registry)
+        for name, cap in caps.items():
+            assert isinstance(cap.reduces_uncertainty, list)
+            assert isinstance(cap.risk_domain, str)
+            assert cap.risk_domain != ""
+
+    def test_explicit_risk_domain_preserved(self):
+        """Plugins with explicit risk_domain keep their value."""
+        registry = PluginRegistry()
+        registry.discover()
+        caps = build_capabilities(registry)
+        assert caps["dns_enum"].risk_domain == "recon"
+        assert caps["port_scan"].risk_domain == "network"
+        assert caps["sqli_basic"].risk_domain == "web"
+        assert caps["ssh_brute"].risk_domain == "auth"
+        assert caps["hash_crack"].risk_domain == "crypto"
+        assert caps["log_analyze"].risk_domain == "forensics"
+
+    def test_reduces_uncertainty_on_verify_plugins(self):
+        """Verification plugins have non-empty reduces_uncertainty."""
+        registry = PluginRegistry()
+        registry.discover()
+        caps = build_capabilities(registry)
+        ssti = caps.get("ssti_verify")
+        assert ssti is not None
+        assert len(ssti.reduces_uncertainty) > 0
+        assert "Finding:ssti" in ssti.reduces_uncertainty
+        nosqli = caps.get("nosqli_verify")
+        assert nosqli is not None
+        assert "Finding:nosqli" in nosqli.reduces_uncertainty
+
+
+class TestInferRiskDomain:
+    def test_recon(self):
+        assert _infer_risk_domain("recon") == "recon"
+
+    def test_scanning(self):
+        assert _infer_risk_domain("scanning") == "network"
+
+    def test_pentesting(self):
+        assert _infer_risk_domain("pentesting") == "web"
+
+    def test_lateral(self):
+        assert _infer_risk_domain("lateral") == "auth"
+
+    def test_crypto(self):
+        assert _infer_risk_domain("crypto") == "crypto"
+
+    def test_unknown_defaults_to_general(self):
+        assert _infer_risk_domain("unknown") == "general"

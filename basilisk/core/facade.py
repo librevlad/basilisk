@@ -308,6 +308,11 @@ class Audit:
             batch_size=5,
         )
 
+        # Goal engine — strategic objective progression
+        from basilisk.orchestrator.goals import DEFAULT_GOAL_PROGRESSION, GoalEngine
+
+        goal_engine = GoalEngine(goals=list(DEFAULT_GOAL_PROGRESSION))
+
         loop = AutonomousLoop(
             graph=graph,
             planner=planner,
@@ -318,6 +323,7 @@ class Audit:
             safety=safety,
             on_progress=None,
             history=history,
+            goal_engine=goal_engine,
         )
 
         # Open project DB for knowledge graph persistence if project is set
