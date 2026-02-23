@@ -328,7 +328,128 @@ ctx = PluginContext(config=settings, http=http, dns=dns, net=net, rate=rate, ...
 2. **Написание кода**: следовать существующим паттернам, не добавлять лишнего
 3. **Ruff check**: запускается автоматически после каждого Edit/Write .py файлов (hook)
 4. **Тесты**: `pytest tests/ -x --tb=short` для быстрой проверки
-5. **Коммит**: только по запросу пользователя
+5. **Коммит**: только по запросу пользователя, всегда в формате Conventional Commits
+6. **Ветки**: вся работа ведётся на feature-ветках от develop (см. Git Flow ниже)
+
+---
+
+## Git Flow + Conventional Commits
+
+### Структура веток
+
+```
+master          ← стабильные релизы, каждый merge = тег версии
+  └── develop   ← интеграционная ветка, сюда мержатся feature branches
+       ├── feature/<name>   ← от develop, для каждой задачи
+       └── hotfix/<name>    ← от master, критические фиксы → master + develop
+```
+
+| Ветка | Создаётся от | Мержится в | Назначение |
+|-------|-------------|------------|------------|
+| `master` | — | — | Стабильные релизы. Только merge из develop/hotfix |
+| `develop` | `master` | `master` (при релизе) | Интеграция. Default branch на GitHub |
+| `feature/<name>` | `develop` | `develop` | Одна задача = одна ветка |
+| `hotfix/<name>` | `master` | `master` + `develop` | Критические фиксы в продакшене |
+| `release/<version>` | `develop` | `master` + `develop` | Опционально, при подготовке релиза |
+
+### Conventional Commits
+
+Формат каждого коммита:
+```
+<type>(<scope>): <description>
+
+[optional body]
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+```
+
+**Типы:**
+| Тип | Когда использовать | Bump |
+|-----|--------------------|------|
+| `feat` | Новая функциональность | minor |
+| `fix` | Исправление бага | patch |
+| `refactor` | Рефакторинг без изменения поведения | — |
+| `test` | Добавление/изменение тестов | — |
+| `docs` | Документация (CLAUDE.md, README, etc.) | — |
+| `chore` | Конфиги, зависимости, CI | — |
+| `perf` | Оптимизация производительности | patch |
+| `style` | Форматирование, линтинг (без логики) | — |
+| `ci` | CI/CD конфигурация | — |
+
+**Scopes** (один из):
+`plugins`, `orchestrator`, `knowledge`, `pipeline`, `tui`, `cli`, `storage`, `reporting`,
+`utils`, `models`, `core`, `scoring`, `observations`, `capabilities`, `decisions`, `memory`,
+`events`, `data`, `config`
+
+**Примеры:**
+```
+feat(plugins): add redis_exploit plugin
+fix(orchestrator): prevent infinite loop when no gaps found
+refactor(knowledge): extract entity merge logic into separate method
+test(plugins): add functional tests for xss_advanced
+docs: update CLAUDE.md with git flow rules
+chore: bump aiohttp to 3.9.5
+```
+
+### Правила для Claude Code (ОБЯЗАТЕЛЬНЫЕ)
+
+**При каждом коммите:**
+1. Формат — строго Conventional Commits (type, scope, description)
+2. Scope берётся из списка выше; если изменения затрагивают несколько — использовать основной
+3. Description — на английском, императив, lowercase, без точки в конце
+4. Body — опционально, если нужен контекст
+5. Всегда заканчивать `Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>`
+
+**При создании ветки:**
+1. Всегда от `develop` (кроме hotfix — от master)
+2. Имя: `feature/<short-kebab-case>` или `hotfix/<short-kebab-case>`
+3. Пример: `feature/redis-exploit`, `hotfix/fix-ssl-crash`
+
+**При создании PR:**
+1. Target branch = `develop` (кроме hotfix → target = master)
+2. Title = тот же формат что commit message (type(scope): description)
+3. После merge — удалить feature-ветку
+
+**Lifecycle задачи:**
+```bash
+# 1. Создать ветку
+git checkout develop && git pull origin develop
+git checkout -b feature/my-feature
+
+# 2. Работать, коммитить
+git add <files>
+git commit -m "feat(scope): description
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
+
+# 3. Push + PR
+git push -u origin feature/my-feature
+gh pr create --base develop --title "feat(scope): description" --body "..."
+
+# 4. После merge — cleanup
+git checkout develop && git pull origin develop
+git branch -d feature/my-feature
+```
+
+**Release flow:**
+```bash
+# На develop, когда готов релиз:
+git checkout master && git pull origin master
+git merge develop
+git tag -a v3.2.0 -m "v3.2.0"
+git push origin master --tags
+```
+
+**Hotfix flow:**
+```bash
+git checkout master && git checkout -b hotfix/fix-critical-bug
+# ... fix ...
+git commit -m "fix(core): prevent crash on empty input"
+# PR → master, после merge:
+git checkout develop && git merge master
+```
+
+---
 
 ## Текущее состояние и план на будущее
 
