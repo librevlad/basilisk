@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Проект
 
-**Basilisk v4.0.0** — профессиональный модульный фреймворк безопасности для разведки, анализа и пентеста доменов. Автономный движок на knowledge graph с детерминированными decision traces. Плагинная архитектура с автообнаружением (194 плагина), SQLite-хранилище для миллионов записей. Persistent campaign memory для кросс-аудитного обучения. Container security audit подсистема. Cognitive reasoning: hypothesis engine + evidence fusion + belief revision. Training validation для бенчмаркинга. Actor-based network abstraction.
+**Basilisk v4.0.0** — профессиональный модульный фреймворк безопасности для разведки, анализа и пентеста доменов. Автономный движок на knowledge graph с детерминированными decision traces. Unified v4 execution path: ScenarioRegistry (188 legacy-wrapped + 5 native scenarios), ScenarioExecutor, KG persistence. SQLite-хранилище для миллионов записей. Persistent campaign memory для кросс-аудитного обучения. Container security audit подсистема. Cognitive reasoning: hypothesis engine + evidence fusion + belief revision. Training validation для бенчмаркинга. Actor-based network abstraction.
 
 Философия: сделать с хакерскими утилитами то, что Laravel сделал с Symfony — элегантные абстракции поверх мощных инструментов.
 
@@ -12,8 +12,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 # Тесты
-.venv/Scripts/python.exe -m pytest tests/ -v              # все 1921 тест
-.venv/Scripts/python.exe -m pytest tests/test_plugins/ -v  # только плагины (345)
+.venv/Scripts/python.exe -m pytest tests/ -v              # все 1974 теста
+.venv/Scripts/python.exe -m pytest tests/test_plugins/ -v  # только плагины
 .venv/Scripts/python.exe -m pytest tests/ -x --tb=short    # до первого падения
 
 # Линтинг
@@ -26,6 +26,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 .venv/Scripts/python.exe -m basilisk auto example.com --campaign     # с campaign memory
 .venv/Scripts/python.exe -m basilisk run ssl_check example.com       # один плагин
 .venv/Scripts/python.exe -m basilisk plugins                         # список плагинов
+.venv/Scripts/python.exe -m basilisk scenarios                        # все scenarios (native + legacy)
+.venv/Scripts/python.exe -m basilisk scenarios --native               # только native v4 scenarios
 .venv/Scripts/python.exe -m basilisk train profile.yaml              # training validation
 .venv/Scripts/python.exe -m basilisk crack <hash>                    # hash identification + crack
 
@@ -128,7 +130,7 @@ basilisk/
 │
 ├── capabilities/                  # Маппинг плагинов на capabilities
 │   ├── capability.py              # Capability model + ActionType enum
-│   └── mapping.py                 # CAPABILITY_MAP для 194 плагинов
+│   └── mapping.py                 # CAPABILITY_MAP + build_capabilities_from_scenarios()
 │
 ├── reasoning/                     # Cognitive reasoning primitives
 │   ├── hypothesis.py              # HypothesisEngine: 5 pattern detectors, evidence tracking
@@ -146,7 +148,8 @@ basilisk/
 ├── orchestrator/                  # Автономный движок (internal, wrapped by engine/)
 │   ├── planner.py                 # Planner: 18 правил обнаружения knowledge gaps
 │   ├── selector.py                # Selector: match gaps → capabilities, pick batch
-│   ├── executor.py                # OrchestratorExecutor: обёртка над core executor
+│   ├── executor.py                # OrchestratorExecutor: обёртка над core executor (legacy)
+│   ├── scenario_executor.py       # [v4] ScenarioExecutor: dispatches to scenarios (active path)
 │   ├── loop.py                    # AutonomousLoop: цикл + decision tracing + KnowledgeState
 │   ├── goals.py                   # GoalEngine: 5-goal progression, success_probability
 │   ├── attack_paths.py            # Multi-step attack path scoring
@@ -184,7 +187,7 @@ basilisk/
 │   ├── db.py                      # Schema + PRAGMA + migrations
 │   └── repo.py                    # Repository (CRUD, bulk ops, pagination)
 │
-└── plugins/                       # 194 плагина (auto-discover)
+└── plugins/                       # 188 плагинов (auto-discover)
     ├── recon/        (23)         # dns_enum, subdomain_*, whois, reverse_ip, ...
     ├── scanning/     (19)         # port_scan, ssl_check, service_detect, ...
     ├── analysis/     (23)         # http_headers, tech_detect, takeover_check, ...
@@ -199,10 +202,10 @@ basilisk/
 wordlists/bundled/                 # 6 словарей
 training_profiles/                 # YAML profiles for training validation
 
-tests/                             # 1921 тест, 90+ файлов
+tests/                             # 1974 теста, 90+ файлов
 ├── test_models/                   # 43 теста
 ├── test_core/                     # 167 тестов
-├── test_plugins/                  # 345 тестов (194 плагина покрыты)
+├── test_plugins/                  # 345 тестов (188 плагинов покрыты)
 ├── test_utils/                    # 212 тестов
 ├── test_storage/                  # 14 тестов
 ├── test_knowledge/                # 71 тест (entities, graph, state, store, vulns)
@@ -255,7 +258,7 @@ result = await Basilisk("example.com").on_finding(callback).on_step(callback).ru
 - Зависимости (`depends_on`) разрешаются топологической сортировкой (Kahn's algorithm)
 - `provides` поле для мультипровайдеров (напр. 10 плагинов `provides="subdomains"`)
 - `default_enabled=False` для тяжёлых плагинов (subdomain_bruteforce)
-- Все 194 плагина автоматически оборачиваются как v4 Scenarios через `bridge/legacy_scenario.py`
+- Все 188 плагинов автоматически оборачиваются как v4 Scenarios через `bridge/legacy_scenario.py`
 
 ### Создание нового плагина
 ```python
@@ -323,7 +326,7 @@ Protocol-based interface для всех сетевых операций. Все
 - `AutonomousLoop` — seed → find_gaps → match → score → **build decision** → execute → apply → **hypothesize** → **revise beliefs** → repeat
 - `SafetyLimits` — max_steps, max_duration_seconds, batch_size, cooldown tracking
 - `adapter.py` — конвертация `PluginResult` → `list[Observation]` → entities/relations в граф
-- `mapping.py` — все 194 плагина маппятся на requires/produces/cost/noise/action_type/expected_state_delta
+- `mapping.py` — все 188 плагинов маппятся на requires/produces/cost/noise/action_type/expected_state_delta
 
 ### v4 Layers
 
@@ -331,14 +334,14 @@ Protocol-based interface для всех сетевых операций. Все
 CLI (cli.py) / Basilisk class (__init__.py)
     ↓
 Engine (engine/autonomous/runner.py)
-    ↓  wraps v3 orchestrator transparently
+    ↓  ScenarioRegistry + ScenarioExecutor (v4 active path)
 Orchestrator (loop, planner, selector, scorer)
     ↓
-Scenarios (scenarios/ native + bridge/legacy_scenario.py 194 wrapped)
+Scenarios (scenarios/ 5 native + bridge/legacy_scenario.py 188 wrapped)
     ↓  depend on ActorProtocol
 Actor (actor/ — CompositeActor, RecordingActor, ...)
     ↓
-Knowledge Graph + Verification + Training
+Knowledge Graph + Verification + Training + KG Persistence (knowledge.db)
 ```
 
 ### Storage (SQLite WAL)
@@ -770,7 +773,7 @@ class Capability(BaseModel):
 
 ### CAPABILITY_MAP (`capabilities/mapping.py`)
 
-145 плагинов явно маппятся. Для остальных — auto-inference из `PluginMeta`:
+145 плагинов явно маппятся. Для остальных — auto-inference из `PluginMeta`/`ScenarioMeta`:
 - `requires`: `["Host"]` + `"Service:http"` если `meta.requires_http`
 - `produces`: из `meta.produces` или `["Finding"]`
 - `cost_score`: `min(meta.timeout / 10.0, 10.0)`
