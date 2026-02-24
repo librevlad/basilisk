@@ -59,6 +59,16 @@ SOURCE_FAMILIES: dict[str, str] = {
     "nosqli_verify": "verification",
     "container_verification": "verification",
     "cors_exploit": "verification",
+    # Additional exploit/verification plugins
+    "ssrf_advanced": "exploit",
+    "sqli_extract": "exploit",
+    "lfi_harvest": "exploit",
+    "file_upload_bypass": "exploit",
+    "version_detect": "http_probe",
+    "waf_bypass": "exploit",
+    "graphql_exploit": "exploit",
+    "pp_exploit": "exploit",
+    "idor_exploit": "exploit",
 }
 
 

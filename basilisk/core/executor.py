@@ -15,7 +15,6 @@ if TYPE_CHECKING:
     from basilisk.config import Settings
     from basilisk.core.auth import AuthManager
     from basilisk.core.callback import CallbackServer
-    from basilisk.core.exploit_chain import ExploitChainEngine
     from basilisk.core.plugin import BasePlugin
     from basilisk.core.providers import ProviderPool
     from basilisk.models.target import Target
@@ -69,7 +68,6 @@ class PluginContext:
     differ: ResponseDiffer | None = None
     payloads: PayloadEngine | None = None
     waf_bypass: WafBypassEngine | None = None
-    exploit_chain: ExploitChainEngine | None = None
     dynamic_wordlist: DynamicWordlistGenerator | None = None
     oob: OobVerifier | NoopOobVerifier | None = None
     shell: ShellManager | None = None
@@ -197,7 +195,7 @@ class AsyncExecutor:
         tasks = [self.run_one(plugin, t, ctx) for t in eligible]
         results = await asyncio.gather(*tasks)
 
-        # Emit findings to TUI as they arrive + quality metrics
+        # Emit findings via callback + quality metrics
         all_results = skipped_results + list(results)
         for result in results:
             for finding in result.findings:

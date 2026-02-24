@@ -1,0 +1,21 @@
+name: hackazon
+description: "Hackazon - E-commerce vulnerable app"
+target: "localhost:80"
+target_ports: [80]
+max_steps: 200
+required_coverage: 1.0
+expected_findings:
+  - { title: "SQL Injection", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic"] }
+  - { title: "SQL Injection Blind", severity: "critical", category: "sqli", plugin_hints: ["sqli_advanced"] }
+  - { title: "OS Command Injection", severity: "critical", category: "injection", plugin_hints: ["command_injection"] }
+  - { title: "File Upload Arbitrary", severity: "critical", category: "upload", plugin_hints: ["file_upload_bypass"] }
+  - { title: "Remote File Inclusion", severity: "critical", category: "lfi", plugin_hints: ["lfi_check"] }
+  - { title: "XXE", severity: "critical", category: "injection", plugin_hints: ["xxe_check"] }
+  - { title: "XSS Reflected", severity: "high", category: "xss", plugin_hints: ["xss_basic"] }
+  - { title: "XSS Stored", severity: "high", category: "xss", plugin_hints: ["xss_advanced"] }
+  - { title: "CSRF", severity: "high", category: "csrf", plugin_hints: ["csrf_check"] }
+  - { title: "Session Fixation", severity: "high", category: "auth", plugin_hints: ["session_check"] }
+  - { title: "REST API Unauthenticated Access", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
+  - { title: "IDOR", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
+  - { title: "Information Disclosure", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
+  - { title: "Referrer Header Bypass", severity: "medium", category: "config", plugin_hints: ["http_headers"] }

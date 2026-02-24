@@ -10,7 +10,6 @@ from pydantic import Field
 from pydantic_settings import BaseSettings
 
 DEFAULT_CONFIG_PATH = Path(__file__).parent.parent / "config" / "default.yaml"
-PROJECTS_DIR = Path("projects")
 WORDLISTS_DIR = Path(__file__).parent.parent / "wordlists"
 
 
@@ -124,7 +123,6 @@ class Settings(BaseSettings):
     browser: BrowserSettings = Field(default_factory=BrowserSettings)
     callback: CallbackSettings = Field(default_factory=CallbackSettings)
     campaign: CampaignSettings = Field(default_factory=CampaignSettings)
-    projects_dir: Path = PROJECTS_DIR
     wordlists_dir: Path = WORDLISTS_DIR
     log_level: str = "INFO"
 

@@ -32,3 +32,4 @@ class Capability(BaseModel):
     risk_domain: str = "general"  # recon|web|network|auth|crypto|forensics|general
     action_type: ActionType = ActionType.ENUMERATION
     expected_state_delta: dict[str, Any] = Field(default_factory=dict)
+    detects: list[str] = Field(default_factory=list)  # vuln categories this plugin detects

@@ -5,12 +5,12 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from basilisk.core.pipeline import _is_ip_or_local
 from basilisk.knowledge.entities import Entity, EntityType
 from basilisk.knowledge.relations import RelationType
 from basilisk.models.result import PluginResult
 from basilisk.models.target import Target
 from basilisk.observations.adapter import adapt_result
+from basilisk.orchestrator.selector import _is_ip_or_local
 
 if TYPE_CHECKING:
     from basilisk.capabilities.capability import Capability

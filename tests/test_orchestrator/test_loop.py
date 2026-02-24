@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 from basilisk.capabilities.capability import Capability
@@ -16,7 +17,7 @@ from basilisk.orchestrator.loop import AutonomousLoop
 from basilisk.orchestrator.planner import KnowledgeGap, Planner
 from basilisk.orchestrator.safety import SafetyLimits
 from basilisk.orchestrator.selector import Selector
-from basilisk.scoring.scorer import Scorer
+from basilisk.scoring.scorer import ScoredCapability, Scorer
 
 
 def _make_loop(
@@ -25,6 +26,9 @@ def _make_loop(
     gaps: list[KnowledgeGap] | None = None,
     observations: list[Observation] | None = None,
     history: History | None = None,
+    confirmer: Any = None,
+    confidence_model: Any = None,
+    revalidator: Any = None,
 ) -> tuple[AutonomousLoop, KnowledgeGraph]:
     graph = KnowledgeGraph()
 
@@ -60,6 +64,9 @@ def _make_loop(
         bus=bus,
         safety=safety,
         history=history,
+        confirmer=confirmer,
+        confidence_model=confidence_model,
+        revalidator=revalidator,
     )
 
     return loop, graph
@@ -391,7 +398,6 @@ class TestMarkGapSatisfied:
             requires_knowledge=["Host"], produces_knowledge=["Finding"],
             cost_score=1.0, noise_score=0.0,
         )
-        from basilisk.scoring.scorer import ScoredCapability
         sc = ScoredCapability(
             capability=finding_cap,
             target_entity=host_entity,
@@ -403,3 +409,268 @@ class TestMarkGapSatisfied:
 
         # host_vuln_tested should NOT be in host data
         assert "host_vuln_tested" not in host_entity.data
+
+
+class TestVerificationIntegration:
+    """Tests for _evaluate_verifications wiring in the loop."""
+
+    def _make_verification_loop(
+        self,
+        *,
+        confirmer=None,
+        confidence_model=None,
+    ):
+        """Build a loop with a FINDING entity and verification capability."""
+        graph = KnowledgeGraph()
+        finding_entity = Entity(
+            id=Entity.make_id(EntityType.FINDING, host="v.com", title="XSS"),
+            type=EntityType.FINDING,
+            data={"host": "v.com", "title": "XSS", "severity": "high"},
+            confidence=0.6,
+        )
+        graph.add_entity(finding_entity)
+
+        cap = Capability(
+            name="xss_verify", plugin_name="xss_verify", category="exploitation",
+            requires_knowledge=["Finding"], produces_knowledge=["Finding"],
+            reduces_uncertainty=["Finding:xss"],
+            cost_score=2.0, noise_score=1.0,
+        )
+        planner = MagicMock(spec=Planner)
+        planner.find_gaps.return_value = []
+
+        selector = Selector({"xss_verify": cap})
+        scorer = Scorer(graph)
+        executor = AsyncMock()
+        executor.execute.return_value = []
+        executor.ctx = MagicMock()
+        executor.ctx.pipeline = {}
+        bus = EventBus()
+        safety = SafetyLimits(max_steps=5, batch_size=3)
+
+        loop = AutonomousLoop(
+            graph=graph, planner=planner, selector=selector, scorer=scorer,
+            executor=executor, bus=bus, safety=safety,
+            confirmer=confirmer, confidence_model=confidence_model,
+        )
+        return loop, graph, finding_entity, cap
+
+    def test_verification_updates_confidence(self):
+        """When confirmer + confidence_model are present and cap has
+        reduces_uncertainty targeting a FINDING, confidence is updated."""
+        mock_confirmer = MagicMock()
+        mock_confirmation = MagicMock()
+        mock_confirmation.verdict = "confirmed"
+        mock_confirmer.evaluate_result.return_value = mock_confirmation
+        mock_confirmer._extract_category.return_value = "xss"
+
+        mock_confidence_model = MagicMock()
+        mock_update = MagicMock()
+        mock_update.entity_id = "test"
+        mock_update.old_confidence = 0.6
+        mock_update.new_confidence = 0.9
+        mock_confidence_model.update_from_verification.return_value = mock_update
+
+        loop, graph, finding_entity, cap = self._make_verification_loop(
+            confirmer=mock_confirmer,
+            confidence_model=mock_confidence_model,
+        )
+
+        # Simulate a pipeline result for the verification plugin
+        loop.executor.ctx.pipeline["xss_verify:v.com"] = MagicMock(ok=True, findings=[])
+
+        sc = ScoredCapability(
+            capability=cap, target_entity=finding_entity, score=5.0, reason="verify",
+        )
+        loop._evaluate_verifications([sc])
+
+        mock_confirmer.evaluate_result.assert_called_once_with(
+            finding_entity, loop.executor.ctx.pipeline["xss_verify:v.com"],
+        )
+        mock_confidence_model.update_from_verification.assert_called_once()
+        mock_confidence_model.apply.assert_called_once_with(mock_update, graph)
+
+    def test_verification_skipped_when_no_confirmer(self):
+        """Without confirmer, _evaluate_verifications is a no-op."""
+        loop, graph, finding_entity, cap = self._make_verification_loop(
+            confirmer=None, confidence_model=None,
+        )
+        sc = ScoredCapability(
+            capability=cap, target_entity=finding_entity, score=5.0, reason="test",
+        )
+        # Should not raise
+        loop._evaluate_verifications([sc])
+
+    def test_verification_skipped_for_non_finding(self):
+        """Caps targeting non-FINDING entities are skipped."""
+        mock_confirmer = MagicMock()
+        mock_confidence_model = MagicMock()
+
+        loop, graph, _, cap = self._make_verification_loop(
+            confirmer=mock_confirmer,
+            confidence_model=mock_confidence_model,
+        )
+
+        host_entity = Entity.host("v.com")
+        graph.add_entity(host_entity)
+
+        sc = ScoredCapability(
+            capability=cap, target_entity=host_entity, score=5.0, reason="test",
+        )
+        loop._evaluate_verifications([sc])
+        mock_confirmer.evaluate_result.assert_not_called()
+
+    def test_verification_skipped_without_reduces_uncertainty(self):
+        """Caps without reduces_uncertainty are skipped."""
+        mock_confirmer = MagicMock()
+        mock_confidence_model = MagicMock()
+
+        loop, graph, finding_entity, _ = self._make_verification_loop(
+            confirmer=mock_confirmer,
+            confidence_model=mock_confidence_model,
+        )
+
+        non_verify_cap = Capability(
+            name="xss_check", plugin_name="xss_check", category="pentesting",
+            requires_knowledge=["Host"], produces_knowledge=["Finding"],
+            cost_score=2.0, noise_score=1.0,
+        )
+        sc = ScoredCapability(
+            capability=non_verify_cap, target_entity=finding_entity,
+            score=5.0, reason="test",
+        )
+        loop._evaluate_verifications([sc])
+        mock_confirmer.evaluate_result.assert_not_called()
+
+
+class TestReValidatorIntegration:
+    """Tests for ReValidator wiring in _evaluate_verifications."""
+
+    def _make_verification_loop_with_revalidator(
+        self, *, confirmer=None, confidence_model=None, revalidator=None,
+    ):
+        """Build a loop with a FINDING entity, verification cap, and optional revalidator."""
+        graph = KnowledgeGraph()
+        finding_entity = Entity(
+            id=Entity.make_id(EntityType.FINDING, host="rv.com", title="SQLi"),
+            type=EntityType.FINDING,
+            data={"host": "rv.com", "title": "SQLi", "severity": "high"},
+            confidence=0.6,
+        )
+        graph.add_entity(finding_entity)
+
+        cap = Capability(
+            name="sqli_verify", plugin_name="sqli_verify", category="exploitation",
+            requires_knowledge=["Finding"], produces_knowledge=["Finding"],
+            reduces_uncertainty=["Finding:sqli"],
+            cost_score=2.0, noise_score=1.0,
+        )
+        planner = MagicMock(spec=Planner)
+        planner.find_gaps.return_value = []
+        selector = Selector({"sqli_verify": cap})
+        scorer = Scorer(graph)
+        executor = AsyncMock()
+        executor.execute.return_value = []
+        executor.ctx = MagicMock()
+        executor.ctx.pipeline = {}
+        bus = EventBus()
+        safety = SafetyLimits(max_steps=5, batch_size=3)
+
+        loop = AutonomousLoop(
+            graph=graph, planner=planner, selector=selector, scorer=scorer,
+            executor=executor, bus=bus, safety=safety,
+            confirmer=confirmer, confidence_model=confidence_model,
+            revalidator=revalidator,
+        )
+        return loop, graph, finding_entity, cap
+
+    def test_revalidator_called_on_confirmed(self):
+        """When verdict is 'confirmed', revalidator.plan_revalidation is called."""
+        mock_confirmer = MagicMock()
+        mock_confirmation = MagicMock()
+        mock_confirmation.verdict = "confirmed"
+        mock_confirmer.evaluate_result.return_value = mock_confirmation
+        mock_confirmer._extract_category.return_value = "sqli"
+
+        mock_confidence_model = MagicMock()
+        mock_update = MagicMock()
+        mock_confidence_model.update_from_verification.return_value = mock_update
+
+        mock_revalidator = MagicMock()
+        mock_reval_request = MagicMock()
+        mock_reval_request.suggested_plugins = ["sqli_verify"]
+        mock_revalidator.plan_revalidation.return_value = [mock_reval_request]
+
+        loop, graph, finding_entity, cap = self._make_verification_loop_with_revalidator(
+            confirmer=mock_confirmer,
+            confidence_model=mock_confidence_model,
+            revalidator=mock_revalidator,
+        )
+
+        loop.executor.ctx.pipeline["sqli_verify:rv.com"] = MagicMock(ok=True, findings=[])
+
+        sc = ScoredCapability(
+            capability=cap, target_entity=finding_entity, score=5.0, reason="verify",
+        )
+        loop._evaluate_verifications([sc])
+
+        mock_revalidator.plan_revalidation.assert_called_once_with(finding_entity)
+        assert finding_entity.data["needs_revalidation"] is True
+        assert finding_entity.data["revalidation_plugins"] == ["sqli_verify"]
+
+    def test_revalidator_skipped_on_false_positive(self):
+        """When verdict is 'false_positive', revalidator is NOT called."""
+        mock_confirmer = MagicMock()
+        mock_confirmation = MagicMock()
+        mock_confirmation.verdict = "false_positive"
+        mock_confirmer.evaluate_result.return_value = mock_confirmation
+        mock_confirmer._extract_category.return_value = "sqli"
+
+        mock_confidence_model = MagicMock()
+        mock_update = MagicMock()
+        mock_confidence_model.update_from_verification.return_value = mock_update
+
+        mock_revalidator = MagicMock()
+
+        loop, graph, finding_entity, cap = self._make_verification_loop_with_revalidator(
+            confirmer=mock_confirmer,
+            confidence_model=mock_confidence_model,
+            revalidator=mock_revalidator,
+        )
+
+        loop.executor.ctx.pipeline["sqli_verify:rv.com"] = MagicMock(ok=True, findings=[])
+
+        sc = ScoredCapability(
+            capability=cap, target_entity=finding_entity, score=5.0, reason="verify",
+        )
+        loop._evaluate_verifications([sc])
+
+        mock_revalidator.plan_revalidation.assert_not_called()
+        assert "needs_revalidation" not in finding_entity.data
+
+    def test_revalidator_skipped_when_none(self):
+        """When revalidator is None, no error is raised and entity is unchanged."""
+        mock_confirmer = MagicMock()
+        mock_confirmation = MagicMock()
+        mock_confirmation.verdict = "confirmed"
+        mock_confirmer.evaluate_result.return_value = mock_confirmation
+        mock_confirmer._extract_category.return_value = "sqli"
+
+        mock_confidence_model = MagicMock()
+        mock_update = MagicMock()
+        mock_confidence_model.update_from_verification.return_value = mock_update
+
+        loop, graph, finding_entity, cap = self._make_verification_loop_with_revalidator(
+            confirmer=mock_confirmer,
+            confidence_model=mock_confidence_model,
+            revalidator=None,
+        )
+
+        loop.executor.ctx.pipeline["sqli_verify:rv.com"] = MagicMock(ok=True, findings=[])
+
+        sc = ScoredCapability(
+            capability=cap, target_entity=finding_entity, score=5.0, reason="verify",
+        )
+        loop._evaluate_verifications([sc])
+
+        assert "needs_revalidation" not in finding_entity.data

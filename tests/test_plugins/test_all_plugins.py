@@ -43,9 +43,9 @@ class TestAllPluginsMeta:
             "waf_bypass", "prometheus_scrape", "js_api_extract",
             "openapi_parser",
             "image_fingerprint", "container_config_audit",
-            # Pentesting (55)
+            # Pentesting (58)
             "dir_brute", "git_exposure", "backup_finder", "ftp_anon",
-            "sqli_basic", "xss_basic", "open_redirect", "lfi_check",
+            "sqli_basic", "xss_basic", "xss_dom", "open_redirect", "lfi_check",
             "crlf_injection", "host_header_inject",
             "admin_finder", "sensitive_files", "debug_endpoints",
             "error_disclosure", "wordpress_scan", "default_creds",
@@ -64,6 +64,7 @@ class TestAllPluginsMeta:
             "idor_check", "actuator_exploit", "api_logic_engine",
             "credential_spray", "prototype_pollution",
             "file_upload_check", "session_check",
+            "param_tampering", "auth_bypass",
             # Exploitation (23)
             "credential_reuse", "cve_exploit", "docker_exploit", "file_upload_bypass",
             "jenkins_exploit", "ldap_enum", "lfi_harvest", "mssql_exploit",
@@ -91,7 +92,7 @@ class TestAllPluginsMeta:
             "memory_analyze", "pcap_analyze", "steganography",
         }
         assert expected.issubset(names), f"Missing: {expected - names}"
-        assert len(names) == 185, f"Expected 185 plugins, got {len(names)}"
+        assert len(names) == 188, f"Expected 188 plugins, got {len(names)}"
 
     def test_all_have_valid_meta(self):
         for plugin_cls in self._get_all_plugins():
@@ -141,7 +142,7 @@ class TestAllPluginsMeta:
         registry = PluginRegistry()
         registry.discover()
         pentesting = registry.by_category(PluginCategory.PENTESTING)
-        assert len(pentesting) == 57
+        assert len(pentesting) == 60
 
     def test_exploitation_count(self):
         registry = PluginRegistry()

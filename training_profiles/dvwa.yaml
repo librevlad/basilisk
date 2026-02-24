@@ -1,0 +1,100 @@
+name: dvwa
+description: "Damn Vulnerable Web Application"
+target: "localhost:4280"
+target_ports: [4280]
+max_steps: 200
+required_coverage: 0.7
+
+auth:
+  username: admin
+  password: password
+  login_url: /login.php
+  setup_url: /setup.php
+  setup_data:
+    create_db: "Create / Reset Database"
+  extra_cookies:
+    security: low
+
+scan_paths:
+  - /vulnerabilities/sqli/?id=1
+  - /vulnerabilities/sqli_blind/?id=1
+  - /vulnerabilities/exec/
+  - /vulnerabilities/upload/
+  - /vulnerabilities/xss_r/?name=test
+  - /vulnerabilities/xss_s/
+  - /vulnerabilities/xss_d/
+  - /vulnerabilities/fi/?page=include.php
+  - /vulnerabilities/csrf/
+  - /vulnerabilities/brute/
+  - /vulnerabilities/authbypass/
+  - /vulnerabilities/weak_id/
+  - /vulnerabilities/captcha/
+  - /vulnerabilities/csp/
+  - /vulnerabilities/javascript/
+  - /vulnerabilities/open_redirect/
+
+expected_findings:
+  - title: "SQL Injection"
+    severity: "high"
+    category: "sqli"
+    plugin_hints: ["sqli_basic", "sqli_advanced"]
+  - title: "SQL Injection Blind"
+    severity: "high"
+    category: "sqli"
+    plugin_hints: ["sqli_advanced"]
+  - title: "Command Injection"
+    severity: "critical"
+    category: "cmdi"
+    plugin_hints: ["command_injection"]
+  - title: "File Upload"
+    severity: "high"
+    category: "upload"
+    plugin_hints: ["file_upload_check", "file_upload_bypass"]
+  - title: "Cross-Site Scripting Reflected"
+    severity: "medium"
+    category: "xss"
+    plugin_hints: ["xss_basic", "xss_advanced"]
+  - title: "Cross-Site Scripting Stored"
+    severity: "medium"
+    category: "xss"
+    plugin_hints: ["xss_basic", "xss_advanced"]
+  - title: "Cross-Site Scripting DOM"
+    severity: "medium"
+    category: "xss"
+    plugin_hints: ["xss_dom"]
+  - title: "File Inclusion"
+    severity: "high"
+    category: "lfi"
+    plugin_hints: ["lfi_check"]
+  - title: "CSRF"
+    severity: "medium"
+    category: "csrf"
+    plugin_hints: ["csrf_check"]
+  - title: "Brute Force"
+    severity: "medium"
+    category: "auth"
+    plugin_hints: ["default_creds", "service_brute"]
+  - title: "Authorization Bypass"
+    severity: "medium"
+    category: "idor"
+    plugin_hints: ["idor_check", "auth_bypass"]
+  - title: "Weak Session IDs"
+    severity: "medium"
+    category: "auth"
+    plugin_hints: ["session_check"]
+  - title: "Insecure CAPTCHA"
+    severity: "medium"
+    category: "csrf"
+    plugin_hints: ["csrf_check"]
+  - title: "CSP Bypass"
+    severity: "medium"
+    category: "csp"
+    plugin_hints: ["csp_analyzer"]
+  - title: "JavaScript Attacks"
+    severity: "low"
+    category: "config"
+    plugin_hints: ["js_secret_scan"]
+  - title: "Open HTTP Redirect"
+    severity: "medium"
+    category: "open-redirect"
+    plugin_hints: ["open_redirect"]

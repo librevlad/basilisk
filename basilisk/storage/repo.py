@@ -27,45 +27,6 @@ class ResultRepository:
         self.db = db
         self.chunk_size = chunk_size
 
-    # === Projects ===
-
-    async def create_project(
-        self, name: str, path: str, config: dict | None = None, description: str = ""
-    ) -> int:
-        cursor = await self.db.execute(
-            "INSERT INTO projects (name, path, config, description) VALUES (?, ?, ?, ?)",
-            (name, path, json.dumps(config or {}), description),
-        )
-        await self.db.commit()
-        return cursor.lastrowid  # type: ignore[return-value]
-
-    async def get_project(self, project_id: int) -> dict[str, Any] | None:
-        cursor = await self.db.execute(
-            "SELECT * FROM projects WHERE id = ?", (project_id,)
-        )
-        row = await cursor.fetchone()
-        return dict(row) if row else None
-
-    async def get_project_by_name(self, name: str) -> dict[str, Any] | None:
-        cursor = await self.db.execute(
-            "SELECT * FROM projects WHERE name = ?", (name,)
-        )
-        row = await cursor.fetchone()
-        return dict(row) if row else None
-
-    async def list_projects(self) -> list[dict[str, Any]]:
-        cursor = await self.db.execute(
-            "SELECT * FROM projects ORDER BY created_at DESC"
-        )
-        return [dict(row) for row in await cursor.fetchall()]
-
-    async def update_project_status(self, project_id: int, status: str) -> None:
-        await self.db.execute(
-            "UPDATE projects SET status = ?, updated_at = datetime('now') WHERE id = ?",
-            (status, project_id),
-        )
-        await self.db.commit()
-
     # === Domains ===
 
     async def insert_domain(

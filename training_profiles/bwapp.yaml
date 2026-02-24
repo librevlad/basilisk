@@ -1,0 +1,47 @@
+name: bwapp
+description: "bWAPP - buggy Web Application"
+target: "localhost:80"
+target_ports: [80]
+max_steps: 400
+required_coverage: 1.0
+expected_findings:
+  - { title: "SQL Injection GET Search", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic"] }
+  - { title: "SQL Injection POST Search", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic"] }
+  - { title: "SQL Injection AJAX JSON", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic"] }
+  - { title: "SQL Injection Login Form", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic"] }
+  - { title: "SQL Injection Blind Boolean", severity: "critical", category: "sqli", plugin_hints: ["sqli_advanced"] }
+  - { title: "SQL Injection Blind Time", severity: "critical", category: "sqli", plugin_hints: ["sqli_advanced"] }
+  - { title: "SQL Injection Stored Blog", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic"] }
+  - { title: "XSS Reflected GET", severity: "high", category: "xss", plugin_hints: ["xss_basic"] }
+  - { title: "XSS Reflected POST", severity: "high", category: "xss", plugin_hints: ["xss_basic"] }
+  - { title: "XSS Stored Blog", severity: "high", category: "xss", plugin_hints: ["xss_advanced"] }
+  - { title: "XSS Reflected User-Agent", severity: "high", category: "xss", plugin_hints: ["xss_advanced"] }
+  - { title: "XSS Reflected Referer", severity: "high", category: "xss", plugin_hints: ["xss_advanced"] }
+  - { title: "OS Command Injection", severity: "critical", category: "injection", plugin_hints: ["command_injection"] }
+  - { title: "OS Command Injection Blind", severity: "critical", category: "injection", plugin_hints: ["command_injection"] }
+  - { title: "PHP Code Injection", severity: "critical", category: "injection", plugin_hints: ["command_injection"] }
+  - { title: "SSI Injection", severity: "critical", category: "injection", plugin_hints: ["ssti_check"] }
+  - { title: "LDAP Injection", severity: "high", category: "injection", plugin_hints: ["ldap_enum"] }
+  - { title: "XML XPath Injection", severity: "high", category: "injection", plugin_hints: ["sqli_basic"] }
+  - { title: "HTML Injection Reflected", severity: "medium", category: "injection", plugin_hints: ["xss_basic"] }
+  - { title: "iFrame Injection", severity: "medium", category: "injection", plugin_hints: ["xss_basic"] }
+  - { title: "Local File Inclusion", severity: "high", category: "lfi", plugin_hints: ["lfi_check"] }
+  - { title: "Remote File Inclusion", severity: "critical", category: "lfi", plugin_hints: ["lfi_check"] }
+  - { title: "Unrestricted File Upload", severity: "critical", category: "upload", plugin_hints: ["file_upload_bypass"] }
+  - { title: "CSRF Change Password", severity: "high", category: "csrf", plugin_hints: ["csrf_check"] }
+  - { title: "CSRF Transfer Amount", severity: "high", category: "csrf", plugin_hints: ["csrf_check"] }
+  - { title: "Broken Authentication Insecure Login", severity: "high", category: "auth", plugin_hints: ["default_creds"] }
+  - { title: "Broken Authentication Weak Passwords", severity: "high", category: "auth", plugin_hints: ["service_brute"] }
+  - { title: "Session Fixation", severity: "high", category: "auth", plugin_hints: ["session_check"] }
+  - { title: "Insecure Direct Object Reference", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
+  - { title: "SSRF", severity: "high", category: "injection", plugin_hints: ["ssrf_check"] }
+  - { title: "XXE", severity: "critical", category: "injection", plugin_hints: ["xxe_check"] }
+  - { title: "CORS Misconfiguration", severity: "medium", category: "config", plugin_hints: ["cors_scan"] }
+  - { title: "Directory Traversal", severity: "high", category: "injection", plugin_hints: ["lfi_check"] }
+  - { title: "HTTP Response Splitting", severity: "medium", category: "injection", plugin_hints: ["http_smuggling"] }
+  - { title: "Clickjacking", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
+  - { title: "Shellshock", severity: "critical", category: "injection", plugin_hints: ["command_injection"] }
+  - { title: "Heartbleed", severity: "critical", category: "crypto", plugin_hints: ["ssl_check"] }
+  - { title: "Unvalidated Redirect", severity: "medium", category: "config", plugin_hints: ["open_redirect"] }
+  - { title: "HTTP Parameter Pollution", severity: "medium", category: "injection", plugin_hints: ["param_tampering"] }
+  - { title: "Information Disclosure Robots", severity: "low", category: "config", plugin_hints: ["robots_parser"] }

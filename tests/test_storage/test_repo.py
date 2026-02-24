@@ -15,33 +15,6 @@ async def repo(tmp_path):
     await close_db(db)
 
 
-class TestProjects:
-    async def test_create_and_get(self, repo):
-        pid = await repo.create_project("test", "/tmp/test")
-        assert pid > 0
-        project = await repo.get_project(pid)
-        assert project is not None
-        assert project["name"] == "test"
-
-    async def test_get_by_name(self, repo):
-        await repo.create_project("myproject", "/tmp/mp")
-        project = await repo.get_project_by_name("myproject")
-        assert project is not None
-        assert project["path"] == "/tmp/mp"
-
-    async def test_list_projects(self, repo):
-        await repo.create_project("p1", "/tmp/p1")
-        await repo.create_project("p2", "/tmp/p2")
-        projects = await repo.list_projects()
-        assert len(projects) == 2
-
-    async def test_update_status(self, repo):
-        pid = await repo.create_project("test", "/tmp/test")
-        await repo.update_project_status(pid, "running")
-        project = await repo.get_project(pid)
-        assert project["status"] == "running"
-
-
 class TestDomains:
     async def test_insert_and_get(self, repo):
         did = await repo.insert_domain("example.com")
@@ -59,38 +32,34 @@ class TestDomains:
         assert id1 > 0
 
     async def test_insert_duplicate_with_project(self, repo):
-        pid = await repo.create_project("test", "/tmp/test")
-        id1 = await repo.insert_domain("sub.example.com", project_id=pid)
-        id2 = await repo.insert_domain("sub.example.com", project_id=pid)
+        id1 = await repo.insert_domain("sub.example.com")
+        id2 = await repo.insert_domain("sub.example.com")
         assert id1 == id2
         assert id1 > 0
         # Can save plugin_data with the returned ID (no FOREIGN KEY error)
-        run_id = await repo.create_run(project_id=pid)
-        from basilisk.models.result import PluginResult
+        run_id = await repo.create_run()
         result = PluginResult(plugin="test_plugin", target="sub.example.com")
         saved_id = await repo.save_plugin_result(run_id, id2, result)
         assert saved_id > 0
 
     async def test_bulk_insert_strings(self, repo):
-        pid = await repo.create_project("test", "/tmp/test")
         domains = [{"host": f"sub{i}.example.com"} for i in range(100)]
-        total = await repo.bulk_insert_domains(domains, project_id=pid)
+        total = await repo.bulk_insert_domains(domains)
         assert total == 100
-        count = await repo.count_domains(project_id=pid)
+        count = await repo.count_domains()
         assert count == 100
 
     async def test_pagination(self, repo):
-        pid = await repo.create_project("test", "/tmp/test")
         domains = [{"host": f"sub{i}.example.com"} for i in range(50)]
-        await repo.bulk_insert_domains(domains, project_id=pid)
+        await repo.bulk_insert_domains(domains)
 
-        page1 = await repo.get_domains_page(project_id=pid, offset=0, limit=20)
+        page1 = await repo.get_domains_page(offset=0, limit=20)
         assert len(page1) == 20
 
-        page2 = await repo.get_domains_page(project_id=pid, offset=20, limit=20)
+        page2 = await repo.get_domains_page(offset=20, limit=20)
         assert len(page2) == 20
 
-        page3 = await repo.get_domains_page(project_id=pid, offset=40, limit=20)
+        page3 = await repo.get_domains_page(offset=40, limit=20)
         assert len(page3) == 10
 
     async def test_type_filter(self, repo):
@@ -188,8 +157,7 @@ class TestStats:
 class TestBulkPerformance:
     async def test_bulk_insert_10k_domains(self, repo):
         """Insert 10K domains — should be fast with chunked inserts."""
-        pid = await repo.create_project("perf", "/tmp/perf")
         domains = [{"host": f"sub{i}.example.com"} for i in range(10_000)]
-        total = await repo.bulk_insert_domains(domains, project_id=pid)
+        total = await repo.bulk_insert_domains(domains)
         assert total == 10_000
-        assert await repo.count_domains(project_id=pid) == 10_000
+        assert await repo.count_domains() == 10_000

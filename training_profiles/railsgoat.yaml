@@ -1,0 +1,25 @@
+name: railsgoat
+description: "OWASP RailsGoat"
+target: "localhost:3000"
+target_ports: [3000]
+max_steps: 250
+required_coverage: 1.0
+expected_findings:
+  - { title: "SQL Injection", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic"] }
+  - { title: "Command Injection", severity: "critical", category: "injection", plugin_hints: ["command_injection"] }
+  - { title: "Mass Assignment Privilege Escalation", severity: "critical", category: "auth", plugin_hints: ["param_tampering"] }
+  - { title: "Remote Code Execution Deserialization", severity: "critical", category: "injection", plugin_hints: ["deserialization_check"] }
+  - { title: "XSS Reflected", severity: "high", category: "xss", plugin_hints: ["xss_basic"] }
+  - { title: "XSS Stored", severity: "high", category: "xss", plugin_hints: ["xss_advanced"] }
+  - { title: "XSS DOM", severity: "high", category: "xss", plugin_hints: ["xss_dom"] }
+  - { title: "IDOR", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
+  - { title: "Missing Access Control", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
+  - { title: "CSRF Token Bypass", severity: "high", category: "csrf", plugin_hints: ["csrf_check"] }
+  - { title: "Insecure Password Hashing", severity: "high", category: "crypto", plugin_hints: ["prng_crack"] }
+  - { title: "Sensitive Data Exposure", severity: "high", category: "config", plugin_hints: ["http_headers"] }
+  - { title: "Vulnerable Components", severity: "high", category: "config", plugin_hints: ["version_detect"] }
+  - { title: "Credential Enumeration", severity: "medium", category: "auth", plugin_hints: ["default_creds"] }
+  - { title: "Missing HTTPOnly Flag", severity: "medium", category: "auth", plugin_hints: ["http_headers"] }
+  - { title: "Security Misconfiguration", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
+  - { title: "Unvalidated Redirect", severity: "medium", category: "config", plugin_hints: ["open_redirect"] }
+  - { title: "Timing Attack", severity: "high", category: "auth", plugin_hints: ["auth_bypass"] }

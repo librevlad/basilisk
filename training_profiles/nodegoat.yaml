@@ -1,0 +1,22 @@
+name: nodegoat
+description: "OWASP NodeGoat"
+target: "localhost:4000"
+target_ports: [4000]
+max_steps: 200
+required_coverage: 1.0
+expected_findings:
+  - { title: "Server Side JS Injection", severity: "critical", category: "injection", plugin_hints: ["command_injection", "ssti_check"] }
+  - { title: "NoSQL Injection", severity: "critical", category: "injection", plugin_hints: ["nosqli_check"] }
+  - { title: "Insecure Deserialization", severity: "critical", category: "injection", plugin_hints: ["deserialization_check"] }
+  - { title: "XSS Stored", severity: "high", category: "xss", plugin_hints: ["xss_advanced"] }
+  - { title: "IDOR", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
+  - { title: "Missing Access Control", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
+  - { title: "Broken Authentication", severity: "high", category: "auth", plugin_hints: ["default_creds", "service_brute"] }
+  - { title: "CSRF", severity: "high", category: "csrf", plugin_hints: ["csrf_check"] }
+  - { title: "Sensitive Data Exposure", severity: "high", category: "config", plugin_hints: ["http_headers"] }
+  - { title: "Vulnerable Components", severity: "high", category: "config", plugin_hints: ["version_detect"] }
+  - { title: "Log Injection", severity: "medium", category: "injection", plugin_hints: ["command_injection"] }
+  - { title: "Password Guessing", severity: "high", category: "auth", plugin_hints: ["service_brute"] }
+  - { title: "Security Misconfiguration", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
+  - { title: "Unvalidated Redirect", severity: "medium", category: "config", plugin_hints: ["open_redirect"] }
+  - { title: "Session Management Weakness", severity: "high", category: "auth", plugin_hints: ["session_check"] }

@@ -2,13 +2,47 @@
 
 from __future__ import annotations
 
+import ipaddress
+
 from basilisk.capabilities.capability import Capability
-from basilisk.core.pipeline import _is_domain_only_plugin, _is_ip_or_local
 from basilisk.knowledge.entities import Entity, EntityType
 from basilisk.knowledge.graph import KnowledgeGraph
 from basilisk.knowledge.relations import RelationType
 from basilisk.orchestrator.planner import KnowledgeGap
 from basilisk.scoring.scorer import ScoredCapability
+
+# Plugins that require real domain names — skip for IP/localhost targets
+_DOMAIN_ONLY_PREFIXES = ("subdomain_", "dns_", "ssl_", "tls_")
+_DOMAIN_ONLY_NAMES = frozenset({
+    "whois", "asn_lookup", "reverse_ip", "email_harvest",
+    "github_dorking", "s3_bucket_finder", "cloud_bucket_enum",
+    "shodan_lookup", "dnssec_check", "cdn_detect", "ipv6_scan",
+    "takeover_check",
+})
+
+
+def _is_ip_or_local(host: str) -> bool:
+    """Check if host is an IP address or localhost (with optional port)."""
+    if host in ("localhost", "127.0.0.1", "::1", "[::1]"):
+        return True
+    h = host
+    if h.startswith("["):
+        h = h.split("]")[0][1:]
+    elif "." in h and ":" in h:
+        h = h.rsplit(":", 1)[0]
+    try:
+        ipaddress.ip_address(h)
+        return True
+    except ValueError:
+        return False
+
+
+def _is_domain_only_plugin(name: str) -> bool:
+    """Check if plugin requires a real domain name."""
+    if any(name.startswith(p) for p in _DOMAIN_ONLY_PREFIXES):
+        return True
+    return name in _DOMAIN_ONLY_NAMES
+
 
 # Map gap.missing → required capability produces_knowledge patterns
 _GAP_TO_PRODUCES: dict[str, list[str]] = {

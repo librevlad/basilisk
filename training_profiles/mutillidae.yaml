@@ -1,0 +1,37 @@
+name: mutillidae
+description: "OWASP Mutillidae II"
+target: "localhost:80"
+target_ports: [80]
+max_steps: 300
+required_coverage: 1.0
+expected_findings:
+  - { title: "SQL Injection Login Bypass", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic"] }
+  - { title: "SQL Injection Extract Data", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic"] }
+  - { title: "SQL Injection UNION", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic"] }
+  - { title: "SQL Injection Blind Boolean", severity: "critical", category: "sqli", plugin_hints: ["sqli_advanced"] }
+  - { title: "SQL Injection Blind Time", severity: "critical", category: "sqli", plugin_hints: ["sqli_advanced"] }
+  - { title: "OS Command Injection", severity: "critical", category: "injection", plugin_hints: ["command_injection"] }
+  - { title: "XSS Reflected", severity: "high", category: "xss", plugin_hints: ["xss_basic"] }
+  - { title: "XSS Stored Blog", severity: "high", category: "xss", plugin_hints: ["xss_advanced"] }
+  - { title: "XSS DOM", severity: "high", category: "xss", plugin_hints: ["xss_dom"] }
+  - { title: "LDAP Injection", severity: "high", category: "injection", plugin_hints: ["ldap_enum"] }
+  - { title: "XML Injection", severity: "high", category: "injection", plugin_hints: ["xxe_check"] }
+  - { title: "XPath Injection", severity: "high", category: "injection", plugin_hints: ["sqli_basic"] }
+  - { title: "JSON Injection", severity: "high", category: "injection", plugin_hints: ["param_tampering"] }
+  - { title: "HTML Injection", severity: "medium", category: "injection", plugin_hints: ["xss_basic"] }
+  - { title: "JavaScript Injection", severity: "high", category: "injection", plugin_hints: ["xss_basic"] }
+  - { title: "Log Injection", severity: "medium", category: "injection", plugin_hints: ["command_injection"] }
+  - { title: "HTTP Parameter Pollution", severity: "medium", category: "injection", plugin_hints: ["param_tampering"] }
+  - { title: "CSRF Register User", severity: "high", category: "csrf", plugin_hints: ["csrf_check"] }
+  - { title: "Local File Inclusion", severity: "high", category: "lfi", plugin_hints: ["lfi_check"] }
+  - { title: "Remote File Inclusion", severity: "critical", category: "lfi", plugin_hints: ["lfi_check"] }
+  - { title: "Directory Traversal", severity: "high", category: "injection", plugin_hints: ["lfi_check"] }
+  - { title: "IDOR", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
+  - { title: "Authentication Bypass", severity: "high", category: "auth", plugin_hints: ["auth_bypass"] }
+  - { title: "Privilege Escalation", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
+  - { title: "Username Enumeration", severity: "medium", category: "auth", plugin_hints: ["default_creds"] }
+  - { title: "Clickjacking", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
+  - { title: "Robots Disclosure", severity: "low", category: "config", plugin_hints: ["robots_parser"] }
+  - { title: "phpinfo Disclosure", severity: "medium", category: "config", plugin_hints: ["dir_brute"] }
+  - { title: "Verbose Error Messages", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
+  - { title: "Open Redirect", severity: "medium", category: "config", plugin_hints: ["open_redirect"] }

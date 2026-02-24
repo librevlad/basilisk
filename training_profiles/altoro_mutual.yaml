@@ -1,0 +1,23 @@
+name: altoro_mutual
+description: "Altoro Mutual / TestFire"
+target: "localhost:8080"
+target_ports: [8080]
+max_steps: 200
+required_coverage: 1.0
+expected_findings:
+  - { title: "SQL Injection Login Bypass", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic"] }
+  - { title: "SQL Injection Cookie", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic"] }
+  - { title: "Default Credentials", severity: "critical", category: "auth", plugin_hints: ["default_creds"] }
+  - { title: "XSS Reflected", severity: "high", category: "xss", plugin_hints: ["xss_basic"] }
+  - { title: "XSS Stored", severity: "high", category: "xss", plugin_hints: ["xss_advanced"] }
+  - { title: "CSRF Fund Transfer", severity: "high", category: "csrf", plugin_hints: ["csrf_check"] }
+  - { title: "CSRF Password Change", severity: "high", category: "csrf", plugin_hints: ["csrf_check"] }
+  - { title: "IDOR Account Access", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
+  - { title: "Session Fixation", severity: "high", category: "auth", plugin_hints: ["session_check"] }
+  - { title: "Broken Access Control", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
+  - { title: "File Inclusion", severity: "high", category: "lfi", plugin_hints: ["lfi_check"] }
+  - { title: "HTML Injection", severity: "medium", category: "injection", plugin_hints: ["xss_basic"] }
+  - { title: "Open Redirect", severity: "medium", category: "config", plugin_hints: ["open_redirect"] }
+  - { title: "Clickjacking", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
+  - { title: "Insecure Cookie Flags", severity: "medium", category: "auth", plugin_hints: ["http_headers"] }
+  - { title: "Directory Browsing", severity: "low", category: "config", plugin_hints: ["dir_brute"] }
