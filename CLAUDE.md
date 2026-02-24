@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Проект
 
-**Basilisk v3.4.0** — профессиональный модульный фреймворк безопасности для разведки, анализа и пентеста доменов. Два режима: классический pipeline и автономный движок на knowledge graph с детерминированными decision traces. Плагинная архитектура с автообнаружением, мультипровайдерная агрегация данных, TUI-дашборд в реальном времени, SQLite-хранилище для миллионов записей. Persistent campaign memory для кросс-аудитного обучения. Container security audit подсистема. Cognitive reasoning: hypothesis engine + evidence fusion + belief revision.
+**Basilisk v4.0.0** — профессиональный модульный фреймворк безопасности для разведки, анализа и пентеста доменов. Автономный движок на knowledge graph с детерминированными decision traces. Плагинная архитектура с автообнаружением (194 плагина), SQLite-хранилище для миллионов записей. Persistent campaign memory для кросс-аудитного обучения. Container security audit подсистема. Cognitive reasoning: hypothesis engine + evidence fusion + belief revision. Training validation для бенчмаркинга. Actor-based network abstraction.
 
 Философия: сделать с хакерскими утилитами то, что Laravel сделал с Symfony — элегантные абстракции поверх мощных инструментов.
 
@@ -12,7 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 # Тесты
-.venv/Scripts/python.exe -m pytest tests/ -v              # все 1929 тестов
+.venv/Scripts/python.exe -m pytest tests/ -v              # все 1921 тест
 .venv/Scripts/python.exe -m pytest tests/test_plugins/ -v  # только плагины (345)
 .venv/Scripts/python.exe -m pytest tests/ -x --tb=short    # до первого падения
 
@@ -24,10 +24,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 .venv/Scripts/python.exe -m basilisk auto example.com                # автономный аудит (основной)
 .venv/Scripts/python.exe -m basilisk auto example.com -n 50          # с лимитом шагов
 .venv/Scripts/python.exe -m basilisk auto example.com --campaign     # с campaign memory
-.venv/Scripts/python.exe -m basilisk audit example.com               # классический pipeline
 .venv/Scripts/python.exe -m basilisk run ssl_check example.com       # один плагин
-.venv/Scripts/python.exe -m basilisk plugins                         # 185 плагинов
-.venv/Scripts/python.exe -m basilisk tui                             # TUI дашборд
+.venv/Scripts/python.exe -m basilisk plugins                         # список плагинов
+.venv/Scripts/python.exe -m basilisk train profile.yaml              # training validation
+.venv/Scripts/python.exe -m basilisk crack <hash>                    # hash identification + crack
 
 # Установка
 uv sync && uv pip install -e ".[dev]"
@@ -42,9 +42,7 @@ uv sync && uv pip install -e ".[dev]"
 - **dnspython** — async DNS resolution
 - **aiolimiter** — token bucket rate limiting
 - **aiofiles** — async file I/O (streaming wordlists)
-- **Textual** — TUI дашборд (async-native)
-- **Typer + Rich** — CLI headless-режим
-- **Jinja2** — HTML-шаблоны отчётов
+- **Typer + Rich** — CLI
 - **cryptography** — парсинг SSL-сертификатов
 - **uv** — менеджер пакетов
 - **ruff** — линтинг (py312, line-length 100)
@@ -54,76 +52,116 @@ uv sync && uv pip install -e ".[dev]"
 
 ```
 basilisk/
-├── __init__.py                    # версия, фасад
+├── __init__.py                    # версия, Basilisk class (fluent API)
 ├── __main__.py                    # python -m basilisk
-├── cli.py                         # Typer CLI (headless)
+├── cli.py                         # Typer CLI: auto, run, plugins, train, crack, version
 ├── config.py                      # Pydantic Settings + YAML
 │
-├── models/                        # Pydantic-модели (контракты)
+├── domain/                        # [v4] Typed domain models
+│   ├── target.py                  # BaseTarget (ABC), LiveTarget, TrainingTarget, ExpectedFinding
+│   ├── scenario.py                # Scenario (ABC), ScenarioMeta, ScenarioResult
+│   ├── surface.py                 # Surface — discovered audit surface
+│   └── finding.py                 # Finding, Proof — structured vulnerability report
+│
+├── actor/                         # [v4] Network abstraction layer
+│   ├── base.py                    # ActorProtocol — runtime-checkable protocol
+│   ├── composite.py               # CompositeActor (HTTP + DNS + Net + Browser)
+│   ├── http_actor.py              # HTTP-only actor
+│   └── recording.py               # Record/replay actor for testing
+│
+├── engine/                        # [v4] Execution engine
+│   ├── scenario_registry.py       # ScenarioRegistry: discover native + wrap legacy
+│   ├── target_loader.py           # TargetLoader: CLI/API specs → Target objects
+│   └── autonomous/
+│       └── runner.py              # AutonomousRunner: wraps orchestrator, returns RunResult
+│
+├── bridge/                        # [v4] v3 → v4 compatibility layer
+│   ├── legacy_scenario.py         # LegacyPluginScenario: wraps BasePlugin as Scenario
+│   ├── context_adapter.py         # ContextAdapter: Actor → PluginContext bridge
+│   └── result_adapter.py          # ResultAdapter: PluginResult → Finding/Surface
+│
+├── scenarios/                     # [v4] Native v4 scenario implementations
+│   ├── recon/dns_scenario.py      # DNS enumeration
+│   ├── scanning/port_scenario.py  # Port scanning
+│   ├── scanning/ssl_scenario.py   # SSL/TLS analysis
+│   ├── pentesting/sqli_scenario.py # SQL injection
+│   └── pentesting/xss_scenario.py  # XSS scanning
+│
+├── verification/                  # [v4] Finding verification engine
+│   ├── confidence.py              # ConfidenceCalculator: multi-source confidence merging
+│   ├── confirmer.py               # FindingConfirmer: suggest verification plugins
+│   └── revalidator.py             # FindingRevalidator: coordinate re-testing
+│
+├── training/                      # [v4] Training validation
+│   ├── profile.py                 # TrainingProfile: expected findings + auth config
+│   ├── runner.py                  # TrainingRunner: autonomous loop vs known targets
+│   ├── validator.py               # FindingTracker, ValidationReport
+│   ├── planner_wrapper.py         # TrainingPlanner: tracks gap detection accuracy
+│   └── scorer_wrapper.py          # TrainingScorer: tracks ranking accuracy
+│
+├── models/                        # Pydantic-модели (v3 contracts, used by plugins)
 │   ├── target.py                  # Target, TargetScope, TargetType
 │   ├── result.py                  # PluginResult, Finding, Severity
-│   ├── project.py                 # Project, ProjectConfig, ProjectStatus
 │   └── types.py                   # DnsRecord, SslInfo, PortInfo, HttpInfo, WhoisInfo
 │
-├── core/                          # Движок фреймворка
+├── core/                          # Plugin infrastructure
 │   ├── plugin.py                  # BasePlugin ABC, PluginMeta, PluginCategory
 │   ├── registry.py                # PluginRegistry: discover + topo sort (Kahn's)
-│   ├── pipeline.py                # Pipeline: фазы recon→scan→analyze→pentest
 │   ├── executor.py                # AsyncExecutor + PluginContext (DI-контейнер)
 │   ├── providers.py               # ProviderPool: стратегии all/first/fastest
-│   ├── project_manager.py         # ProjectManager: CRUD проектов
-│   ├── facade.py                  # Audit — fluent API фасад (+autonomous mode)
 │   ├── auth.py                    # AuthManager, FormLoginStrategy
-│   ├── callback.py                # OOB CallbackServer
-│   ├── attack_graph.py            # AttackGraph для exploit chain визуализации
-│   └── exploit_chain.py           # ExploitChainEngine
+│   └── callback.py                # OOB CallbackServer
 │
-├── knowledge/                     # [v3] Knowledge Graph
+├── knowledge/                     # Knowledge Graph
 │   ├── entities.py                # Entity, EntityType — типизированные узлы
 │   ├── relations.py               # Relation, RelationType — типизированные связи
 │   ├── graph.py                   # KnowledgeGraph: dedup, merge, query, neighbors
-│   ├── state.py                   # [v3.1] KnowledgeState: delta-tracking wrapper
-│   └── store.py                   # KnowledgeStore: SQLite persistence
+│   ├── state.py                   # KnowledgeState: delta-tracking wrapper
+│   ├── store.py                   # KnowledgeStore: SQLite persistence
+│   └── vulns/
+│       ├── definitions.yaml       # 100+ vulnerability type definitions (CWE/OWASP)
+│       └── registry.py            # VulnRegistry: loads/queries vuln definitions
 │
-├── observations/                  # [v3] PluginResult → Observation мост
+├── observations/                  # PluginResult → Observation мост
 │   ├── observation.py             # Observation model
 │   └── adapter.py                 # adapt_result(): PluginResult → list[Observation]
 │
-├── capabilities/                  # [v3] Маппинг плагинов на capabilities
-│   ├── capability.py              # Capability model + ActionType enum (requires/produces/cost/noise)
-│   └── mapping.py                 # CAPABILITY_MAP для 185 плагинов
+├── capabilities/                  # Маппинг плагинов на capabilities
+│   ├── capability.py              # Capability model + ActionType enum
+│   └── mapping.py                 # CAPABILITY_MAP для 194 плагинов
 │
-├── reasoning/                     # [v3.4] Cognitive reasoning primitives
+├── reasoning/                     # Cognitive reasoning primitives
 │   ├── hypothesis.py              # HypothesisEngine: 5 pattern detectors, evidence tracking
 │   └── belief.py                  # EvidenceAggregator: source-family independence, belief revision
 │
-├── decisions/                     # [v3.1] Decision tracing
+├── decisions/                     # Decision tracing
 │   └── decision.py                # Decision, ContextSnapshot, EvaluatedOption
 │
-├── memory/                        # [v3.1] Decision memory
+├── memory/                        # Decision memory
 │   └── history.py                 # History: decision log, repetition penalty, persistence
 │
-├── scoring/                       # [v3] Scoring engine
+├── scoring/                       # Scoring engine
 │   └── scorer.py                  # Scorer: multi-component formula + hypothesis_gain + action_type_bonus
 │
-├── orchestrator/                  # [v3] Автономный движок
+├── orchestrator/                  # Автономный движок (internal, wrapped by engine/)
 │   ├── planner.py                 # Planner: 18 правил обнаружения knowledge gaps
 │   ├── selector.py                # Selector: match gaps → capabilities, pick batch
 │   ├── executor.py                # OrchestratorExecutor: обёртка над core executor
 │   ├── loop.py                    # AutonomousLoop: цикл + decision tracing + KnowledgeState
-│   ├── goals.py                   # [v3.3] GoalEngine: 5-goal progression, success_probability
-│   ├── attack_paths.py            # [v3.2] Multi-step attack path scoring
-│   ├── cost_tracker.py            # [v3.2] Runtime plugin cost learning
+│   ├── goals.py                   # GoalEngine: 5-goal progression, success_probability
+│   ├── attack_paths.py            # Multi-step attack path scoring
+│   ├── cost_tracker.py            # Runtime plugin cost learning
+│   ├── coverage_tracker.py        # [v4] Per-host, per-vuln-category coverage tracking
 │   ├── safety.py                  # SafetyLimits: max_steps, max_duration, cooldown
 │   └── timeline.py                # Timeline: структурированный лог выполнения
 │
-├── campaign/                      # [v3.2] Persistent campaign memory
+├── campaign/                      # Persistent campaign memory
 │   ├── models.py                  # TargetProfile, PluginEfficacy, TechFingerprint
 │   ├── store.py                   # CampaignStore: async SQLite (3 tables, WAL mode)
 │   ├── memory.py                  # CampaignMemory: in-memory aggregator, scorer query API
 │   └── extractor.py               # Extract profiles/efficacy/fingerprints from KG
 │
-├── events/                        # [v3] Event Bus
+├── events/                        # Event Bus
 │   └── bus.py                     # EventBus: subscribe/emit + 14 event types
 │
 ├── utils/                         # Утилиты
@@ -146,33 +184,12 @@ basilisk/
 │   ├── db.py                      # Schema + PRAGMA + migrations
 │   └── repo.py                    # Repository (CRUD, bulk ops, pagination)
 │
-├── tui/                           # Textual TUI дашборд
-│   ├── app.py                     # BasiliskApp — главное приложение
-│   ├── screens/                   # 5 экранов: projects, targets, config, dashboard, report
-│   ├── widgets/                   # 4 виджета: phase_progress, finding_feed, stats_panel, target_table
-│   └── styles/app.tcss            # Textual CSS
-│
-├── reporting/                     # Генерация отчётов
-│   ├── engine.py                  # ReportEngine + ReportRenderer protocol
-│   ├── json.py, csv.py, html.py   # Рендереры
-│   ├── live_html.py               # Liquid glass live HTML report
-│   └── templates/report.html.j2   # HTML-шаблон (dark theme)
-│
-└── plugins/                       # 185 плагинов (auto-discover)
-    ├── recon/        (23)         # dns_enum, subdomain_*, whois, reverse_ip,
-    │                              # asn_lookup, web_crawler, email_harvest,
-    │                              # github_dorking, robots_parser, sitemap_parser, ...
-    ├── scanning/     (19)         # port_scan, ssl_check, service_detect, cdn_detect,
-    │                              # cors_scan, graphql_detect, websocket_detect,
-    │                              # container_discovery, container_enumeration, registry_lookup, ...
-    ├── analysis/     (23)         # http_headers, tech_detect, takeover_check,
-    │                              # js_secret_scan, csp_analyzer, waf_detect,
-    │                              # container_config_audit, image_fingerprint, ...
-    ├── pentesting/   (57)         # git_exposure, dir_brute, sqli_*, xss_*,
-    │                              # ssrf_*, ssti_*, command_injection, lfi_check,
-    │                              # jwt_attack, cors_exploit, cache_poison, ...
-    ├── exploitation/ (23)         # cors_exploit, graphql_exploit, nosqli_verify,
-    │                              # container_escape_probe, container_verification, ...
+└── plugins/                       # 194 плагина (auto-discover)
+    ├── recon/        (23)         # dns_enum, subdomain_*, whois, reverse_ip, ...
+    ├── scanning/     (19)         # port_scan, ssl_check, service_detect, ...
+    ├── analysis/     (23)         # http_headers, tech_detect, takeover_check, ...
+    ├── pentesting/   (60)         # git_exposure, dir_brute, sqli_*, xss_*, ...
+    ├── exploitation/ (23)         # cors_exploit, graphql_exploit, ...
     ├── crypto/        (8)         # hash_crack, padding_oracle, weak_random, ...
     ├── lateral/      (12)         # service_brute, ssh_brute, credential_spray, ...
     ├── privesc/       (7)         # suid_finder, kernel_suggest, ...
@@ -180,35 +197,57 @@ basilisk/
     └── forensics/     (6)         # log_analyzer, memory_dump, ...
 
 wordlists/bundled/                 # 6 словарей
-tests/                             # 1929 тестов, 90+ файлов
+training_profiles/                 # YAML profiles for training validation
+
+tests/                             # 1921 тест, 90+ файлов
 ├── test_models/                   # 43 теста
 ├── test_core/                     # 167 тестов
-├── test_plugins/                  # 345 тестов (117/117 плагинов покрыты)
+├── test_plugins/                  # 345 тестов (194 плагина покрыты)
 ├── test_utils/                    # 212 тестов
-├── test_storage/                  # 18 тестов
-├── test_reporting/                # 26 тестов
-├── test_tui/                      # 10 тестов
-├── test_knowledge/                # 71 тест (entities, graph, state, store, container entities)
+├── test_storage/                  # 14 тестов
+├── test_knowledge/                # 71 тест (entities, graph, state, store, vulns)
 ├── test_observations/             # 43 теста (adapter, container adapter)
 ├── test_capabilities/             # 36 тестов (mapping, container capabilities)
 ├── test_decisions/                # 12 тестов (decision model)
 ├── test_memory/                   # 19 тестов (history, repetition penalty)
 ├── test_scoring/                  # 22 теста (scorer + breakdown + multistep)
-├── test_orchestrator/             # 111 тестов (loop, planner, selector, safety, attack_paths, cost_tracker, goals, container_*)
+├── test_orchestrator/             # 111 тестов (loop, planner, selector, safety, goals, coverage)
 ├── test_events/                   # 5 тестов (bus)
 ├── test_campaign/                 # 61 тест (models, store, memory, extractor, integration)
-├── test_reasoning/                # 42 теста (hypothesis engine, evidence aggregator, belief revision)
+├── test_reasoning/                # 42 теста (hypothesis engine, evidence aggregator)
+├── test_actor/                    # [v4] 3 теста (composite, http, recording)
+├── test_bridge/                   # [v4] 3 теста (legacy scenario, context/result adapters)
+├── test_domain/                   # [v4] 4 теста (target, scenario, finding, surface)
+├── test_engine/                   # [v4] 3 теста (scenario registry, target loader, runner)
+├── test_scenarios/                # [v4] 5 тестов (dns, port, ssl, sqli, xss)
+├── test_training/                 # [v4] 5 тестов (planner/scorer wrappers, profile, validator)
+├── test_verification/             # [v4] 3 теста (confidence, confirmer, revalidator)
 └── test_cli.py, test_config.py    # 24 теста
 
-examples/git/                      # Скрипты массового сканирования
-├── git_exposure_scan.py           # Bulk git scanner (PriorityQueue, resume)
-├── top10million_ru.csv            # Домены .ru
-└── top10milliondomains.csv        # Топ-10M мировых доменов
-
+examples/                          # Примеры использования
 config/default.yaml                # Конфиг по умолчанию
 ```
 
 ## Ключевые паттерны
+
+### Basilisk Class (fluent API)
+```python
+from basilisk import Basilisk
+
+# Автономный аудит (основной способ)
+result = await Basilisk("example.com").run()
+result = await Basilisk("example.com", max_steps=50).run()
+result = await Basilisk("10.10.10.1", "10.10.10.2").run()
+
+# С campaign memory
+result = await Basilisk("example.com").campaign().run()
+
+# С фильтрацией плагинов
+result = await Basilisk("example.com").plugins("sqli_*", "xss_*").exclude("heavy_*").run()
+
+# С callbacks
+result = await Basilisk("example.com").on_finding(callback).on_step(callback).run()
+```
 
 ### Плагинная система
 - Каждый плагин = файл в `plugins/<category>/`, класс наследует `BasePlugin`, имеет `meta: ClassVar[PluginMeta]` и `async def run(target, ctx) -> PluginResult`
@@ -216,6 +255,7 @@ config/default.yaml                # Конфиг по умолчанию
 - Зависимости (`depends_on`) разрешаются топологической сортировкой (Kahn's algorithm)
 - `provides` поле для мультипровайдеров (напр. 10 плагинов `provides="subdomains"`)
 - `default_enabled=False` для тяжёлых плагинов (subdomain_bruteforce)
+- Все 194 плагина автоматически оборачиваются как v4 Scenarios через `bridge/legacy_scenario.py`
 
 ### Создание нового плагина
 ```python
@@ -256,66 +296,56 @@ class MyPlugin(BasePlugin):
 - `ctx.providers` — ProviderPool
 - `ctx.pipeline` — dict[str, PluginResult] предыдущих результатов (напр. `ctx.pipeline["port_scan:host"]`)
 - `ctx.state` — dict для shared state между плагинами
-- `ctx.emit(finding, target_host)` — callback для TUI live-feed
+- `ctx.emit(finding, target_host)` — callback для live-feed
 - `ctx.should_stop` — True когда < 2с до таймаута, плагин должен вернуть partial result
 
-### Мультипровайдеры (ProviderPool)
-- `strategy="all"` — запустить все, объединить результаты (для subdomains)
-- `strategy="first"` — первый успешный (для whois)
-- `strategy="fastest"` — гонка, взять самый быстрый
+### Actor Protocol (v4)
+Protocol-based interface для всех сетевых операций. Все v4 Scenarios зависят от `ActorProtocol`, а не от конкретных реализаций.
+- `CompositeActor` — полный actor (HTTP + DNS + Net + Browser)
+- `HttpActor` — минимальный HTTP-only actor
+- `RecordingActor` — record/replay для детерминированного тестирования
 
-### Fluent API (facade.py)
-```python
-# Классический pipeline
-results = await Audit("example.com").discover().scan().analyze().pentest().report(["json", "html"]).run()
-# Автономный режим (v3)
-results = await Audit("example.com").autonomous(max_steps=50).run()
-# Автономный с campaign memory (v3.2)
-results = await Audit("example.com").autonomous(max_steps=50).enable_campaign().run()
-# Один плагин
-results = await Audit.run_plugin("ssl_check", ["example.com"])
-```
-
-### Автономный движок (v3 + v3.1 decision tracing + v3.2 campaign memory + v3.3 container audit + v3.4 cognitive reasoning)
+### Автономный движок
 - `KnowledgeGraph` — in-memory граф с 9 entity types, 11 relation types, dedup, confidence merge, decay, hypothesis storage
-- `KnowledgeState` — [v3.1] delta-tracking wrapper, `apply_observation()` → `ObservationOutcome` (+ source_family)
+- `KnowledgeState` — delta-tracking wrapper, `apply_observation()` → `ObservationOutcome` (+ source_family)
 - `Planner` — 18 правил обнаружения gaps (host_without_services, container_*, attack_paths, hypothesis_validation, ...)
 - `Selector` — match gaps → capabilities, pick batch (budget-constrained)
 - `Scorer` — формула + `score_breakdown` dict + campaign-aware cost + prior_bonus + hypothesis_gain + action_type_bonus
-- `GoalEngine` — [v3.3] 5-goal progression + [v3.4] `goal_progress_delta()`
-- `HypothesisEngine` — [v3.4] 5 pattern detectors, hypothesis lifecycle, resolution_gain scoring
-- `EvidenceAggregator` — [v3.4] source-family independence, contradiction penalty, per-step belief revision
-- `AttackPaths` — [v3.2] multi-step exploit chain scoring, unlock_value, container_exploitation path
-- `CostTracker` — [v3.2] runtime plugin success/failure statistics, adaptive cost adjustment
-- `CampaignMemory` — [v3.2] persistent cross-audit learning (SQLite, opt-in)
-- `Decision` — [v3.1] полная запись: context snapshot, evaluated options, reasoning trace, outcome + [v3.4] hypothesis context
-- `History` — [v3.1] лог решений, repetition penalty (decay + unproductive multiplier), JSON persistence
+- `GoalEngine` — 5-goal progression + `goal_progress_delta()`
+- `HypothesisEngine` — 5 pattern detectors, hypothesis lifecycle, resolution_gain scoring
+- `EvidenceAggregator` — source-family independence, contradiction penalty, per-step belief revision
+- `AttackPaths` — multi-step exploit chain scoring, unlock_value, container_exploitation path
+- `CostTracker` — runtime plugin success/failure statistics, adaptive cost adjustment
+- `CoverageTracker` — [v4] per-host, per-vuln-category tracking (VulnCategoryStatus)
+- `CampaignMemory` — persistent cross-audit learning (SQLite, opt-in)
+- `Decision` — полная запись: context snapshot, evaluated options, reasoning trace, outcome + hypothesis context
+- `History` — лог решений, repetition penalty (decay + unproductive multiplier), JSON persistence
 - `AutonomousLoop` — seed → find_gaps → match → score → **build decision** → execute → apply → **hypothesize** → **revise beliefs** → repeat
 - `SafetyLimits` — max_steps, max_duration_seconds, batch_size, cooldown tracking
 - `adapter.py` — конвертация `PluginResult` → `list[Observation]` → entities/relations в граф
-- `mapping.py` — все 185 плагинов маппятся на requires/produces/cost/noise/action_type/expected_state_delta
+- `mapping.py` — все 194 плагина маппятся на requires/produces/cost/noise/action_type/expected_state_delta
 
-### Инициализация контекста (паттерн из facade.py:135-241)
-```python
-settings = Settings.load()
-registry = PluginRegistry(); registry.discover()
-http = AsyncHttpClient(timeout=settings.http.timeout, ...)
-dns = DnsClient(nameservers=settings.dns.nameservers, ...)
-net = NetUtils(timeout=settings.scan.port_timeout)
-rate = RateLimiter(rate=settings.rate_limit.requests_per_second, ...)
-ctx = PluginContext(config=settings, http=http, dns=dns, net=net, rate=rate, ...)
+### v4 Layers
+
+```
+CLI (cli.py) / Basilisk class (__init__.py)
+    ↓
+Engine (engine/autonomous/runner.py)
+    ↓  wraps v3 orchestrator transparently
+Orchestrator (loop, planner, selector, scorer)
+    ↓
+Scenarios (scenarios/ native + bridge/legacy_scenario.py 194 wrapped)
+    ↓  depend on ActorProtocol
+Actor (actor/ — CompositeActor, RecordingActor, ...)
+    ↓
+Knowledge Graph + Verification + Training
 ```
 
 ### Storage (SQLite WAL)
 - PRAGMA: journal_mode=WAL, synchronous=NORMAL, cache_size=-65536, mmap_size=2GB
-- Таблицы: projects, domains, scan_runs, findings, plugin_data, kg_entities, kg_relations
+- Таблицы: domains, scan_runs, findings, plugin_data, kg_entities, kg_relations
 - Bulk insert батчами по 1000 записей
 - KnowledgeStore сохраняет knowledge graph в SQLite после автономного прогона
-
-### Pipeline
-- 4 фазы: recon → scanning → analysis → pentesting
-- Recon расширяет target scope (найденные subdomains добавляются как цели)
-- Каждая фаза: resolve_order → run_batch → emit findings → save to DB
 
 ## Конвенции кода
 
@@ -340,7 +370,7 @@ ctx = PluginContext(config=settings, http=http, dns=dns, net=net, rate=rate, ...
 
 ### Тестирование
 - pytest: asyncio_mode = "auto", testpaths = ["tests"]
-- Тесты плагинов: meta + discovery + функциональные mock-тесты для всех 110 плагинов
+- Тесты плагинов: meta + discovery + функциональные mock-тесты для всех плагинов
 - Mock сетевые вызовы через `unittest.mock.AsyncMock`
 - Всегда запускать `ruff check` перед коммитом
 
@@ -404,9 +434,10 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 | `ci` | CI/CD конфигурация | — |
 
 **Scopes** (один из):
-`plugins`, `orchestrator`, `knowledge`, `pipeline`, `tui`, `cli`, `storage`, `reporting`,
-`utils`, `models`, `core`, `scoring`, `observations`, `capabilities`, `decisions`, `memory`,
-`events`, `data`, `config`, `campaign`, `reasoning`
+`plugins`, `orchestrator`, `knowledge`, `cli`, `storage`, `utils`, `models`, `core`,
+`scoring`, `observations`, `capabilities`, `decisions`, `memory`, `events`, `config`,
+`campaign`, `reasoning`, `actor`, `bridge`, `domain`, `engine`, `scenarios`,
+`verification`, `training`
 
 **Примеры:**
 ```
@@ -463,7 +494,7 @@ git branch -d feature/my-feature
 # На develop, когда готов релиз:
 git checkout master && git pull origin master
 git merge develop
-git tag -a v3.4.0 -m "v3.4.0"
+git tag -a v4.0.0 -m "v4.0.0"
 git push origin master --tags
 ```
 
@@ -480,7 +511,7 @@ git checkout develop && git merge master
 
 ## Автономный движок — обзор
 
-Автономный движок — основной режим работы Basilisk. Вместо жёсткого pipeline он строит
+Автономный движок — единственный режим работы Basilisk. Он строит
 **knowledge graph** о цели и итеративно обнаруживает пробелы в знаниях (gaps), выбирает
 оптимальные плагины для их заполнения, выполняет их и обогащает граф результатами.
 Каждое решение детерминированно записывается с полным контекстом.
@@ -539,14 +570,6 @@ git checkout develop && git merge master
 - **Decision traces**: каждое решение записывается ДО выполнения, outcome — ПОСЛЕ
 - **Gap-driven**: движок работает пока есть knowledge gaps; нет gaps = аудит завершён
 
-### Fluent API
-```python
-results = await Audit("example.com").autonomous(max_steps=50).run()      # автономный
-results = await Audit("example.com").autonomous().enable_campaign().run() # с campaign memory
-results = await Audit("example.com").discover().scan().analyze().pentest().run()  # pipeline
-results = await Audit.run_plugin("ssl_check", ["example.com"])           # один плагин
-```
-
 ---
 
 ## Knowledge Graph
@@ -581,8 +604,8 @@ results = await Audit.run_plugin("ssl_check", ["example.com"])           # од�
 | `PARENT_OF` | Домен является родителем | HOST -> HOST | example.com PARENT_OF sub.example.com |
 | `RUNS_CONTAINER` | Runtime запускает контейнер | TECHNOLOGY -> CONTAINER | docker RUNS_CONTAINER abc123 |
 | `USES_IMAGE` | Контейнер использует образ | CONTAINER -> IMAGE | abc123 USES_IMAGE nginx:1.24 |
-| `SUPPORTED_BY` | Доказательство подтверждает гипотезу | ENTITY -> HYPOTHESIS | [v3.4] evidence supports hypothesis |
-| `DISPROVED_BY` | Доказательство опровергает гипотезу | ENTITY -> HYPOTHESIS | [v3.4] evidence contradicts hypothesis |
+| `SUPPORTED_BY` | Доказательство подтверждает гипотезу | ENTITY -> HYPOTHESIS | evidence supports hypothesis |
+| `DISPROVED_BY` | Доказательство опровергает гипотезу | ENTITY -> HYPOTHESIS | evidence contradicts hypothesis |
 
 ### Генерация ID и дедупликация
 
@@ -615,9 +638,9 @@ merged = 1.0 - (1.0 - existing.confidence) * (1.0 - new.confidence)
 | `hosts()` / `services()` / `endpoints()` / `technologies()` / `findings()` / `containers()` / `images()` | Shortcut-методы |
 | `record_execution(fingerprint)` / `was_executed(fingerprint)` | Трекинг выполнений |
 | `to_targets()` | Конвертация Host entities -> list[Target] |
-| `add_hypothesis(hyp)` / `get_hypothesis(id)` | [v3.4] CRUD для гипотез |
-| `active_hypotheses()` / `all_hypotheses()` | [v3.4] Запрос гипотез по статусу |
-| `hypotheses_for_entity(entity_id)` | [v3.4] Гипотезы, связанные с entity |
+| `add_hypothesis(hyp)` / `get_hypothesis(id)` | CRUD для гипотез |
+| `active_hypotheses()` / `all_hypotheses()` | Запрос гипотез по статусу |
+| `hypotheses_for_entity(entity_id)` | Гипотезы, связанные с entity |
 
 ### KnowledgeState — delta-tracking wrapper (`knowledge/state.py`)
 
@@ -717,8 +740,8 @@ class Capability(BaseModel):
     execution_time_estimate: float = 10.0  # секунды
     reduces_uncertainty: list[str] = []    # knowledge confirmed
     risk_domain: str = "general"           # recon|web|network|auth|crypto|forensics|general
-    action_type: ActionType = ENUMERATION  # [v3.4] what the capability does
-    expected_state_delta: dict = {}        # [v3.4] predicted world change
+    action_type: ActionType = ENUMERATION  # what the capability does
+    expected_state_delta: dict = {}        # predicted world change
 ```
 
 ### ActionType auto-inference (`capabilities/mapping.py`)
@@ -767,19 +790,19 @@ priority = (novelty * knowledge_gain * success_prob + unlock_value + prior_bonus
 | `success_prob` | `GoalEngine.success_probability()` — вероятность успеха на текущей стадии |
 | `unlock_value` | `count_unlockable_paths() * 0.3` — будущая ценность от attack paths |
 | `prior_bonus` | Campaign-aware: 0.15 для известной инфры, `tech_rate * 0.2` для стека |
-| `hypothesis_gain` | [v3.4] `HypothesisEngine.resolution_gain(plugin, entity_id)` — max 1.0 |
-| `action_type_bonus` | [v3.4] Бонус за тип действия в текущем контексте (0.0-0.2) |
+| `hypothesis_gain` | `HypothesisEngine.resolution_gain(plugin, entity_id)` — max 1.0 |
+| `action_type_bonus` | Бонус за тип действия в текущем контексте (0.0-0.2) |
 | `gap_boost` | `1.0 + gap.priority * 0.1` — множитель от приоритета gap |
 | `cost` | `cap.cost_score` (1-10), campaign/cost_tracker adjusted |
 | `noise` | `cap.noise_score` (1-10) |
 | `repetition_penalty` | Adaptive из History или binary 5.0 из графа |
 
-**hypothesis_gain** (v3.4):
+**hypothesis_gain**:
 - 0.3 per matching `validation_plugins` in hypothesis
 - 0.15 per matching `target_entity_ids`
 - Higher when hypothesis is uncertain (confidence near 0.5)
 
-**action_type_bonus** (v3.4):
+**action_type_bonus**:
 | ActionType | Условие | Бонус |
 |------------|---------|-------|
 | EXPERIMENT | `entity.confidence < 0.7` | +0.1 (предпочитать эксперименты при неопределённости) |
@@ -836,7 +859,7 @@ Planner (`orchestrator/planner.py`) анализирует knowledge graph и о
 | 15 | `_container_without_config_audit` | `"container_config_audit"` | **5.5** | Container без `config_audited` (1 gap per host) |
 | 16 | `_container_without_image_analysis` | `"image_analysis"` | **5.0** | Image без `vulnerabilities_checked` |
 | 17 | `_attack_path_gaps` | `"attack_path"` | **path.risk** | Attack path preconditions met, actions available |
-| 18 | `_hypothesis_validation` | `"hypothesis_validation"` | **5.5** | [v3.4] Active hypothesis с confidence в [0.3, 0.7] |
+| 18 | `_hypothesis_validation` | `"hypothesis_validation"` | **5.5** | Active hypothesis с confidence в [0.3, 0.7] |
 
 ### Gap satisfaction flags
 
@@ -891,13 +914,13 @@ Greedy top-N с дедупликацией:
     a. state.apply_observation(obs)   -> обновление графа (+ source_family)
     b. emit ENTITY events
     c. update decision outcome
-10. [v3.4] hypothesis_engine.generate_hypotheses(graph)  -> новые гипотезы
-11. [v3.4] evidence_aggregator.record_evidence(...)      -> запись evidence per entity
-12. [v3.4] evidence_aggregator.revise_beliefs()          -> belief revision
+10. hypothesis_engine.generate_hypotheses(graph)  -> новые гипотезы
+11. evidence_aggregator.record_evidence(...)      -> запись evidence per entity
+12. evidence_aggregator.revise_beliefs()          -> belief revision
     - emit BELIEF_STRENGTHENED / BELIEF_WEAKENED
-13. [v3.4] hypothesis_engine.update_from_observation()   -> обновление confidence гипотез
+13. hypothesis_engine.update_from_observation()   -> обновление confidence гипотез
     - emit HYPOTHESIS_CONFIRMED / HYPOTHESIS_REJECTED
-14. [v3.4] evidence_aggregator.reset_step()              -> сброс aggregator для след. шага
+14. evidence_aggregator.reset_step()              -> сброс aggregator для след. шага
 15. _mark_gap_satisfied(sc)           -> satisfaction flags
 16. emit STEP_COMPLETED event
 ```
@@ -915,9 +938,9 @@ Greedy top-N с дедупликацией:
 - `evaluated_options` — все кандидаты (max 20) с score_breakdown
 - `chosen_capability`, `chosen_plugin`, `chosen_target`, `chosen_score`
 - `reasoning_trace` — "Gap: X. Selected Y (score=Z) from N candidates."
-- `related_hypothesis_ids` — [v3.4] гипотезы, связанные с target entity
-- `hypothesis_resolution_gain` — [v3.4] ожидаемый вклад в разрешение гипотез (0.0-1.0)
-- `action_type` — [v3.4] тип действия capability (enumeration/experiment/exploit/verification)
+- `related_hypothesis_ids` — гипотезы, связанные с target entity
+- `hypothesis_resolution_gain` — ожидаемый вклад в разрешение гипотез (0.0-1.0)
+- `action_type` — тип действия capability (enumeration/experiment/exploit/verification)
 
 **Post-execution** (заполняются ПОСЛЕ):
 - `outcome_observations`, `outcome_new_entities`, `outcome_confidence_delta`, `outcome_duration`
@@ -942,8 +965,8 @@ Greedy top-N с дедупликацией:
 | `STEP_COMPLETED` | Шаг цикла завершён |
 | `DECISION_MADE` | Принято решение о запуске |
 | `GOAL_ADVANCED` / `AUDIT_COMPLETED` | Прогресс целей / аудит завершён |
-| `BELIEF_STRENGTHENED` / `BELIEF_WEAKENED` | [v3.4] Уверенность в entity повышена/понижена belief revision |
-| `HYPOTHESIS_CONFIRMED` / `HYPOTHESIS_REJECTED` | [v3.4] Гипотеза подтверждена (≥0.85) / отклонена (≤0.15) |
+| `BELIEF_STRENGTHENED` / `BELIEF_WEAKENED` | Уверенность в entity повышена/понижена belief revision |
+| `HYPOTHESIS_CONFIRMED` / `HYPOTHESIS_REJECTED` | Гипотеза подтверждена (≥0.85) / отклонена (≤0.15) |
 
 ### SafetyLimits (`orchestrator/safety.py`)
 
@@ -962,7 +985,7 @@ knowledge_gained, confidence_delta, duration. `summary()` -> human-readable ло
 
 ---
 
-## Container Security Audit (v3.3)
+## Container Security Audit
 
 Подсистема автономного аудита контейнерной инфраструктуры. Обнаруживает Docker/K8s среды,
 перечисляет контейнеры и образы, аудитирует конфигурацию, проверяет escape-векторы и
@@ -990,22 +1013,6 @@ HOST --[EXPOSES]--> SERVICE(:2375)
 | `container_escape_probe` | exploitation | `container_config_audit` | `container_escapes` | 6 escape-векторов, проверка CVE (runc, containerd, dirty pipe) |
 | `container_verification` | exploitation | config_audit + escape_probe | `verified_container_findings` | Re-probe на confidence 0.85 |
 
-### 11 проверок container_config_audit
-
-| Проверка | Severity | Confidence |
-|----------|----------|------------|
-| Privileged mode | CRITICAL | 0.65 |
-| docker.sock mount | CRITICAL | 0.65 |
-| Host PID namespace | HIGH | 0.65 |
-| Host network mode | HIGH | 0.65 |
-| Sensitive volume mounts (/etc, /root, /proc) | HIGH | 0.60 |
-| CAP_SYS_ADMIN capability | HIGH | 0.65 |
-| Secret env vars (PASSWORD/KEY/TOKEN) | HIGH | 0.60 |
-| Running as root | MEDIUM | 0.60 |
-| No resource limits | MEDIUM | 0.55 |
-| No seccomp profile | MEDIUM | 0.55 |
-| Writable root filesystem | LOW | 0.55 |
-
 ### Attack path: container_exploitation
 
 ```python
@@ -1020,14 +1027,9 @@ AttackPath(
 )
 ```
 
-### Goal integration
-
-- **SURFACE_MAPPING**: gap type `"container_runtime"`, risk domain `"container"`
-- **EXPLOIT**: gap types `"container_enumeration"`, `"container_config_audit"`, `"image_analysis"`, risk domain `"container"`
-
 ---
 
-## Campaign Memory (v3.2)
+## Campaign Memory
 
 Persistent cross-audit learning. Запоминает инфраструктуру, эффективность плагинов и
 технологические стеки между аудитами. Opt-in, по умолчанию выключена.
@@ -1041,27 +1043,13 @@ Persistent cross-audit learning. Запоминает инфраструктур
 └── tech_fingerprints (per-domain)    ← паттерны технологий по организациям
 ```
 
-### Модели (`campaign/models.py`)
-
-| Модель | Ключ | Назначение |
-|--------|------|-----------|
-| `TargetProfile` | `host` | Сервисы, технологии, endpoints, findings per host |
-| `PluginEfficacy` | `plugin_name` | Success rate, new entities, runtime, tech_stack_stats |
-| `TechFingerprint` | `base_domain` | Технологии по организации (nginx, php, wordpress) |
-
-### Интеграция со Scorer
-
-- **Campaign cost**: `adjusted_cost()` → discount для проверенных плагинов, penalty для бесполезных
-- **Prior bonus**: 0.15 для известной инфраструктуры (host+port), `tech_rate * 0.2` для стека
-- Приоритет: CostTracker > CampaignMemory > static cost_score
-
 ### Активация
 
 ```bash
 basilisk auto example.com --campaign          # CLI
 ```
 ```python
-Audit("example.com").autonomous().enable_campaign().run()  # API
+await Basilisk("example.com").campaign().run()  # API
 ```
 ```yaml
 campaign:
@@ -1070,7 +1058,7 @@ campaign:
 
 ---
 
-## Cognitive Reasoning (v3.4)
+## Cognitive Reasoning
 
 Детерминированные reasoning-примитивы поверх knowledge graph. Без AI/LLM — чистая логика
 на паттернах и статистике. Три компонента: Hypothesis Engine, Evidence Aggregator, ActionType.
@@ -1078,20 +1066,6 @@ campaign:
 ### Hypothesis Engine (`reasoning/hypothesis.py`)
 
 Формирует тестируемые гипотезы из паттернов в knowledge graph.
-
-**Модель Hypothesis:**
-```python
-class Hypothesis(BaseModel):
-    id: str                    # SHA256 deterministic (same pattern as Entity)
-    type: HypothesisType       # SHARED_STACK|SERVICE_IDENTITY|SYSTEMATIC_VULN|...
-    statement: str             # человекочитаемое описание
-    confidence: float = 0.5    # [0.0, 1.0]
-    status: HypothesisStatus   # ACTIVE → CONFIRMED (≥0.85) | REJECTED (≤0.15)
-    supporting_evidence: list[EvidenceItem] = []
-    contradicting_evidence: list[EvidenceItem] = []
-    validation_plugins: list[str] = []   # плагины для проверки
-    target_entity_ids: list[str] = []    # entities для тестирования
-```
 
 **5 детекторов паттернов:**
 
@@ -1102,20 +1076,6 @@ class Hypothesis(BaseModel):
 | `_detect_systematic_vuln` | 3+ findings одного типа | "Систематическая уязвимость категории X" |
 | `_detect_unverified_findings` | HIGH/CRITICAL finding, confidence < 0.7 | "Уязвимость может существовать в X" |
 | `_detect_framework_pattern` | Пути endpoints совпадают с известным фреймворком | "Цель использует WordPress/Laravel/etc" |
-
-**Confidence recalculation:**
-- Группировка evidence по `source_family`
-- Первое evidence в семье: полный weight. Каждое следующее: `weight * 0.7^i` (diminishing returns)
-- Contradiction penalty: `weight * 0.5`
-- Нормализация к [0.0, 1.0]
-- Status transitions: `≥ 0.85` → CONFIRMED, `≤ 0.15` → REJECTED
-
-**HypothesisEngine API:**
-- `generate_hypotheses(graph)` → `list[Hypothesis]` — запуск всех детекторов
-- `update_from_observation(entity_id, source_plugin, ...)` → `list[Hypothesis]` — обновление из observation
-- `resolution_gain(plugin_name, target_entity_id)` → `float` — ожидаемый вклад (0.0-1.0)
-- `active_hypotheses` / `all_hypotheses` — properties
-- `MAX_ACTIVE = 50` — ограничение активных гипотез
 
 ### Evidence Aggregator (`reasoning/belief.py`)
 
@@ -1137,58 +1097,6 @@ Belief revision на основе source-family independence.
 - После шага: entity с evidence из 2+ source families → independence bonus (+0.05 per family, max +0.15)
 - Contradicting evidence → penalty (-0.1)
 - Confidence clamped to [0.1, 1.0]
-- Events: `BELIEF_STRENGTHENED` / `BELIEF_WEAKENED`
-
-**EvidenceAggregator API:**
-- `record_evidence(entity_id, source_plugin, confidence_delta)` — запись evidence
-- `revise_beliefs()` → `list[tuple[entity_id, old_conf, new_conf]]` — revision
-- `reset_step()` — сброс для следующего шага
-
-### Integration with Autonomous Loop
-
-```
-... execute plugins → apply observations → [v3.4 START] →
-  generate_hypotheses(graph)         # detect patterns, create hypotheses
-  record_evidence(entity, plugin)    # track per-entity evidence
-  revise_beliefs()                   # independence bonus / contradiction penalty
-  update_from_observation(...)       # hypothesis confidence updates
-  reset_step()                       # prepare for next iteration
-→ [v3.4 END] → mark_gap_satisfied → emit STEP_COMPLETED
-```
-
-### Backward Compatibility
-
-Все новые поля имеют defaults. Все новые параметры конструкторов `= None`.
-Когда `hypothesis_engine is None` (по умолчанию в non-autonomous mode):
-- Нет генерации гипотез
-- Нет belief revision
-- Нет hypothesis_gain в скоринге
-- Нет hypothesis_validation gaps
-- Поведение идентично v3.3.0
-
----
-
-## Классический Pipeline
-
-Pipeline (`core/pipeline.py`) — последовательное выполнение плагинов по фазам.
-
-### Фазы
-- **По умолчанию** (4): `recon -> scanning -> analysis -> pentesting`
-- **Offensive** (10): + `exploitation, post_exploit, privesc, lateral, crypto, forensics`
-
-### Порядок выполнения
-1. Топологическая сортировка (Kahn's algorithm, `depends_on`)
-2. Recon расширяет target scope (subdomains -> новые цели)
-3. Каждая фаза: resolve_order -> run_batch -> emit findings -> save to DB
-
-### Inter-phase intelligence injection
-
-| После фазы | Инъекция | Что делает |
-|-------------|----------|------------|
-| `recon` | `_inject_crawl_data()` | `ctx.state["crawled_urls"]`, `ctx.state["discovered_forms"]` |
-| `recon` | `_check_http_reachability()` | HEAD-проверка хостов -> `ctx.state["http_scheme"]` |
-| `analysis` | `_inject_waf_data()` | `ctx.state["waf_map"]` |
-| `analysis` | `_inject_api_paths()` | `ctx.state["discovered_api_paths"]` |
 
 ---
 
@@ -1215,3 +1123,4 @@ Pipeline (`core/pipeline.py`) — последовательное выполн�
 | WP plugins/themes | pentesting/wp_deep_scan.py | 86 + 52 | WPScan |
 | VULNERABLE_BASE_IMAGES | analysis/image_fingerprint.py | 30 | — |
 | Container escape CVEs | exploitation/container_escape_probe.py | 3 | — |
+| VulnRegistry definitions | knowledge/vulns/definitions.yaml | 100+ | — |

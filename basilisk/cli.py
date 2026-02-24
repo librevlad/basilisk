@@ -1,10 +1,9 @@
-"""Typer CLI — headless commands for Basilisk."""
+"""Typer CLI — clean interface for Basilisk."""
 
 from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime
 from pathlib import Path
 
 import typer
@@ -15,7 +14,7 @@ from basilisk import __version__
 
 app = typer.Typer(
     name="basilisk",
-    help="Basilisk — Professional security audit framework",
+    help="Basilisk — autonomous security intelligence framework",
     no_args_is_help=True,
 )
 console = Console()
@@ -36,334 +35,159 @@ def _setup_logging(verbose: bool = False, config_level: str | None = None) -> No
 
 
 @app.command()
-def audit(
-    target: str = typer.Argument(help="Target domain to audit"),
-    plugins: str | None = typer.Option(None, help="Comma-separated plugin names (whitelist)"),
-    exclude: str | None = typer.Option(
-        None, "--exclude", "-x",
-        help="Exclude plugins by name or prefix, e.g.: dns_enum,subdomain_,whois,asn_",
-    ),
-    format: str = typer.Option("json", help="Output formats: json,csv,html"),  # noqa: A002
-    config: str | None = typer.Option(None, help="Path to config YAML"),
-    output: str = typer.Option("reports", help="Output directory"),
-    verbose: bool = typer.Option(False, "-v", "--verbose"),
-    interactive: bool = typer.Option(False, "--tui", help="Launch TUI dashboard"),
-    wordlist: str | None = typer.Option(
-        None, "--wordlist", "-w", help="Wordlist names, comma-separated",
-    ),
-    project_name: str | None = typer.Option(
-        None, "--project", "-p", help="Save to project (auto-create, resume)",
-    ),
-    phases: str | None = typer.Option(
-        None, "--phases", help="Comma-separated phases to run (default: all). "
-        "E.g.: scanning,analysis,pentesting",
-    ),
-    no_cache: bool = typer.Option(False, "--no-cache", help="Ignore cached results"),
-    cache_ttl: int = typer.Option(
-        0, "--cache-ttl", help="Cache TTL in hours (0=default per phase)",
-    ),
-    force: str | None = typer.Option(
-        None, "--force", help="Force re-run phases, e.g.: recon,pentesting",
-    ),
-    autonomous: bool = typer.Option(
-        False, "--autonomous", "-A", help="Autonomous mode (state-driven orchestration)",
-    ),
-    max_steps: int = typer.Option(
-        100, "--max-steps", help="Max autonomous steps (only with --autonomous)",
-    ),
-):
-    """Run a full audit against a target domain."""
-    # Load config early to get log_level
-    config_log_level = None
-    if config:
-        from basilisk.config import Settings
-        try:
-            cfg = Settings.load(config)
-            config_log_level = cfg.log_level
-        except Exception:
-            pass
-    _setup_logging(verbose, config_level=config_log_level)
-
-    if interactive:
-        _run_tui_audit(target, plugins, config, wordlist, project_name)
-        return
-
-    from basilisk.core.facade import Audit
-
-    console.print(f"[bold blue]Basilisk v{__version__}[/] — Auditing [bold]{target}[/]")
-
-    audit_builder = Audit(target)
-    if config:
-        audit_builder = audit_builder.with_config(config)
-    if plugins:
-        audit_builder = audit_builder.plugins(*plugins.split(","))
-    if exclude:
-        audit_builder = audit_builder.exclude(*exclude.split(","))
-    if wordlist:
-        audit_builder = audit_builder.wordlists(*wordlist.split(","))
-    if autonomous:
-        audit_builder = audit_builder.autonomous(max_steps=max_steps)
-    if no_cache:
-        audit_builder = audit_builder.no_cache()
-    if cache_ttl > 0:
-        audit_builder = audit_builder.cache_ttl(cache_ttl)
-    if force:
-        audit_builder = audit_builder.force_phases(*force.split(","))
-    project_obj = None
-    if project_name:
-        audit_builder, project_obj = _attach_project(audit_builder, project_name, target)
-
-    phase_methods = {
-        "recon": "discover", "scanning": "scan",
-        "analysis": "analyze", "pentesting": "pentest",
-        "exploitation": "exploit", "post_exploit": "post_exploit",
-        "privesc": "privesc", "lateral": "lateral",
-        "crypto": "crypto", "forensics": "forensics",
-    }
-    if phases:
-        for p in phases.split(","):
-            p = p.strip()
-            if p not in phase_methods:
-                console.print(f"[red]Unknown phase: {p}[/]")
-                raise typer.Exit(1)
-            audit_builder = getattr(audit_builder, phase_methods[p])()
-    else:
-        for method in phase_methods.values():
-            audit_builder = getattr(audit_builder, method)()
-
-    # Build scan output directory: target_YYYYMMDD_HHMMSS
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    safe_target = target.replace(":", "_").replace("/", "_")
-    base_reports = project_obj.reports_dir if project_obj else Path(output)
-    scan_dir = base_reports / f"{safe_target}_{timestamp}"
-
-    # Unified live report engine — writes both HTML and JSON from the start
-    from basilisk.reporting.live_html import LiveReportEngine
-
-    report_engine = LiveReportEngine(scan_dir)
-    console.print(f"  Reports: {scan_dir} (updating live)")
-
-    _last_plugin = {"name": ""}
-
-    def on_progress(state):
-        report_engine.update(state)
-        if state.status == "running" and state.current_plugin:
-            plugin = state.current_plugin
-            if plugin != _last_plugin["name"]:
-                _last_plugin["name"] = plugin
-                phase = state.current_phase
-                phase_info = state.phases.get(phase)
-                progress = ""
-                if phase_info and phase_info.total:
-                    progress = f" [{phase_info.completed}/{phase_info.total}]"
-                elapsed = ""
-                if phase_info and phase_info.elapsed > 0:
-                    elapsed = f" ({phase_info.elapsed:.0f}s)"
-                console.print(
-                    f"  [dim]{phase}{progress}{elapsed}[/] >> [cyan]{plugin}[/]"
-                )
-        elif state.status == "running":
-            for name, phase in state.phases.items():
-                if phase.status == "done" and name == state.current_phase:
-                    console.print(
-                        f"  [green]OK {name}[/] done ({phase.elapsed:.0f}s, "
-                        f"{phase.completed} tasks)"
-                    )
-
-    audit_builder = audit_builder.on_progress(on_progress)
-
-    state = asyncio.run(audit_builder.run())
-
-    # CSV is optional — only generate if explicitly requested
-    if "csv" in format.split(","):
-        from basilisk.reporting.csv import CsvRenderer
-        from basilisk.reporting.engine import ReportEngine
-
-        csv_engine = ReportEngine()
-        csv_engine.register("csv", CsvRenderer())
-        csv_engine.generate(state, scan_dir, ["csv"])
-
-    console.print(f"\n[bold green]Audit complete![/] {state.total_findings} findings")
-    if state.skipped_plugins:
-        console.print(f"  [dim]Skipped {len(state.skipped_plugins)} irrelevant plugins[/]")
-    for name, phase in state.phases.items():
-        if phase.total > 0:
-            console.print(f"  [dim]{name}: {phase.completed} tasks in {phase.elapsed:.0f}s[/]")
-    console.print(f"  Reports: {scan_dir}")
-    console.print(f"  - {report_engine.html_path.name}")
-    console.print(f"  - {report_engine.json_path.name}")
-
-
-def _attach_project(audit_builder, name: str, target: str) -> tuple:
-    """Load or create project and attach to audit builder.
-
-    Returns (audit_builder, project) tuple.
-    """
-    from basilisk.config import Settings
-    from basilisk.core.project_manager import ProjectManager
-
-    pm = ProjectManager(Settings.load())
-    try:
-        proj = pm.load(name)
-    except FileNotFoundError:
-        proj = pm.create(name, targets=[target])
-        console.print(f"[green]Created project '{name}'[/]")
-    return audit_builder.for_project(proj), proj
-
-
-def _run_tui_audit(
-    target: str,
-    plugins: str | None,
-    config: str | None,
-    wordlist: str | None,
-    project_name: str | None = None,
-) -> None:
-    """Launch TUI app and start audit immediately."""
-    try:
-        from basilisk.tui.app import BasiliskApp
-
-        app_instance = BasiliskApp(
-            audit_target=target,
-            audit_plugins=plugins.split(",") if plugins else None,
-            audit_config=config,
-            audit_wordlists=wordlist.split(",") if wordlist else None,
-            audit_project=project_name,
-        )
-        app_instance.run()
-    except ImportError:
-        console.print("[red]TUI not available. Install textual: pip install textual[/]")
-
-
-@app.command(name="auto")
 def auto(
-    target: str = typer.Argument(help="Target domain to audit"),
+    target: str = typer.Argument(help="Target domain/IP to audit"),
     max_steps: int = typer.Option(100, "--max-steps", "-n", help="Max autonomous steps"),
-    plugins: str | None = typer.Option(None, help="Comma-separated plugin names (whitelist)"),
-    exclude: str | None = typer.Option(
-        None, "--exclude", "-x",
-        help="Exclude plugins by name or prefix",
-    ),
     config: str | None = typer.Option(None, help="Path to config YAML"),
-    output: str = typer.Option("reports", help="Output directory"),
-    wordlist: str | None = typer.Option(
-        None, "--wordlist", "-w", help="Wordlist names, comma-separated",
-    ),
-    project_name: str | None = typer.Option(
-        None, "--project", "-p", help="Save to project",
-    ),
     campaign: bool = typer.Option(
         False, "--campaign/--no-campaign", help="Enable persistent campaign memory",
     ),
-    format: str = typer.Option("json", help="Output formats: json,csv,html"),  # noqa: A002
     verbose: bool = typer.Option(False, "-v", "--verbose"),
 ):
     """Autonomous audit — state-driven knowledge graph exploration."""
-    config_log_level = None
-    if config:
-        from basilisk.config import Settings
-        try:
-            cfg = Settings.load(config)
-            config_log_level = cfg.log_level
-        except Exception:
-            pass
-    _setup_logging(verbose, config_level=config_log_level)
+    _setup_logging(verbose)
 
-    from basilisk.core.facade import Audit
+    from basilisk import Basilisk
 
     console.print(
         f"[bold blue]Basilisk v{__version__}[/] — "
         f"Autonomous audit [bold]{target}[/] (max {max_steps} steps)"
     )
 
-    audit_builder = Audit(target).autonomous(max_steps=max_steps)
+    b = Basilisk(target, max_steps=max_steps, config=config)
     if campaign:
-        audit_builder = audit_builder.enable_campaign()
-    if config:
-        audit_builder = audit_builder.with_config(config)
-    if plugins:
-        audit_builder = audit_builder.plugins(*plugins.split(","))
-    if exclude:
-        audit_builder = audit_builder.exclude(*exclude.split(","))
-    if wordlist:
-        audit_builder = audit_builder.wordlists(*wordlist.split(","))
-    project_obj = None
-    if project_name:
-        audit_builder, project_obj = _attach_project(audit_builder, project_name, target)
+        b = b.campaign()
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    safe_target = target.replace(":", "_").replace("/", "_")
-    base_reports = project_obj.reports_dir if project_obj else Path(output)
-    scan_dir = base_reports / f"{safe_target}_{timestamp}"
+    result = asyncio.run(b.run())
 
-    from basilisk.reporting.live_html import LiveReportEngine
+    # Print summary
+    console.print(f"\n[bold green]Audit complete![/] {len(result.findings)} findings")
+    console.print(f"  Steps: {result.steps}")
+    console.print(f"  Duration: {result.duration:.1f}s")
+    console.print(f"  Reason: {result.termination_reason}")
+    if result.graph_data:
+        console.print(
+            f"  Graph: {result.graph_data.get('entity_count', 0)} entities, "
+            f"{result.graph_data.get('relation_count', 0)} relations"
+        )
 
-    report_engine = LiveReportEngine(scan_dir)
-    console.print(f"  Reports: {scan_dir} (updating live)")
+    if result.findings:
+        _print_findings_table(result.findings)
 
-    _last_plugin = {"name": ""}
 
-    def on_progress(state):
-        report_engine.update(state)
-        if state.status == "running" and state.current_plugin:
-            plugin = state.current_plugin
-            if plugin != _last_plugin["name"]:
-                _last_plugin["name"] = plugin
-                phase = state.current_phase
-                phase_info = state.phases.get(phase)
-                progress = ""
-                if phase_info and phase_info.total:
-                    progress = f" [{phase_info.completed}/{phase_info.total}]"
-                elapsed = ""
-                if phase_info and phase_info.elapsed > 0:
-                    elapsed = f" ({phase_info.elapsed:.0f}s)"
-                console.print(
-                    f"  [dim]{phase}{progress}{elapsed}[/] >> [cyan]{plugin}[/]"
-                )
+def _print_findings_table(findings: list) -> None:
+    """Print severity summary and top findings."""
+    # Severity summary
+    counts: dict[str, int] = {}
+    for f in findings:
+        name = f.severity.name if hasattr(f.severity, "name") else str(f.severity)
+        counts[name] = counts.get(name, 0) + 1
 
-    audit_builder = audit_builder.on_progress(on_progress)
-    state = asyncio.run(audit_builder.run())
+    sev_colors = {
+        "CRITICAL": "bold red", "HIGH": "red", "MEDIUM": "yellow",
+        "LOW": "green", "INFO": "dim",
+    }
 
-    if "csv" in format.split(","):
-        from basilisk.reporting.csv import CsvRenderer
-        from basilisk.reporting.engine import ReportEngine
+    summary = Table(title="Severity Summary")
+    summary.add_column("Severity")
+    summary.add_column("Count", justify="right")
+    sev_order = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
+    for sev in sev_order:
+        if sev in counts:
+            style = sev_colors.get(sev, "")
+            summary.add_row(f"[{style}]{sev}[/{style}]", str(counts[sev]))
+    console.print(summary)
 
-        csv_engine = ReportEngine()
-        csv_engine.register("csv", CsvRenderer())
-        csv_engine.generate(state, scan_dir, ["csv"])
+    # Top findings (max 20)
+    table = Table(title="Top Findings")
+    table.add_column("Severity", width=10)
+    table.add_column("Title")
+    table.add_column("Target", style="dim")
 
-    console.print(f"\n[bold green]Audit complete![/] {state.total_findings} findings")
-    if state.skipped_plugins:
-        console.print(f"  [dim]Skipped {len(state.skipped_plugins)} irrelevant plugins[/]")
-    console.print(f"  Reports: {scan_dir}")
-    console.print(f"  - {report_engine.html_path.name}")
-    console.print(f"  - {report_engine.json_path.name}")
+    for f in findings[:20]:
+        sev = f.severity.name if hasattr(f.severity, "name") else str(f.severity)
+        style = sev_colors.get(sev, "")
+        target = getattr(f, "target", "") or ""
+        table.add_row(f"[{style}]{sev}[/{style}]", f.title, target)
+
+    console.print(table)
+    if len(findings) > 20:
+        console.print(f"  [dim]... and {len(findings) - 20} more[/]")
 
 
 @app.command(name="run")
 def run_plugin(
     plugin_name: str = typer.Argument(help="Plugin name to run"),
     target: str = typer.Argument(help="Target domain/IP"),
-    wordlist: str | None = typer.Option(None, help="Wordlist name for brute plugins"),
     verbose: bool = typer.Option(False, "-v", "--verbose"),
 ):
     """Run a single plugin against a target."""
     _setup_logging(verbose)
 
-    from basilisk.core.facade import Audit
+    from basilisk.core.executor import AsyncExecutor, PluginContext
+    from basilisk.core.registry import PluginRegistry
+    from basilisk.models.target import Target
 
     console.print(
         f"[bold blue]Basilisk[/] — Running [bold]{plugin_name}[/] on [bold]{target}[/]"
     )
 
-    results = asyncio.run(Audit.run_plugin(plugin_name, [target]))
+    registry = PluginRegistry()
+    registry.discover()
+    plugin_cls = registry.get(plugin_name)
+    if not plugin_cls:
+        console.print(f"[red]Plugin not found: {plugin_name}[/]")
+        raise typer.Exit(1)
 
-    for result in results:
-        if result.ok:
-            for finding in result.findings:
-                color = finding.severity.color
-                console.print(f"  [{color}][{finding.severity.label}][/{color}] {finding.title}")
-        else:
-            console.print(f"  [red]Error:[/] {result.error}")
+    async def _run():
+        from basilisk.config import Settings
+        from basilisk.utils.dns import DnsClient
+        from basilisk.utils.http import AsyncHttpClient
+        from basilisk.utils.net import NetUtils
+        from basilisk.utils.rate_limiter import RateLimiter
+
+        settings = Settings.load()
+        http = AsyncHttpClient(
+            timeout=settings.http.timeout,
+            max_connections=settings.http.max_connections,
+            max_per_host=settings.http.max_connections_per_host,
+            user_agent=settings.http.user_agent,
+            verify_ssl=settings.http.verify_ssl,
+        )
+        dns = DnsClient(nameservers=settings.dns.nameservers, timeout=settings.dns.timeout)
+        net = NetUtils(timeout=settings.scan.port_timeout)
+        rate = RateLimiter(
+            rate=settings.rate_limit.requests_per_second, burst=settings.rate_limit.burst,
+        )
+
+        ctx = PluginContext(
+            config=settings, http=http, dns=dns, net=net, rate=rate,
+        )
+        t = Target.domain(target)
+        executor = AsyncExecutor(max_concurrency=1)
+        plugin = plugin_cls()
+        try:
+            await plugin.setup(ctx)
+            result = await executor.run_one(plugin, t, ctx)
+            await plugin.teardown()
+        finally:
+            await http.close()
+        return result
+
+    result = asyncio.run(_run())
+
+    if result.ok:
+        sev_colors = {
+            "CRITICAL": "bold red", "HIGH": "red", "MEDIUM": "yellow",
+            "LOW": "green", "INFO": "dim",
+        }
+        for finding in result.findings:
+            color = sev_colors.get(finding.severity.label.upper(), "")
+            console.print(f"  [{color}][{finding.severity.label}][/{color}] {finding.title}")
+        if not result.findings:
+            console.print("  [green]No findings[/]")
+    else:
+        console.print(f"  [red]Error:[/] {result.error}")
 
 
 @app.command(name="plugins")
@@ -404,110 +228,108 @@ def list_plugins(
     console.print(table)
 
 
-@app.command()
-def project(
-    action: str = typer.Argument(help="Action: create, list, run, report"),
-    name: str | None = typer.Argument(None, help="Project name"),
-    targets: str | None = typer.Option(None, help="Comma-separated targets"),
-    format: str = typer.Option("json", help="Report formats"),  # noqa: A002
+@app.command(name="train")
+def train(
+    profile: str = typer.Argument(help="Path to training profile YAML"),
+    target: str | None = typer.Option(None, "--target", "-t", help="Override target"),
+    max_steps: int | None = typer.Option(None, "--max-steps", "-n"),
+    config: str | None = typer.Option(None, help="Config YAML path"),
     verbose: bool = typer.Option(False, "-v", "--verbose"),
 ):
-    """Manage audit projects."""
+    """Training validation — benchmark engine against known vulnerabilities."""
     _setup_logging(verbose)
 
-    from basilisk.config import Settings
-    from basilisk.core.project_manager import ProjectManager
+    from basilisk.training.profile import TrainingProfile
+    from basilisk.training.runner import TrainingRunner
 
-    settings = Settings.load()
-    pm = ProjectManager(settings)
-
-    if action == "create":
-        if not name:
-            console.print("[red]Project name required[/]")
-            raise typer.Exit(1)
-        target_list = targets.split(",") if targets else []
-        project = pm.create(name, targets=target_list)
-        console.print(f"[green]Created project '{project.name}' at {project.path}[/]")
-
-    elif action == "list":
-        projects = pm.list_all()
-        if not projects:
-            console.print("No projects found")
-            return
-        table = Table(title="Projects")
-        table.add_column("Name", style="cyan")
-        table.add_column("Status", style="green")
-        table.add_column("Targets")
-        table.add_column("Created")
-        for p in projects:
-            table.add_row(
-                p.name, p.status.value,
-                str(len(p.targets)), p.created_at.strftime("%Y-%m-%d"),
-            )
-        console.print(table)
-
-    elif action == "run":
-        if not name:
-            console.print("[red]Project name required[/]")
-            raise typer.Exit(1)
-        project = pm.load(name)
-        console.print(f"[blue]Running project '{name}' with {len(project.targets)} targets[/]")
-        # TODO: Run pipeline with project config
-
-    elif action == "report":
-        if not name:
-            console.print("[red]Project name required[/]")
-            raise typer.Exit(1)
-        console.print(f"[blue]Generating report for '{name}'[/]")
-        # TODO: Generate report from project DB
-
-    else:
-        console.print(f"[red]Unknown action: {action}[/]")
-
-
-@app.command()
-def htb(
-    target: str = typer.Argument(help="Target IP (e.g. 10.10.10.1)"),
-    mode: str = typer.Option("full", help="Attack mode: full, web, ad, recon"),
-    verbose: bool = typer.Option(False, "-v", "--verbose"),
-    output: str = typer.Option("reports", help="Output directory"),
-):
-    """Full HTB attack chain — automated offensive pipeline."""
-    _setup_logging(verbose)
-
-    from basilisk.core.facade import Audit
-
-    console.print(f"[bold red]Basilisk v{__version__}[/] — HTB Attack Mode: [bold]{mode}[/]")
-    console.print(f"  Target: [bold]{target}[/]")
-
-    audit_builder = Audit(target)
-
-    if mode == "full":
-        audit_builder = audit_builder.full_offensive()
-    elif mode == "web":
-        audit_builder = audit_builder.discover().scan().analyze().pentest()
-    elif mode == "ad":
-        audit_builder = audit_builder.discover().scan().exploit().lateral()
-    elif mode == "recon":
-        audit_builder = audit_builder.discover().scan().analyze()
-    else:
-        console.print(f"[red]Unknown mode: {mode}[/]")
+    profile_path = Path(profile)
+    if not profile_path.exists():
+        console.print(f"[red]Profile not found: {profile_path}[/]")
         raise typer.Exit(1)
 
-    from basilisk.reporting.live_html import LiveReportEngine
+    tp = TrainingProfile.load(profile_path)
+    if max_steps is not None:
+        tp.max_steps = max_steps
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    safe_target = target.replace(":", "_").replace("/", "_")
-    scan_dir = Path(output) / f"htb_{safe_target}_{timestamp}"
+    console.print(
+        f"[bold blue]Basilisk v{__version__}[/] — Training validation: "
+        f"[bold]{tp.name}[/] ({len(tp.expected_findings)} expected findings)"
+    )
+    console.print(f"  Target: [bold]{target or tp.target}[/]")
+    console.print(f"  Max steps: {tp.max_steps}")
 
-    report_engine = LiveReportEngine(scan_dir)
-    audit_builder = audit_builder.on_progress(report_engine.update)
+    from basilisk.config import Settings
 
-    state = asyncio.run(audit_builder.run())
+    settings = Settings.load(config) if config else Settings.load()
+    runner = TrainingRunner(tp, target_override=target)
+    report = asyncio.run(runner.run(config=settings))
 
-    console.print(f"\n[bold green]Attack complete![/] {state.total_findings} findings")
-    console.print(f"  - {report_engine.html_path.name}")
-    console.print(f"  - {report_engine.json_path.name}")
+    table = Table(title=f"Training Validation: {report.profile_name}")
+    table.add_column("Finding", style="cyan")
+    table.add_column("Severity")
+    table.add_column("Category", style="dim")
+    table.add_column("Discovered")
+    table.add_column("Verified")
+    table.add_column("Step")
+
+    for fd in report.findings_detail:
+        sev = fd["expected_severity"]
+        sev_colors = {
+            "critical": "bold red", "high": "red", "medium": "yellow", "low": "green",
+        }
+        sev_style = sev_colors.get(sev, "")
+        disc = "[green]YES[/]" if fd["discovered"] else "[red]NO[/]"
+        verif = "[green]YES[/]" if fd["verified"] else "[yellow]NO[/]"
+        step = str(fd.get("discovery_step", "-") or "-")
+        table.add_row(
+            fd["expected_title"],
+            f"[{sev_style}]{sev}[/{sev_style}]",
+            fd.get("category", ""),
+            disc,
+            verif,
+            step,
+        )
+
+    console.print(table)
+    console.print(
+        f"\n  Coverage: [bold]{report.coverage * 100:.1f}%[/] "
+        f"({report.discovered}/{report.total_expected})"
+    )
+    console.print(f"  Verification: {report.verification_rate * 100:.1f}%")
+    console.print(f"  Steps: {report.steps_taken}")
+
+    if report.passed:
+        console.print("[bold green]PASSED[/]")
+    else:
+        console.print("[bold red]FAILED[/] — coverage below required threshold")
+        raise typer.Exit(1)
+
+
+@app.command(name="scenarios")
+def list_scenarios(
+    native_only: bool = typer.Option(False, "--native", help="Show only native v4 scenarios"),
+):
+    """List all scenarios (native v4 + legacy-wrapped plugins)."""
+    from basilisk.bridge.legacy_scenario import LegacyPluginScenario
+    from basilisk.engine.scenario_registry import ScenarioRegistry
+
+    registry = ScenarioRegistry()
+    registry.discover()
+
+    table = Table(title="Basilisk Scenarios")
+    table.add_column("Name", style="cyan")
+    table.add_column("Type", width=8)
+    table.add_column("Category", style="green")
+    table.add_column("Description")
+
+    for scenario in sorted(registry.all_scenarios(), key=lambda s: s.meta.name):
+        is_native = not isinstance(scenario, LegacyPluginScenario)
+        if native_only and not is_native:
+            continue
+        stype = "[bold green]native[/]" if is_native else "legacy"
+        table.add_row(scenario.meta.name, stype, scenario.meta.category, scenario.meta.description)
+
+    console.print(table)
 
 
 @app.command()
@@ -538,17 +360,6 @@ def crack(
 def version():
     """Show version."""
     console.print(f"Basilisk v{__version__}")
-
-
-@app.command()
-def tui():
-    """Launch interactive TUI dashboard."""
-    try:
-        from basilisk.tui.app import BasiliskApp
-        app_instance = BasiliskApp()
-        app_instance.run()
-    except ImportError:
-        console.print("[red]TUI not available. Install textual: pip install textual[/]")
 
 
 def main() -> None:

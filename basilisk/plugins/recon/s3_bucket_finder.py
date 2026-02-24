@@ -59,24 +59,50 @@ class S3BucketFinderPlugin(BasePlugin):
                     body = await resp.text(encoding="utf-8", errors="replace")
 
                     if status == 200 and "ListBucketResult" in body:
+                        # Verify ownership: bucket content must reference the domain
+                        domain_base = target.host.split(".")[0]
+                        has_domain_ref = (
+                            target.host.lower() in body.lower()
+                            or (
+                                len(domain_base) >= 4
+                                and domain_base.lower() in body.lower()
+                            )
+                        )
                         found_buckets.append({
                             "name": bucket, "url": url, "access": "public-list",
+                            "domain_verified": has_domain_ref,
                         })
-                        findings.append(Finding.critical(
-                            f"Public S3 bucket: {bucket}",
-                            description="S3 bucket allows public listing of contents",
-                            evidence=url,
-                            remediation="Restrict S3 bucket access policy",
-                            tags=["recon", "s3", "cloud"],
-                        ))
+                        if has_domain_ref:
+                            findings.append(Finding.high(
+                                f"Public S3 bucket: {bucket}",
+                                description=(
+                                    "S3 bucket allows public listing and content "
+                                    f"references target domain '{target.host}'"
+                                ),
+                                evidence=url,
+                                remediation="Restrict S3 bucket access policy",
+                                tags=["recon", "s3", "cloud"],
+                            ))
+                        else:
+                            findings.append(Finding.low(
+                                f"Public S3 bucket (unverified ownership): {bucket}",
+                                description=(
+                                    "S3 bucket allows public listing but content "
+                                    "does not reference target domain. "
+                                    "May belong to another organization."
+                                ),
+                                evidence=url,
+                                remediation="Verify bucket ownership",
+                                tags=["recon", "s3", "cloud"],
+                            ))
                     elif status == 200:
                         found_buckets.append({
                             "name": bucket, "url": url, "access": "public-read",
                         })
-                        findings.append(Finding.high(
-                            f"Accessible S3 bucket: {bucket}",
+                        findings.append(Finding.low(
+                            f"Accessible S3 bucket (unverified): {bucket}",
                             evidence=url,
-                            remediation="Review S3 bucket access policy",
+                            remediation="Verify bucket ownership",
                             tags=["recon", "s3", "cloud"],
                         ))
                     elif status == 403:

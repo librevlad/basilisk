@@ -38,6 +38,11 @@ CREATE TABLE IF NOT EXISTS kg_relations (
 );
 CREATE INDEX IF NOT EXISTS idx_kg_rel_source ON kg_relations(source_id);
 CREATE INDEX IF NOT EXISTS idx_kg_rel_target ON kg_relations(target_id);
+
+CREATE TABLE IF NOT EXISTS kg_executions (
+    fingerprint TEXT PRIMARY KEY,
+    timestamp REAL NOT NULL
+);
 """
 
 
@@ -52,11 +57,16 @@ class KnowledgeStore:
         await self.db.executescript(KG_SCHEMA)
 
     async def save(self, graph: KnowledgeGraph) -> None:
-        """Save entire graph to DB (upsert)."""
+        """Save entire graph to DB (upsert), including execution log."""
         for entity in graph.all_entities():
             await self.save_entity(entity)
         for relation in graph.all_relations():
             await self.save_relation(relation)
+        for fp, ts in graph._execution_log.items():
+            await self.db.execute(
+                "INSERT OR REPLACE INTO kg_executions (fingerprint, timestamp) VALUES (?, ?)",
+                (fp, ts),
+            )
         await self.db.commit()
 
     async def save_entity(self, entity: Entity) -> None:
@@ -130,5 +140,15 @@ class KnowledgeStore:
                     source_plugin=row[5],
                 )
                 graph.add_relation(relation)
+
+        # Restore execution log (dedup fingerprints).
+        try:
+            async with self.db.execute(
+                "SELECT fingerprint, timestamp FROM kg_executions",
+            ) as cursor:
+                async for row in cursor:
+                    graph._execution_log[row[0]] = row[1]
+        except Exception:
+            pass  # table may not exist in older DBs
 
         return graph

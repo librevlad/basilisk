@@ -115,6 +115,18 @@ def adapt_result(result: PluginResult) -> list[Observation]:
         if obs:
             observations.append(obs)
 
+    # waf_cdn → Technology entities (from tech_detect plugin)
+    for wc in _safe_list("waf_cdn"):
+        obs = _waf_cdn_observation(host, wc, plugin)
+        if obs:
+            observations.append(obs)
+
+    # cdn → Technology entities (from cdn_detect / waf_detect)
+    for cdn in _safe_list("cdn"):
+        obs = _cdn_observation(host, cdn, plugin)
+        if obs:
+            observations.append(obs)
+
     # ssl_info → enrich Host/Service data
     if data.get("ssl_info"):
         observations.append(_ssl_observation(host, data["ssl_info"], plugin))
@@ -352,6 +364,14 @@ def _endpoint_from_path(host: str, path_entry: Any, plugin: str) -> Observation 
     if not path:
         return None
 
+    # Normalize: if a full URL was passed, extract just the path component
+    if path.startswith(("http://", "https://")):
+        try:
+            parsed = urlparse(path)
+            path = parsed.path or "/"
+        except Exception:
+            pass
+
     return _make_endpoint_observation(host, path, plugin, status=status)
 
 
@@ -366,6 +386,18 @@ def _endpoint_from_api(host: str, ep: Any, plugin: str) -> Observation | None:
 
     if not path:
         return None
+
+    # Normalize: if a full URL was passed, extract just the path component
+    if path.startswith(("http://", "https://")):
+        try:
+            parsed = urlparse(path)
+            path = parsed.path or "/"
+            if parsed.query:
+                return _make_endpoint_observation(
+                    host, path, plugin, is_api=True, params=True,
+                )
+        except Exception:
+            pass
 
     return _make_endpoint_observation(host, path, plugin, is_api=True)
 
@@ -441,6 +473,70 @@ def _waf_observation(host: str, waf: Any, plugin: str) -> Observation | None:
     return Observation(
         entity_type=EntityType.TECHNOLOGY,
         entity_data={"host": host, "name": name, "version": "", "is_waf": True},
+        key_fields={"host": host, "name": name, "version": ""},
+        relation=Relation(
+            source_id=host_id, target_id=tech_id,
+            type=RelationType.RUNS, source_plugin=plugin,
+        ),
+        source_plugin=plugin,
+    )
+
+
+def _waf_cdn_observation(host: str, wc: Any, plugin: str) -> Observation | None:
+    """Convert WAF/CDN entry from tech_detect to Technology observation."""
+    if isinstance(wc, dict):
+        name = wc.get("name", "")
+        version = wc.get("version", "")
+        category = wc.get("category", "")
+    elif isinstance(wc, str):
+        name = wc
+        version = ""
+        category = ""
+    else:
+        return None
+
+    if not name:
+        return None
+
+    host_id = Entity.make_id(EntityType.HOST, host=host)
+    tech_id = Entity.make_id(EntityType.TECHNOLOGY, host=host, name=name, version=version)
+
+    entity_data: dict[str, Any] = {"host": host, "name": name, "version": version}
+    if category in ("waf",):
+        entity_data["is_waf"] = True
+    if category in ("cdn", "cache"):
+        entity_data["is_cdn"] = True
+
+    return Observation(
+        entity_type=EntityType.TECHNOLOGY,
+        entity_data=entity_data,
+        key_fields={"host": host, "name": name, "version": version},
+        relation=Relation(
+            source_id=host_id, target_id=tech_id,
+            type=RelationType.RUNS, source_plugin=plugin,
+        ),
+        source_plugin=plugin,
+    )
+
+
+def _cdn_observation(host: str, cdn: Any, plugin: str) -> Observation | None:
+    """Convert CDN detection entry to Technology observation."""
+    if isinstance(cdn, dict):
+        name = cdn.get("name", cdn.get("provider", ""))
+    elif isinstance(cdn, str):
+        name = cdn
+    else:
+        return None
+
+    if not name:
+        return None
+
+    host_id = Entity.make_id(EntityType.HOST, host=host)
+    tech_id = Entity.make_id(EntityType.TECHNOLOGY, host=host, name=name, version="")
+
+    return Observation(
+        entity_type=EntityType.TECHNOLOGY,
+        entity_data={"host": host, "name": name, "version": "", "is_cdn": True},
         key_fields={"host": host, "name": name, "version": ""},
         relation=Relation(
             source_id=host_id, target_id=tech_id,
@@ -621,12 +717,22 @@ def _finding_observation(host: str, finding: Any, plugin: str) -> Observation:
     verified = getattr(finding, "verified", False)
     false_positive_risk = getattr(finding, "false_positive_risk", "low")
 
+    # Infer category from tags (skip generic tags like "pentesting", "analysis")
+    tags = getattr(finding, "tags", []) or []
+    generic_tags = {
+        "pentesting", "analysis", "scanning", "recon", "exploitation",
+        "crypto", "lateral", "privesc", "post_exploit", "forensics",
+        "form", "header", "config",
+    }
+    category = next((t for t in tags if t not in generic_tags), "")
+
     return Observation(
         entity_type=EntityType.FINDING,
         entity_data={
             "host": host,
             "title": title,
             "severity": severity,
+            "category": category,
             "description": getattr(finding, "description", ""),
             "evidence": evidence,
             "finding_confidence": finding_confidence,

@@ -36,6 +36,7 @@ class LoopResult:
     steps: int = 0
     total_observations: int = 0
     termination_reason: str = ""
+    duration: float = 0.0
     results: dict[str, Any] = field(default_factory=dict)
     plugin_results: dict[str, Any] = field(default_factory=dict)
     decisions: list[Decision] = field(default_factory=list)
@@ -71,6 +72,10 @@ class AutonomousLoop:
         goal_engine: Any = None,  # GoalEngine | None
         hypothesis_engine: Any = None,  # HypothesisEngine | None
         evidence_aggregator: Any = None,  # EvidenceAggregator | None
+        coverage_tracker: Any = None,  # CoverageTracker | None
+        confirmer: Any = None,  # FindingConfirmer | None
+        confidence_model: Any = None,  # ConfidenceModel | None
+        revalidator: Any = None,  # ReValidator | None
     ) -> None:
         self.graph = graph
         self.planner = planner
@@ -88,6 +93,10 @@ class AutonomousLoop:
         self._goal_engine = goal_engine
         self._hypothesis_engine = hypothesis_engine
         self._evidence_aggregator = evidence_aggregator
+        self._coverage_tracker = coverage_tracker
+        self._confirmer = confirmer
+        self._confidence_model = confidence_model
+        self._revalidator = revalidator
 
     async def run(self, initial_targets: list) -> LoopResult:
         """Main autonomous loop."""
@@ -121,7 +130,7 @@ class AutonomousLoop:
 
             # 2b. Goal-driven gap prioritization
             if self._goal_engine is not None:
-                if self._goal_engine.should_advance(gaps):
+                if self._goal_engine.should_advance(gaps, self._coverage_tracker):
                     self._goal_engine.advance()
                 gaps = self._goal_engine.prioritize_gaps(gaps)
 
@@ -251,6 +260,24 @@ class AutonomousLoop:
 
             total_obs += step_obs_count
 
+            # 7x. Track coverage
+            if self._coverage_tracker is not None:
+                for idx, sc in enumerate(chosen):
+                    host = sc.target_entity.data.get("host", "")
+                    if host:
+                        self._coverage_tracker.record_execution(
+                            sc.capability.plugin_name, host,
+                        )
+                    if idx < len(results) and not isinstance(results[idx], BaseException):
+                        for obs in results[idx]:
+                            if obs.entity_type == EntityType.FINDING:
+                                cat = obs.entity_data.get("category", "")
+                                obs_host = obs.key_fields.get("host", host)
+                                self._coverage_tracker.record_finding(obs_host, cat)
+
+            # 7v. Evaluate verification results
+            self._evaluate_verifications(chosen)
+
             # 7a. Hypothesis generation from updated graph
             if self._hypothesis_engine is not None:
                 new_hypotheses = self._hypothesis_engine.generate_hypotheses(self.graph)
@@ -360,6 +387,7 @@ class AutonomousLoop:
             steps=step,
             total_observations=total_obs,
             termination_reason=termination_reason,
+            duration=self.safety.elapsed,
             results=self._collect_results(),
             plugin_results=dict(self.executor.ctx.pipeline),
             decisions=all_decisions,
@@ -607,6 +635,41 @@ class AutonomousLoop:
         # need to run on the same service. The execution fingerprint tracking
         # (graph.was_executed) prevents re-running the same plugin on the same
         # entity, so the gap naturally resolves when all capabilities are exhausted.
+
+    def _evaluate_verifications(self, chosen: list[ScoredCapability]) -> None:
+        """Evaluate verification results and update finding confidence.
+
+        For each executed capability that has reduces_uncertainty and targets
+        a FINDING entity, look up the plugin result and run it through the
+        confirmer + confidence model pipeline.
+        """
+        if self._confirmer is None or self._confidence_model is None:
+            return
+        for sc in chosen:
+            cap = sc.capability
+            entity = sc.target_entity
+            if not cap.reduces_uncertainty or entity.type != EntityType.FINDING:
+                continue
+            host = entity.data.get("host", "")
+            pipeline_key = f"{cap.plugin_name}:{host}"
+            plugin_result = self.executor.ctx.pipeline.get(pipeline_key)
+            if plugin_result is None:
+                continue
+            confirmation = self._confirmer.evaluate_result(entity, plugin_result)
+            category = self._confirmer._extract_category(entity)
+            update = self._confidence_model.update_from_verification(
+                entity, confirmation.verdict, category=category,
+            )
+            self._confidence_model.apply(update, self.graph)
+
+            # Plan revalidation for confirmed/likely findings
+            if self._revalidator is not None and confirmation.verdict in (
+                "confirmed", "likely",
+            ):
+                requests = self._revalidator.plan_revalidation(entity)
+                for req in requests:
+                    entity.data["needs_revalidation"] = True
+                    entity.data["revalidation_plugins"] = req.suggested_plugins
 
     @staticmethod
     def _fingerprint(sc: Any) -> str:

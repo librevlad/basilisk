@@ -207,6 +207,7 @@ CAPABILITY_MAP: dict[str, dict] = {
         "requires": ["Technology:waf"],
         "produces": ["Finding"],
         "cost": 3, "noise": 3,
+        "reduces_uncertainty": ["Technology:waf", "Finding"],
     },
     "http_headers": {
         "requires": ["Host", "Service:http"],
@@ -227,6 +228,7 @@ CAPABILITY_MAP: dict[str, dict] = {
         "requires": ["Technology"],
         "produces": ["Vulnerability"],
         "cost": 1, "noise": 1,
+        "reduces_uncertainty": ["Technology"],
     },
     "takeover_check": {
         "requires": ["Host"], "produces": ["Vulnerability"],
@@ -297,51 +299,64 @@ CAPABILITY_MAP: dict[str, dict] = {
         "requires": ["Endpoint:params"],
         "produces": ["Finding:sqli", "Vulnerability"],
         "cost": 5, "noise": 7, "risk_domain": "web",
+        "detects": ["sqli"],
     },
     "sqli_advanced": {
         "requires": ["Endpoint:params"],
         "produces": ["Finding:sqli", "Vulnerability"],
         "cost": 6, "noise": 8,
+        "detects": ["sqli"],
+        "reduces_uncertainty": ["Finding:sqli"],
     },
     "xss_basic": {
         "requires": ["Endpoint:params"],
         "produces": ["Finding:xss"],
         "cost": 4, "noise": 5,
+        "detects": ["xss"],
     },
     "xss_advanced": {
         "requires": ["Endpoint:params"],
         "produces": ["Finding:xss"],
         "cost": 5, "noise": 6,
+        "detects": ["xss"],
+        "reduces_uncertainty": ["Finding:xss"],
     },
     "xss_dom": {
         "requires": ["Endpoint"],
         "produces": ["Finding"],
         "cost": 5, "noise": 3,
+        "detects": ["xss"],
     },
     "param_tampering": {
         "requires": ["Endpoint:params"],
         "produces": ["Finding"],
         "cost": 4, "noise": 3,
+        "detects": ["param_tampering"],
     },
     "auth_bypass": {
         "requires": ["Endpoint"],
         "produces": ["Finding", "Credential"],
         "cost": 5, "noise": 4,
+        "detects": ["auth_bypass"],
     },
     "ssrf_check": {
         "requires": ["Endpoint:params"],
         "produces": ["Vulnerability"],
         "cost": 5, "noise": 6,
+        "detects": ["ssrf"],
     },
     "ssrf_advanced": {
         "requires": ["Endpoint:params"],
         "produces": ["Vulnerability"],
         "cost": 6, "noise": 7,
+        "detects": ["ssrf"],
+        "reduces_uncertainty": ["Finding:ssrf"],
     },
     "ssti_check": {
         "requires": ["Endpoint:params"],
         "produces": ["Vulnerability"],
         "cost": 5, "noise": 6,
+        "detects": ["ssti"],
     },
     "ssti_verify": {
         "requires": ["Endpoint:params"],
@@ -353,21 +368,25 @@ CAPABILITY_MAP: dict[str, dict] = {
         "requires": ["Endpoint:params"],
         "produces": ["Vulnerability"],
         "cost": 5, "noise": 6,
+        "detects": ["lfi"],
     },
     "xxe_check": {
         "requires": ["Host", "Service:http"],
         "produces": ["Vulnerability"],
         "cost": 5, "noise": 6,
+        "detects": ["xxe"],
     },
     "command_injection": {
         "requires": ["Endpoint:params"],
         "produces": ["Vulnerability"],
         "cost": 6, "noise": 8,
+        "detects": ["rce"],
     },
     "nosqli_check": {
         "requires": ["Endpoint:params"],
         "produces": ["Vulnerability"],
         "cost": 5, "noise": 6,
+        "detects": ["nosqli"],
     },
     "nosqli_verify": {
         "requires": ["Endpoint:params"],
@@ -384,11 +403,13 @@ CAPABILITY_MAP: dict[str, dict] = {
         "requires": ["Host", "Service:http"],
         "produces": ["Finding"],
         "cost": 3, "noise": 3,
+        "detects": ["git_exposure"],
     },
     "sensitive_files": {
         "requires": ["Host", "Service:http"],
         "produces": ["Finding"],
         "cost": 3, "noise": 3,
+        "detects": ["sensitive_files"],
     },
     "backup_finder": {
         "requires": ["Host", "Service:http"],
@@ -409,26 +430,31 @@ CAPABILITY_MAP: dict[str, dict] = {
         "requires": ["Host", "Service:http"],
         "produces": ["Credential"],
         "cost": 3, "noise": 4, "risk_domain": "auth",
+        "detects": ["default_creds"],
     },
     "jwt_attack": {
         "requires": ["Host", "Service:http"],
         "produces": ["Vulnerability"],
         "cost": 4, "noise": 4,
+        "detects": ["jwt"],
     },
     "cors_exploit": {
         "requires": ["Host", "Service:http"],
         "produces": ["Finding"],
         "cost": 3, "noise": 3,
+        "detects": ["cors"],
     },
     "cache_poison": {
         "requires": ["Host", "Service:http"],
         "produces": ["Vulnerability"],
         "cost": 4, "noise": 5,
+        "detects": ["cache_poison"],
     },
     "http_smuggling": {
         "requires": ["Host", "Service:http"],
         "produces": ["Vulnerability"],
         "cost": 5, "noise": 6,
+        "detects": ["http_smuggling"],
     },
     "host_header_inject": {
         "requires": ["Host", "Service:http"],
@@ -439,30 +465,36 @@ CAPABILITY_MAP: dict[str, dict] = {
         "requires": ["Host", "Service:http"],
         "produces": ["Vulnerability"],
         "cost": 3, "noise": 4,
+        "detects": ["crlf"],
     },
     "open_redirect": {
         "requires": ["Endpoint:params"],
         "produces": ["Finding"],
         "cost": 3, "noise": 4,
+        "detects": ["open_redirect"],
     },
     "csrf_check": {
         "requires": ["Endpoint"], "produces": ["Finding"],
         "cost": 2, "noise": 2,
+        "detects": ["csrf"],
     },
     "idor_check": {
         "requires": ["Endpoint:params"],
         "produces": ["Finding"],
         "cost": 4, "noise": 4,
+        "detects": ["idor"],
     },
     "idor_exploit": {
         "requires": ["Endpoint:params"],
         "produces": ["Vulnerability"],
         "cost": 5, "noise": 5,
+        "detects": ["idor"],
     },
     "path_traversal": {
         "requires": ["Endpoint:params"],
         "produces": ["Vulnerability"],
         "cost": 5, "noise": 6,
+        "detects": ["path_traversal"],
     },
     "error_disclosure": {
         "requires": ["Host", "Service:http"],
@@ -478,11 +510,13 @@ CAPABILITY_MAP: dict[str, dict] = {
         "requires": ["Host", "Service:http"],
         "produces": ["Vulnerability"],
         "cost": 4, "noise": 5,
+        "detects": ["deserialization"],
     },
     "file_upload_check": {
         "requires": ["Host", "Service:http"],
         "produces": ["Finding", "Vulnerability"],
         "cost": 4, "noise": 5,
+        "detects": ["upload"],
     },
     "session_check": {
         "requires": ["Host", "Service:http"],
@@ -493,11 +527,14 @@ CAPABILITY_MAP: dict[str, dict] = {
         "requires": ["Endpoint:graphql"],
         "produces": ["Finding", "Vulnerability"],
         "cost": 4, "noise": 5,
+        "detects": ["graphql"],
+        "reduces_uncertainty": ["Finding:graphql"],
     },
     "prototype_pollution": {
         "requires": ["Host", "Service:http"],
         "produces": ["Vulnerability"],
         "cost": 3, "noise": 3,
+        "detects": ["pp"],
     },
     "param_pollution": {
         "requires": ["Endpoint:params"],
@@ -546,6 +583,7 @@ CAPABILITY_MAP: dict[str, dict] = {
         "requires": ["Host", "Service:http"],
         "produces": ["Vulnerability"],
         "cost": 4, "noise": 4,
+        "reduces_uncertainty": ["Finding:pp"],
     },
     "subdomain_takeover_active": {
         "requires": ["Host:subdomain"],
@@ -637,15 +675,18 @@ CAPABILITY_MAP: dict[str, dict] = {
         "requires": ["Vulnerability:sqli"],
         "produces": ["Credential", "Finding"],
         "cost": 7, "noise": 9,
+        "reduces_uncertainty": ["Finding:sqli", "Vulnerability"],
     },
     "lfi_harvest": {
         "requires": ["Vulnerability:lfi"],
         "produces": ["Credential", "Finding"],
         "cost": 6, "noise": 7,
+        "reduces_uncertainty": ["Finding:lfi", "Vulnerability"],
     },
     "file_upload_bypass": {
         "requires": ["Endpoint"], "produces": ["Finding"],
         "cost": 5, "noise": 8,
+        "reduces_uncertainty": ["Finding:upload"],
     },
     "webshell_deploy": {
         "requires": ["Vulnerability"],
@@ -957,6 +998,88 @@ def _infer_risk_domain(category: str) -> str:
     return _CATEGORY_TO_DOMAIN.get(category, "general")
 
 
+def build_capabilities_from_scenarios(registry: object) -> dict[str, Capability]:
+    """Build Capability metadata from a ScenarioRegistry.
+
+    For LegacyPluginScenario instances: uses CAPABILITY_MAP + auto-inference
+    (identical logic to build_capabilities).
+    For native scenarios: builds directly from ScenarioMeta fields.
+    """
+    from basilisk.bridge.legacy_scenario import LegacyPluginScenario
+
+    capabilities: dict[str, Capability] = {}
+
+    for scenario in registry.all_scenarios():
+        name = scenario.meta.name
+
+        if isinstance(scenario, LegacyPluginScenario):
+            meta = scenario.plugin_cls.meta
+            if name in CAPABILITY_MAP:
+                m = CAPABILITY_MAP[name]
+                reduces = m.get("reduces_uncertainty", [])
+                produces = m["produces"]
+                detects = m.get("detects", [])
+                cap = Capability(
+                    name=name,
+                    plugin_name=name,
+                    category=meta.category.value,
+                    requires_knowledge=m["requires"],
+                    produces_knowledge=produces,
+                    cost_score=m["cost"],
+                    noise_score=m["noise"],
+                    execution_time_estimate=meta.timeout,
+                    reduces_uncertainty=reduces,
+                    risk_domain=m.get(
+                        "risk_domain", _infer_risk_domain(meta.category.value),
+                    ),
+                    action_type=_infer_action_type(meta.category.value, reduces),
+                    expected_state_delta=_infer_state_delta(produces, reduces),
+                    detects=detects,
+                )
+            else:
+                requires = ["Host"]
+                if meta.requires_http:
+                    requires.append("Service:http")
+                produces = list(meta.produces) if meta.produces else ["Finding"]
+                cap = Capability(
+                    name=name,
+                    plugin_name=name,
+                    category=meta.category.value,
+                    requires_knowledge=requires,
+                    produces_knowledge=produces,
+                    cost_score=min(meta.timeout / 10.0, 10.0),
+                    noise_score=_noise_from_risk(meta.risk_level),
+                    execution_time_estimate=meta.timeout,
+                    risk_domain=_infer_risk_domain(meta.category.value),
+                    action_type=_infer_action_type(meta.category.value, []),
+                    expected_state_delta=_infer_state_delta(produces, []),
+                )
+        else:
+            # Native v4 scenario — build from ScenarioMeta directly
+            sm = scenario.meta
+            category = sm.category
+            requires = sm.requires_knowledge or ["Host"]
+            produces = sm.produces_knowledge or ["Finding"]
+            reduces: list[str] = []
+            cap = Capability(
+                name=name,
+                plugin_name=name,
+                category=category,
+                requires_knowledge=requires,
+                produces_knowledge=produces,
+                cost_score=sm.cost_score,
+                noise_score=sm.noise_score,
+                execution_time_estimate=sm.timeout,
+                risk_domain=_infer_risk_domain(category),
+                action_type=_infer_action_type(category, reduces),
+                expected_state_delta=_infer_state_delta(produces, reduces),
+            )
+
+        capabilities[name] = cap
+
+    return capabilities
+
+
 def build_capabilities(registry: PluginRegistry) -> dict[str, Capability]:
     """Build Capability metadata for all registered plugins.
 
@@ -973,6 +1096,7 @@ def build_capabilities(registry: PluginRegistry) -> dict[str, Capability]:
             m = CAPABILITY_MAP[name]
             reduces = m.get("reduces_uncertainty", [])
             produces = m["produces"]
+            detects = m.get("detects", [])
             cap = Capability(
                 name=name,
                 plugin_name=name,
@@ -986,6 +1110,7 @@ def build_capabilities(registry: PluginRegistry) -> dict[str, Capability]:
                 risk_domain=m.get("risk_domain", _infer_risk_domain(meta.category.value)),
                 action_type=_infer_action_type(meta.category.value, reduces),
                 expected_state_delta=_infer_state_delta(produces, reduces),
+                detects=detects,
             )
         else:
             # Auto-infer from PluginMeta

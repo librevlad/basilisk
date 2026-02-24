@@ -1,0 +1,341 @@
+"""Training runner — orchestrates autonomous engine in validation mode."""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+from typing import TYPE_CHECKING, Any
+
+from basilisk.training.planner_wrapper import TrainingPlanner
+from basilisk.training.scorer_wrapper import TrainingScorer
+from basilisk.training.validator import FindingTracker, ValidationReport
+
+if TYPE_CHECKING:
+    from basilisk.config import Settings
+    from basilisk.core.executor import PluginContext
+    from basilisk.training.profile import TrainingProfile
+
+logger = logging.getLogger(__name__)
+
+
+class TrainingRunner:
+    """Run autonomous engine in training validation mode."""
+
+    def __init__(
+        self,
+        profile: TrainingProfile,
+        target_override: str | None = None,
+    ) -> None:
+        self.profile = profile
+        self.target = target_override or profile.target
+
+    async def run(self, config: Settings | None = None) -> ValidationReport:
+        """Execute training run and return validation report."""
+        from basilisk.capabilities.mapping import build_capabilities
+        from basilisk.config import Settings
+        from basilisk.core.executor import AsyncExecutor, PluginContext
+        from basilisk.core.registry import PluginRegistry
+        from basilisk.events.bus import EventBus, EventType
+        from basilisk.knowledge.graph import KnowledgeGraph
+        from basilisk.memory.history import History
+        from basilisk.models.target import Target, TargetScope
+        from basilisk.orchestrator.executor import OrchestratorExecutor
+        from basilisk.orchestrator.loop import AutonomousLoop
+        from basilisk.orchestrator.planner import Planner
+        from basilisk.orchestrator.safety import SafetyLimits
+        from basilisk.orchestrator.selector import Selector
+        from basilisk.scoring.scorer import Scorer
+        from basilisk.utils.dns import DnsClient
+        from basilisk.utils.http import AsyncHttpClient
+        from basilisk.utils.net import NetUtils
+        from basilisk.utils.rate_limiter import RateLimiter
+        from basilisk.utils.wordlists import WordlistManager
+
+        settings = config or Settings.load()
+
+        # Build infrastructure directly
+        registry = PluginRegistry()
+        registry.discover()
+
+        http = AsyncHttpClient(
+            timeout=settings.http.timeout,
+            max_connections=settings.http.max_connections,
+            max_per_host=settings.http.max_connections_per_host,
+            user_agent=settings.http.user_agent,
+            verify_ssl=settings.http.verify_ssl,
+        )
+        dns = DnsClient(nameservers=settings.dns.nameservers, timeout=settings.dns.timeout)
+        net = NetUtils(timeout=settings.scan.port_timeout)
+        rate = RateLimiter(
+            rate=settings.rate_limit.requests_per_second, burst=settings.rate_limit.burst,
+        )
+        wordlists_mgr = WordlistManager()
+
+        from basilisk.core.providers import ProviderPool
+
+        provider_pool = ProviderPool(registry)
+
+        ctx = PluginContext(
+            config=settings, http=http, dns=dns, net=net, rate=rate,
+            wordlists=wordlists_mgr, providers=provider_pool,
+        )
+
+        # Build target scope
+        from basilisk.orchestrator.selector import _is_ip_or_local
+
+        scope = TargetScope()
+        target_str = self.target
+        if _is_ip_or_local(target_str):
+            scope.add(Target.ip(target_str))
+        else:
+            scope.add(Target.domain(target_str))
+
+        graph = KnowledgeGraph()
+        tracker = FindingTracker(self.profile)
+        planner = Planner()
+        capabilities = build_capabilities(registry)
+        selector = Selector(capabilities)
+        history = History()
+        scorer = Scorer(graph, history=history)
+
+        # Wrap planner and scorer for training mode
+        training_planner = TrainingPlanner(planner, tracker, self.profile)
+        training_scorer = TrainingScorer(scorer, tracker, self.profile)
+
+        core_executor = AsyncExecutor(max_concurrency=settings.scan.max_concurrency)
+        orch_executor = OrchestratorExecutor(registry, core_executor, ctx)
+        bus = EventBus()
+        safety = SafetyLimits(
+            max_steps=self.profile.max_steps,
+            max_duration_seconds=7200.0,
+            batch_size=5,
+        )
+
+        loop = AutonomousLoop(
+            graph=graph,
+            planner=training_planner,
+            selector=selector,
+            scorer=training_scorer,
+            executor=orch_executor,
+            bus=bus,
+            safety=safety,
+            history=history,
+            exploration_rate=0.0,
+            goal_engine=None,
+        )
+
+        # Track verifications via event bus
+        bus.subscribe(EventType.FINDING_VERIFIED, lambda e: tracker.check_verification(
+            e.data["entity_id"], step=0,
+        ))
+
+        try:
+            # Probe HTTP scheme
+            http_scheme: dict[str, str | None] = {}
+            for target in scope:
+                scheme = await self._probe_target_scheme(ctx, target.host)
+                http_scheme[target.host] = scheme
+            ctx.state["http_scheme"] = http_scheme
+
+            # Training auth: run setup URL + form login if configured
+            auth_cfg = self.profile.auth
+            if auth_cfg.username and ctx.http:
+                import re as _re
+
+                for target in scope:
+                    host_key = target.host
+                    scheme = http_scheme.get(host_key, "http") or "http"
+                    base = f"{scheme}://{host_key}"
+
+                    # Setup step (e.g. DVWA database reset) — with CSRF token
+                    if auth_cfg.setup_url:
+                        setup_url = f"{base}{auth_cfg.setup_url}"
+                        try:
+                            setup_page = await ctx.http.get(setup_url)
+                            setup_html = await setup_page.text()
+                            token = _re.search(
+                                r"name=['\"]user_token['\"]\s+value=['\"]([^'\"]+)['\"]",
+                                setup_html,
+                            )
+                            setup_data = dict(auth_cfg.setup_data)
+                            if token:
+                                setup_data["user_token"] = token.group(1)
+                            await ctx.http.post(setup_url, data=setup_data)
+                            logger.info("Training setup POST to %s", setup_url)
+                        except Exception:
+                            logger.warning("Training setup failed: %s", setup_url)
+
+                    # Form login — with CSRF token extraction
+                    login_url = f"{base}{auth_cfg.login_url}" if auth_cfg.login_url else ""
+                    if login_url:
+                        try:
+                            login_page = await ctx.http.get(login_url)
+                            login_html = await login_page.text()
+                            token = _re.search(
+                                r"name=['\"]user_token['\"]\s+value=['\"]([^'\"]+)['\"]",
+                                login_html,
+                            )
+                            login_data: dict[str, str] = {
+                                "username": auth_cfg.username,
+                                "password": auth_cfg.password,
+                                "Login": "Login",
+                            }
+                            if token:
+                                login_data["user_token"] = token.group(1)
+
+                            resp = await ctx.http.post(login_url, data=login_data)
+                            login_body = await resp.text()
+                            login_ok = "logout" in login_body.lower()
+                            logger.info(
+                                "Training auth login to %s: status=%s ok=%s",
+                                login_url, getattr(resp, "status", "?"), login_ok,
+                            )
+                        except Exception:
+                            logger.warning("Training auth login failed: %s", login_url)
+
+                    # Extra cookies (e.g. DVWA security=low)
+                    if auth_cfg.extra_cookies:
+                        await ctx.http.set_cookies(base, auth_cfg.extra_cookies)
+                        logger.info("Set extra cookies for %s: %s",
+                                    host_key, list(auth_cfg.extra_cookies.keys()))
+
+            # Inject scan_paths from profile into graph
+            if self.profile.scan_paths:
+                from datetime import UTC, datetime
+
+                from basilisk.knowledge.entities import Entity, EntityType
+                from basilisk.knowledge.relations import Relation, RelationType
+
+                now = datetime.now(UTC)
+                for target in scope:
+                    host_key = target.host
+                    scheme = http_scheme.get(host_key, "http") or "http"
+                    host_id = Entity.make_id(EntityType.HOST, host=host_key)
+                    for sp in self.profile.scan_paths:
+                        if not sp.startswith("/"):
+                            sp = f"/{sp}"
+                        path_part = sp.split("?")[0]
+                        has_params = "?" in sp
+                        ep = Entity(
+                            id=Entity.make_id(EntityType.ENDPOINT, host=host_key, path=path_part),
+                            type=EntityType.ENDPOINT,
+                            data={
+                                "host": host_key, "path": path_part,
+                                "has_params": has_params,
+                                "scan_path": True,
+                            },
+                            first_seen=now, last_seen=now,
+                        )
+                        graph.add_entity(ep)
+                        graph.add_relation(Relation(
+                            source_id=host_id, target_id=ep.id,
+                            type=RelationType.HAS_ENDPOINT,
+                        ))
+                    # Also populate ctx.state["crawled_urls"] so form_analyzer
+                    # and pentesting plugins (via collect_injection_points) see them.
+                    crawled = ctx.state.setdefault("crawled_urls", {})
+                    host_urls = crawled.setdefault(host_key, [])
+                    for sp in self.profile.scan_paths:
+                        if not sp.startswith("/"):
+                            sp = f"/{sp}"
+                        full_url = f"{scheme}://{host_key}{sp}"
+                        if full_url not in host_urls:
+                            host_urls.append(full_url)
+
+                    logger.info(
+                        "Injected %d scan_paths for %s", len(self.profile.scan_paths), host_key,
+                    )
+
+            # Bootstrap target ports from profile
+            if self.profile.target_ports:
+                from datetime import UTC, datetime
+
+                from basilisk.knowledge.entities import Entity, EntityType
+                from basilisk.knowledge.relations import Relation, RelationType
+
+                now = datetime.now(UTC)
+                for target in scope:
+                    host_id = Entity.make_id(EntityType.HOST, host=target.host)
+                    for port in self.profile.target_ports:
+                        svc = Entity(
+                            id=Entity.make_id(
+                                EntityType.SERVICE,
+                                host=target.host,
+                                port=str(port),
+                                protocol="tcp",
+                            ),
+                            type=EntityType.SERVICE,
+                            data={
+                                "host": target.host,
+                                "port": port,
+                                "protocol": "tcp",
+                                "service": "http",
+                            },
+                            first_seen=now,
+                            last_seen=now,
+                        )
+                        graph.add_entity(svc)
+                        graph.add_relation(Relation(
+                            source_id=host_id,
+                            target_id=svc.id,
+                            type=RelationType.EXPOSES,
+                        ))
+
+            result = await loop.run(list(scope))
+
+            # Final tracker sync from graph
+            for finding in result.graph.findings():
+                tracker.check_discovery(finding, step=result.steps)
+            for tf in tracker.tracked:
+                if tf.discovered and not tf.verified:
+                    entity = result.graph.get(tf.matched_entity_id)
+                    if entity and entity.data.get("verified"):
+                        tracker.check_verification(tf.matched_entity_id, step=result.steps)
+
+            return self._build_report(result, tracker)
+        finally:
+            if ctx.http:
+                await ctx.http.close()
+
+    @staticmethod
+    async def _probe_target_scheme(ctx: PluginContext, host: str) -> str:
+        """Quick probe to determine if host uses HTTPS or HTTP."""
+        if ctx.http is None:
+            return "http"
+        for scheme in ("https", "http"):
+            try:
+                await asyncio.wait_for(
+                    ctx.http.head(f"{scheme}://{host}/"), timeout=5.0,
+                )
+                return scheme
+            except Exception:
+                continue
+        return "http"
+
+    def _build_report(self, result: Any, tracker: FindingTracker) -> ValidationReport:
+        """Build final validation report from loop result and tracker state."""
+        findings_detail = []
+        for tf in tracker.tracked:
+            findings_detail.append({
+                "expected_title": tf.expected.title,
+                "expected_severity": tf.expected.severity,
+                "category": tf.expected.category,
+                "discovered": tf.discovered,
+                "verified": tf.verified,
+                "discovery_step": tf.discovery_step,
+                "verification_step": tf.verification_step,
+                "matched_title": tf.matched_title,
+            })
+
+        return ValidationReport(
+            profile_name=self.profile.name,
+            target=self.target,
+            total_expected=len(tracker.tracked),
+            discovered=sum(1 for tf in tracker.tracked if tf.discovered),
+            verified=sum(1 for tf in tracker.tracked if tf.verified),
+            coverage=tracker.coverage,
+            verification_rate=tracker.verification_rate,
+            steps_taken=result.steps,
+            findings_detail=findings_detail,
+            passed=tracker.coverage >= self.profile.required_coverage,
+        )

@@ -216,20 +216,31 @@ class Scorer:
         """Bonus based on action type vs current entity confidence.
 
         - EXPERIMENT + low confidence → prefer testing when uncertain
+        - EXPERIMENT + detects matching entity category → small category bonus
         - EXPLOIT + high confidence → prefer exploitation when justified
         - VERIFICATION + high/critical finding → always valuable
         """
         from basilisk.capabilities.capability import ActionType
 
+        bonus = 0.0
         if cap.action_type == ActionType.EXPERIMENT and entity.confidence < 0.7:
-            return 0.1
+            bonus = 0.1
+            # Category-aware bonus: if the plugin detects a category matching the entity
+            if cap.detects:
+                entity_cat = entity.data.get("category", "")
+                entity_title = entity.data.get("title", "").lower()
+                for det_cat in cap.detects:
+                    if det_cat == entity_cat or det_cat in entity_title:
+                        bonus += 0.05
+                        break
+            return bonus
         if cap.action_type == ActionType.EXPLOIT and entity.confidence >= 0.8:
             return 0.15
         if cap.action_type == ActionType.VERIFICATION:
             severity = entity.data.get("severity", "")
             if severity in ("high", "critical"):
                 return 0.2
-        return 0.0
+        return bonus
 
     @staticmethod
     def _explain(cap: Capability, entity: Entity, score: float) -> str:

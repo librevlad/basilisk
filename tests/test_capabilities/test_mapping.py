@@ -7,8 +7,10 @@ from basilisk.capabilities.mapping import (
     CAPABILITY_MAP,
     _infer_risk_domain,
     build_capabilities,
+    build_capabilities_from_scenarios,
 )
 from basilisk.core.registry import PluginRegistry
+from basilisk.engine.scenario_registry import ScenarioRegistry
 
 
 class TestCapabilityMap:
@@ -88,7 +90,7 @@ class TestBuildCapabilities:
         registry = PluginRegistry()
         registry.discover()
         caps = build_capabilities(registry)
-        for name, cap in caps.items():
+        for _name, cap in caps.items():
             assert isinstance(cap.reduces_uncertainty, list)
             assert isinstance(cap.risk_domain, str)
             assert cap.risk_domain != ""
@@ -145,6 +147,37 @@ class TestContainerCapabilities:
         assert caps["container_discovery"].risk_domain == "container"
         assert "container_enumeration" in caps
         assert "Container" in caps["container_enumeration"].produces_knowledge
+
+
+class TestBuildCapabilitiesFromScenarios:
+    def test_build_from_scenarios_matches_legacy_count(self):
+        """All legacy plugins + native scenarios produce capabilities."""
+        registry = ScenarioRegistry()
+        registry.discover()
+        caps = build_capabilities_from_scenarios(registry)
+        # 188 legacy + 5 native = 193
+        assert len(caps) >= 190
+
+    def test_build_from_scenarios_includes_native(self):
+        """Native v4 scenarios like dns_scenario are present."""
+        registry = ScenarioRegistry()
+        registry.discover()
+        caps = build_capabilities_from_scenarios(registry)
+        assert "dns_scenario" in caps
+
+    def test_native_scenario_capability_fields(self):
+        """Native scenario capability has correct fields from ScenarioMeta."""
+        registry = ScenarioRegistry()
+        registry.discover()
+        caps = build_capabilities_from_scenarios(registry)
+        dns = caps.get("dns_scenario")
+        assert dns is not None
+        assert dns.plugin_name == "dns_scenario"
+        assert dns.category == "recon"
+        assert "Host" in dns.requires_knowledge
+        assert dns.cost_score == 1.0
+        assert dns.noise_score == 1.0
+        assert dns.execution_time_estimate == 30.0
 
 
 class TestInferRiskDomain:

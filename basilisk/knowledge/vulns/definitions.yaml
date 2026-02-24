@@ -1,0 +1,383 @@
+# Vulnerability type definitions for Basilisk VulnRegistry.
+# Each entry maps a vulnerability type to detection/verification plugins and thresholds.
+
+- id: sqli_error
+  name: "SQL Injection (Error-based)"
+  category: sqli
+  cwe_ids: ["CWE-89"]
+  owasp_ids: ["A03:2021"]
+  severity_range: ["high", "critical"]
+  detection_plugins: ["sqli_basic", "sqli_advanced"]
+  verification_plugins: ["sqli_extract"]
+  verification_techniques: ["error_based", "union_based"]
+  false_positive_indicators: ["generic error page", "custom 500"]
+  confidence_thresholds:
+    detection_floor: 0.4
+    verification_bonus: 0.35
+    multi_source_bonus: 0.15
+    false_positive_cap: 0.25
+
+- id: sqli_blind
+  name: "SQL Injection (Blind/Time-based)"
+  category: sqli
+  cwe_ids: ["CWE-89"]
+  owasp_ids: ["A03:2021"]
+  severity_range: ["high", "critical"]
+  detection_plugins: ["sqli_basic", "sqli_advanced"]
+  verification_plugins: ["sqli_extract"]
+  verification_techniques: ["time_based", "boolean_based"]
+  false_positive_indicators: ["network latency", "server load"]
+  confidence_thresholds:
+    detection_floor: 0.35
+    verification_bonus: 0.3
+    multi_source_bonus: 0.15
+    false_positive_cap: 0.3
+
+- id: xss_reflected
+  name: "Cross-Site Scripting (Reflected)"
+  category: xss
+  cwe_ids: ["CWE-79"]
+  owasp_ids: ["A03:2021"]
+  severity_range: ["medium", "high"]
+  detection_plugins: ["xss_basic", "xss_advanced"]
+  verification_plugins: []
+  verification_techniques: ["reflection_confirm", "encoding_bypass"]
+  false_positive_indicators: ["output encoding active", "csp strict"]
+
+- id: xss_stored
+  name: "Cross-Site Scripting (Stored)"
+  category: xss
+  cwe_ids: ["CWE-79"]
+  owasp_ids: ["A03:2021"]
+  severity_range: ["high", "critical"]
+  detection_plugins: ["xss_basic", "xss_advanced"]
+  verification_plugins: []
+  verification_techniques: ["stored_confirm", "persistence_check"]
+  false_positive_indicators: ["sanitization active"]
+
+- id: xss_dom
+  name: "Cross-Site Scripting (DOM-based)"
+  category: xss
+  cwe_ids: ["CWE-79"]
+  owasp_ids: ["A03:2021"]
+  severity_range: ["medium", "high"]
+  detection_plugins: ["xss_dom"]
+  verification_plugins: []
+  verification_techniques: ["dom_sink_confirm"]
+  false_positive_indicators: ["client-side sanitization"]
+
+- id: ssti_basic
+  name: "Server-Side Template Injection"
+  category: ssti
+  cwe_ids: ["CWE-1336"]
+  owasp_ids: ["A03:2021"]
+  severity_range: ["high", "critical"]
+  detection_plugins: ["ssti_check"]
+  verification_plugins: ["ssti_verify"]
+  verification_techniques: ["math_eval", "engine_fingerprint"]
+  false_positive_indicators: ["client-side template"]
+  confidence_thresholds:
+    detection_floor: 0.4
+    verification_bonus: 0.35
+    multi_source_bonus: 0.15
+    false_positive_cap: 0.25
+
+- id: ssrf_basic
+  name: "Server-Side Request Forgery"
+  category: ssrf
+  cwe_ids: ["CWE-918"]
+  owasp_ids: ["A10:2021"]
+  severity_range: ["high", "critical"]
+  detection_plugins: ["ssrf_check", "ssrf_advanced", "cloud_metadata_ssrf"]
+  verification_plugins: ["ssrf_advanced"]
+  verification_techniques: ["oob_callback", "internal_port_scan"]
+  false_positive_indicators: ["outbound proxy", "url validation"]
+  confidence_thresholds:
+    detection_floor: 0.35
+    verification_bonus: 0.3
+    multi_source_bonus: 0.2
+    false_positive_cap: 0.3
+
+- id: lfi_basic
+  name: "Local File Inclusion"
+  category: lfi
+  cwe_ids: ["CWE-98"]
+  owasp_ids: ["A03:2021"]
+  severity_range: ["high", "critical"]
+  detection_plugins: ["lfi_check", "path_traversal"]
+  verification_plugins: ["lfi_harvest"]
+  verification_techniques: ["known_file_read", "null_byte"]
+  false_positive_indicators: ["custom error page"]
+  confidence_thresholds:
+    detection_floor: 0.4
+    verification_bonus: 0.3
+    multi_source_bonus: 0.15
+    false_positive_cap: 0.25
+
+- id: rce_command
+  name: "Remote Code Execution (Command Injection)"
+  category: rce
+  cwe_ids: ["CWE-78"]
+  owasp_ids: ["A03:2021"]
+  severity_range: ["critical"]
+  detection_plugins: ["command_injection"]
+  verification_plugins: []
+  verification_techniques: ["time_delay", "oob_callback", "output_match"]
+  false_positive_indicators: ["waf blocking"]
+  confidence_thresholds:
+    detection_floor: 0.3
+    verification_bonus: 0.35
+    multi_source_bonus: 0.2
+    false_positive_cap: 0.2
+
+- id: nosqli_basic
+  name: "NoSQL Injection"
+  category: nosqli
+  cwe_ids: ["CWE-943"]
+  owasp_ids: ["A03:2021"]
+  severity_range: ["high", "critical"]
+  detection_plugins: ["nosqli_check"]
+  verification_plugins: ["nosqli_verify"]
+  verification_techniques: ["operator_injection", "js_injection"]
+  false_positive_indicators: ["json parsing error"]
+  confidence_thresholds:
+    detection_floor: 0.35
+    verification_bonus: 0.3
+    multi_source_bonus: 0.15
+    false_positive_cap: 0.3
+
+- id: xxe_basic
+  name: "XML External Entity Injection"
+  category: xxe
+  cwe_ids: ["CWE-611"]
+  owasp_ids: ["A05:2021"]
+  severity_range: ["high", "critical"]
+  detection_plugins: ["xxe_check"]
+  verification_plugins: []
+  verification_techniques: ["file_read", "oob_exfil"]
+  false_positive_indicators: ["xml disabled", "libxml2 patched"]
+
+- id: csrf_basic
+  name: "Cross-Site Request Forgery"
+  category: csrf
+  cwe_ids: ["CWE-352"]
+  owasp_ids: ["A01:2021"]
+  severity_range: ["medium", "high"]
+  detection_plugins: ["csrf_check"]
+  verification_plugins: []
+  verification_techniques: ["token_absence", "samesite_missing"]
+  false_positive_indicators: ["samesite cookie set", "custom header required"]
+
+- id: cors_misconfig
+  name: "CORS Misconfiguration"
+  category: cors
+  cwe_ids: ["CWE-942"]
+  owasp_ids: ["A05:2021"]
+  severity_range: ["medium", "high"]
+  detection_plugins: ["cors_scan", "cors_exploit"]
+  verification_plugins: ["cors_exploit"]
+  verification_techniques: ["origin_reflection", "null_origin"]
+  false_positive_indicators: ["credentials not allowed"]
+
+- id: jwt_vuln
+  name: "JWT Vulnerability"
+  category: jwt
+  cwe_ids: ["CWE-345"]
+  owasp_ids: ["A02:2021"]
+  severity_range: ["high", "critical"]
+  detection_plugins: ["jwt_attack"]
+  verification_plugins: ["jwt_forge"]
+  verification_techniques: ["alg_none", "weak_secret", "key_confusion"]
+  false_positive_indicators: ["strong key", "alg whitelist"]
+
+- id: idor_basic
+  name: "Insecure Direct Object Reference"
+  category: idor
+  cwe_ids: ["CWE-639"]
+  owasp_ids: ["A01:2021"]
+  severity_range: ["medium", "high"]
+  detection_plugins: ["idor_check"]
+  verification_plugins: ["idor_exploit"]
+  verification_techniques: ["id_enumeration", "horizontal_access"]
+  false_positive_indicators: ["authorization check present"]
+
+- id: open_redirect_basic
+  name: "Open Redirect"
+  category: open_redirect
+  cwe_ids: ["CWE-601"]
+  owasp_ids: ["A01:2021"]
+  severity_range: ["low", "medium"]
+  detection_plugins: ["open_redirect"]
+  verification_plugins: []
+  verification_techniques: ["redirect_follow", "scheme_bypass"]
+  false_positive_indicators: ["whitelist active"]
+
+- id: crlf_basic
+  name: "CRLF Injection"
+  category: crlf
+  cwe_ids: ["CWE-93"]
+  owasp_ids: ["A03:2021"]
+  severity_range: ["medium", "high"]
+  detection_plugins: ["crlf_injection"]
+  verification_plugins: []
+  verification_techniques: ["header_injection", "response_split"]
+  false_positive_indicators: ["header sanitization"]
+
+- id: http_smuggling_basic
+  name: "HTTP Request Smuggling"
+  category: http_smuggling
+  cwe_ids: ["CWE-444"]
+  owasp_ids: ["A05:2021"]
+  severity_range: ["high", "critical"]
+  detection_plugins: ["http_smuggling"]
+  verification_plugins: []
+  verification_techniques: ["cl_te", "te_cl", "te_te"]
+  false_positive_indicators: ["single server", "no proxy"]
+
+- id: cache_poison_basic
+  name: "Web Cache Poisoning"
+  category: cache_poison
+  cwe_ids: ["CWE-349"]
+  owasp_ids: ["A05:2021"]
+  severity_range: ["high", "critical"]
+  detection_plugins: ["cache_poison"]
+  verification_plugins: []
+  verification_techniques: ["unkeyed_header", "unkeyed_param"]
+  false_positive_indicators: ["no caching layer"]
+
+- id: path_traversal_basic
+  name: "Path Traversal"
+  category: path_traversal
+  cwe_ids: ["CWE-22"]
+  owasp_ids: ["A01:2021"]
+  severity_range: ["high", "critical"]
+  detection_plugins: ["path_traversal", "lfi_check"]
+  verification_plugins: ["lfi_harvest"]
+  verification_techniques: ["dotdot_traverse", "null_byte"]
+  false_positive_indicators: ["path normalization"]
+
+- id: file_upload_vuln
+  name: "Unrestricted File Upload"
+  category: upload
+  cwe_ids: ["CWE-434"]
+  owasp_ids: ["A04:2021"]
+  severity_range: ["high", "critical"]
+  detection_plugins: ["file_upload_check"]
+  verification_plugins: ["file_upload_bypass"]
+  verification_techniques: ["extension_bypass", "content_type_bypass"]
+  false_positive_indicators: ["antivirus scanning", "sandbox execution"]
+
+- id: deserialization_basic
+  name: "Insecure Deserialization"
+  category: deserialization
+  cwe_ids: ["CWE-502"]
+  owasp_ids: ["A08:2021"]
+  severity_range: ["high", "critical"]
+  detection_plugins: ["deserialization_check"]
+  verification_plugins: []
+  verification_techniques: ["gadget_chain", "dns_callback"]
+  false_positive_indicators: ["type whitelist"]
+
+- id: auth_bypass_basic
+  name: "Authentication Bypass"
+  category: auth_bypass
+  cwe_ids: ["CWE-287"]
+  owasp_ids: ["A07:2021"]
+  severity_range: ["high", "critical"]
+  detection_plugins: ["auth_bypass"]
+  verification_plugins: []
+  verification_techniques: ["forced_browsing", "param_manipulation"]
+  false_positive_indicators: ["redirect to login"]
+
+- id: default_creds_basic
+  name: "Default Credentials"
+  category: default_creds
+  cwe_ids: ["CWE-798"]
+  owasp_ids: ["A07:2021"]
+  severity_range: ["high", "critical"]
+  detection_plugins: ["default_creds"]
+  verification_plugins: []
+  verification_techniques: ["credential_test", "admin_access"]
+  false_positive_indicators: ["account lockout", "captcha"]
+
+- id: git_exposure_basic
+  name: "Git Repository Exposure"
+  category: git_exposure
+  cwe_ids: ["CWE-538"]
+  owasp_ids: ["A05:2021"]
+  severity_range: ["high", "critical"]
+  detection_plugins: ["git_exposure"]
+  verification_plugins: []
+  verification_techniques: ["object_download", "ref_parse"]
+  false_positive_indicators: ["403 forbidden"]
+
+- id: sensitive_files_basic
+  name: "Sensitive File Exposure"
+  category: sensitive_files
+  cwe_ids: ["CWE-538"]
+  owasp_ids: ["A01:2021"]
+  severity_range: ["medium", "high"]
+  detection_plugins: ["sensitive_files"]
+  verification_plugins: []
+  verification_techniques: ["content_verify", "status_check"]
+  false_positive_indicators: ["custom 404", "honeypot"]
+
+- id: container_escape_basic
+  name: "Container Escape"
+  category: container_escape
+  cwe_ids: ["CWE-269"]
+  owasp_ids: ["A05:2021"]
+  severity_range: ["critical"]
+  detection_plugins: ["container_escape_probe"]
+  verification_plugins: ["container_verification"]
+  verification_techniques: ["cve_check", "mount_abuse"]
+  false_positive_indicators: ["seccomp enforced", "apparmor"]
+  confidence_thresholds:
+    detection_floor: 0.3
+    verification_bonus: 0.35
+    multi_source_bonus: 0.2
+    false_positive_cap: 0.2
+
+- id: container_misconfig_basic
+  name: "Container Misconfiguration"
+  category: container_misconfig
+  cwe_ids: ["CWE-16"]
+  owasp_ids: ["A05:2021"]
+  severity_range: ["medium", "high", "critical"]
+  detection_plugins: ["container_config_audit"]
+  verification_plugins: ["container_verification"]
+  verification_techniques: ["config_audit", "privilege_check"]
+  false_positive_indicators: ["policy enforcement"]
+
+- id: pp_basic
+  name: "Prototype Pollution"
+  category: pp
+  cwe_ids: ["CWE-1321"]
+  owasp_ids: ["A03:2021"]
+  severity_range: ["medium", "high"]
+  detection_plugins: ["prototype_pollution"]
+  verification_plugins: ["pp_exploit"]
+  verification_techniques: ["property_injection", "gadget_chain"]
+  false_positive_indicators: ["object freeze"]
+
+- id: param_tampering_basic
+  name: "Parameter Tampering"
+  category: param_tampering
+  cwe_ids: ["CWE-472"]
+  owasp_ids: ["A04:2021"]
+  severity_range: ["medium", "high"]
+  detection_plugins: ["param_tampering"]
+  verification_plugins: []
+  verification_techniques: ["value_manipulation", "type_juggling"]
+  false_positive_indicators: ["server-side validation"]
+
+- id: graphql_vuln
+  name: "GraphQL Vulnerability"
+  category: graphql
+  cwe_ids: ["CWE-200"]
+  owasp_ids: ["A01:2021"]
+  severity_range: ["medium", "high"]
+  detection_plugins: ["graphql_detect"]
+  verification_plugins: ["graphql_exploit"]
+  verification_techniques: ["introspection", "batch_query", "depth_abuse"]
+  false_positive_indicators: ["introspection disabled", "depth limit"]

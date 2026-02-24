@@ -1,0 +1,103 @@
+name: webgoat
+description: "OWASP WebGoat"
+target: "localhost:8080"
+target_ports: [8080]
+max_steps: 300
+required_coverage: 1.0
+expected_findings:
+  - title: "SQL Injection"
+    severity: "critical"
+    category: "sqli"
+    plugin_hints: ["sqli_basic", "sqli_advanced"]
+  - title: "SQL Injection Advanced"
+    severity: "critical"
+    category: "sqli"
+    plugin_hints: ["sqli_basic"]
+  - title: "XML External Entity"
+    severity: "critical"
+    category: "injection"
+    plugin_hints: ["xxe_check"]
+  - title: "Insecure Deserialization"
+    severity: "critical"
+    category: "injection"
+    plugin_hints: ["deserialization_check"]
+  - title: "JWT Token Attack"
+    severity: "critical"
+    category: "auth"
+    plugin_hints: ["jwt_attack"]
+  - title: "Cross-Site Scripting Reflected"
+    severity: "high"
+    category: "xss"
+    plugin_hints: ["xss_basic"]
+  - title: "Cross-Site Scripting Stored"
+    severity: "high"
+    category: "xss"
+    plugin_hints: ["xss_advanced"]
+  - title: "Path Traversal"
+    severity: "high"
+    category: "injection"
+    plugin_hints: ["lfi_check"]
+  - title: "Authentication Bypass"
+    severity: "high"
+    category: "auth"
+    plugin_hints: ["auth_bypass"]
+  - title: "Password Reset Vulnerability"
+    severity: "high"
+    category: "auth"
+    plugin_hints: ["auth_bypass"]
+  - title: "IDOR"
+    severity: "high"
+    category: "auth"
+    plugin_hints: ["idor_check"]
+  - title: "Broken Access Control"
+    severity: "high"
+    category: "auth"
+    plugin_hints: ["idor_check"]
+  - title: "CSRF"
+    severity: "high"
+    category: "csrf"
+    plugin_hints: ["csrf_check"]
+  - title: "SSRF"
+    severity: "high"
+    category: "injection"
+    plugin_hints: ["ssrf_check"]
+  - title: "Insecure Login"
+    severity: "high"
+    category: "auth"
+    plugin_hints: ["default_creds"]
+  - title: "Missing Access Control"
+    severity: "high"
+    category: "auth"
+    plugin_hints: ["idor_check"]
+  - title: "Spoofing Authentication Cookie"
+    severity: "high"
+    category: "auth"
+    plugin_hints: ["session_check"]
+  - title: "Vulnerable Components"
+    severity: "high"
+    category: "config"
+    plugin_hints: ["version_detect"]
+  - title: "Crypto Basics Weakness"
+    severity: "medium"
+    category: "crypto"
+    plugin_hints: ["prng_crack"]
+  - title: "Bypass Front-End Restrictions"
+    severity: "medium"
+    category: "config"
+    plugin_hints: ["param_tampering"]
+  - title: "Client Side Filtering"
+    severity: "medium"
+    category: "auth"
+    plugin_hints: ["idor_check"]
+  - title: "HTML Tampering"
+    severity: "medium"
+    category: "injection"
+    plugin_hints: ["xss_basic"]
+  - title: "Logging Security Issue"
+    severity: "medium"
+    category: "config"
+    plugin_hints: ["http_headers"]
+  - title: "Secure Password Weakness"
+    severity: "medium"
+    category: "auth"
+    plugin_hints: ["default_creds"]

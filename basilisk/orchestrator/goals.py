@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
@@ -123,11 +123,23 @@ class GoalEngine:
             logger.info("All goals exhausted")
         return goal
 
-    def should_advance(self, gaps: list[KnowledgeGap]) -> bool:
-        """True if no remaining gaps match the active goal."""
+    def should_advance(
+        self, gaps: list[KnowledgeGap], coverage_tracker: Any = None,
+    ) -> bool:
+        """True if no remaining gaps match the active goal.
+
+        When a coverage_tracker is provided with >80% coverage, auto-advance
+        past EXPLOIT and PRIVILEGE_ESCALATION goals.
+        """
         goal = self.active_goal
         if goal is None:
             return False
+        if (
+            coverage_tracker is not None
+            and coverage_tracker.overall_coverage() > 0.8
+            and goal.type in (GoalType.EXPLOIT, GoalType.PRIVILEGE_ESCALATION)
+        ):
+            return True
         return not any(goal.matches_gap(g) for g in gaps)
 
     def prioritize_gaps(self, gaps: list[KnowledgeGap]) -> list[KnowledgeGap]:

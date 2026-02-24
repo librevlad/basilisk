@@ -1,0 +1,23 @@
+name: gruyere
+description: "Google Gruyere"
+target: "localhost:8008"
+target_ports: [8008]
+max_steps: 200
+required_coverage: 1.0
+expected_findings:
+  - { title: "Remote Code Execution", severity: "critical", category: "injection", plugin_hints: ["ssti_check", "command_injection"] }
+  - { title: "Elevation of Privilege", severity: "critical", category: "auth", plugin_hints: ["idor_check", "param_tampering"] }
+  - { title: "XSS File Upload", severity: "high", category: "xss", plugin_hints: ["file_upload_bypass", "xss_basic"] }
+  - { title: "XSS Reflected", severity: "high", category: "xss", plugin_hints: ["xss_basic"] }
+  - { title: "XSS Stored Snippets", severity: "high", category: "xss", plugin_hints: ["xss_advanced"] }
+  - { title: "XSS via HTML Attribute", severity: "high", category: "xss", plugin_hints: ["xss_advanced"] }
+  - { title: "XSS via AJAX", severity: "high", category: "xss", plugin_hints: ["xss_advanced"] }
+  - { title: "XSSI", severity: "high", category: "xss", plugin_hints: ["xss_basic"] }
+  - { title: "CSRF", severity: "high", category: "csrf", plugin_hints: ["csrf_check"] }
+  - { title: "Cookie Manipulation", severity: "high", category: "auth", plugin_hints: ["session_check"] }
+  - { title: "Path Traversal Info Disclosure", severity: "high", category: "injection", plugin_hints: ["lfi_check"] }
+  - { title: "Path Traversal Data Tampering", severity: "high", category: "injection", plugin_hints: ["lfi_check"] }
+  - { title: "Information Disclosure Config", severity: "medium", category: "config", plugin_hints: ["dir_brute"] }
+  - { title: "Information Disclosure Source", severity: "medium", category: "config", plugin_hints: ["dir_brute"] }
+  - { title: "Database Dump Exposure", severity: "high", category: "config", plugin_hints: ["dir_brute"] }
+  - { title: "Phishing via AJAX", severity: "high", category: "injection", plugin_hints: ["xss_basic"] }

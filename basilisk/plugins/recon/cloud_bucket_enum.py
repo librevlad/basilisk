@@ -101,9 +101,16 @@ class CloudBucketEnumPlugin(BasePlugin):
         check_azure = not providers or any("azure" in p or "microsoft" in p for p in providers)
         check_gcs = not providers or any("gcp" in p or "google" in p for p in providers)
 
-        # Extract base domain for severity context
+        # Extract base domain for severity context (handle multi-part TLDs)
         parts = target.host.split(".")
-        domain = parts[-2] if len(parts) >= 2 else parts[0]
+        if (
+            len(parts) >= 3
+            and parts[-2] in self._SECOND_LEVEL_TLDS
+            and len(parts[-1]) <= 3
+        ):
+            domain = parts[-3] if len(parts) >= 3 else parts[0]
+        else:
+            domain = parts[-2] if len(parts) >= 2 else parts[0]
 
         for name in names:
             if ctx.should_stop:
@@ -145,6 +152,12 @@ class CloudBucketEnumPlugin(BasePlugin):
             },
         )
 
+    # Common second-level TLDs — domain is the part BEFORE these
+    _SECOND_LEVEL_TLDS: frozenset[str] = frozenset({
+        "co", "com", "net", "org", "edu", "gov", "mil", "ac", "or", "ne",
+        "go", "gob", "nic", "gen", "biz", "web", "info",
+    })
+
     @staticmethod
     def _generate_names(host: str) -> list[str]:
         """Generate bucket name candidates from the domain.
@@ -155,8 +168,19 @@ class CloudBucketEnumPlugin(BasePlugin):
         like ``insales-api`` are kept because they are specific to the target.
         """
         parts = host.split(".")
-        domain = parts[-2] if len(parts) >= 2 else parts[0]
-        subdomain = parts[0] if len(parts) >= 3 else ""
+        # Handle multi-part TLDs like .com.ua, .co.uk, .org.br
+        # For brain.com.ua: parts = ["brain", "com", "ua"]
+        #   parts[-2] = "com" (WRONG) → detect and use parts[-3] = "brain"
+        if (
+            len(parts) >= 3
+            and parts[-2] in CloudBucketEnumPlugin._SECOND_LEVEL_TLDS
+            and len(parts[-1]) <= 3
+        ):
+            domain = parts[-3] if len(parts) >= 3 else parts[0]
+            subdomain = parts[0] if len(parts) >= 4 and parts[0] != domain else ""
+        else:
+            domain = parts[-2] if len(parts) >= 2 else parts[0]
+            subdomain = parts[0] if len(parts) >= 3 else ""
 
         names = [
             domain,

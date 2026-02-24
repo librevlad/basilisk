@@ -513,7 +513,7 @@ async def git_worker(
 
 
 # ---------------------------------------------------------------------------
-# Initialization (mirrors Audit.run() pattern from facade.py)
+# Initialization
 # ---------------------------------------------------------------------------
 
 async def init_context(
