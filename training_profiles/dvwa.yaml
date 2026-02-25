@@ -5,6 +5,11 @@ target_ports: [4280]
 max_steps: 200
 required_coverage: 0.7
 
+docker:
+  compose_file: docker-compose.dvwa.yml
+  service_name: dvwa
+  ready_url: "http://localhost:4280/login.php"
+
 auth:
   username: admin
   password: password

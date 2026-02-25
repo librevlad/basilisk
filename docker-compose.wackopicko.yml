@@ -1,0 +1,6 @@
+services:
+  wackopicko:
+    image: adamdoupe/wackopicko
+    ports:
+      - "127.0.0.1:4980:80"
+    restart: unless-stopped

@@ -2,7 +2,7 @@ services:
   dvwa:
     image: vulnerables/web-dvwa
     ports:
-      - "4280:80"
+      - "127.0.0.1:4280:80"
     environment:
       - RECAPTCHA_PRIV_KEY=''
       - RECAPTCHA_PUB_KEY=''

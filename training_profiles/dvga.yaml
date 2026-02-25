@@ -4,6 +4,11 @@ target: "localhost:5013"
 target_ports: [5013]
 max_steps: 200
 required_coverage: 1.0
+docker:
+  compose_file: docker-compose.dvga.yml
+  service_name: dvga
+  ready_url: "http://localhost:5013/"
+
 expected_findings:
   - { title: "OS Command Injection", severity: "critical", category: "injection", plugin_hints: ["command_injection", "graphql_exploit"] }
   - { title: "SQL Injection", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic", "graphql_exploit"] }

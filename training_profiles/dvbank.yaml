@@ -1,9 +1,12 @@
 name: dvbank
 description: "Damn Vulnerable Bank - REST API"
-target: "localhost:3000"
-target_ports: [3000]
+target: "localhost:4580"
+target_ports: [4580]
 max_steps: 150
 required_coverage: 1.0
+
+# No Docker image available (Android app) — use --no-docker
+
 expected_findings:
   - { title: "JWT Token Vulnerability", severity: "critical", category: "auth", plugin_hints: ["jwt_attack"] }
   - { title: "Unauthenticated API Endpoints", severity: "critical", category: "auth", plugin_hints: ["dir_brute", "idor_check"] }

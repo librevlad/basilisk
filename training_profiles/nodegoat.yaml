@@ -4,6 +4,11 @@ target: "localhost:4000"
 target_ports: [4000]
 max_steps: 200
 required_coverage: 1.0
+docker:
+  compose_file: docker-compose.nodegoat.yml
+  service_name: nodegoat
+  ready_url: "http://localhost:4000/"
+
 expected_findings:
   - { title: "Server Side JS Injection", severity: "critical", category: "injection", plugin_hints: ["command_injection", "ssti_check"] }
   - { title: "NoSQL Injection", severity: "critical", category: "injection", plugin_hints: ["nosqli_check"] }

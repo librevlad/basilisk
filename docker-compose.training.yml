@@ -1,0 +1,49 @@
+# Master compose file — start all 19 training containers at once.
+#
+# Usage:
+#   docker compose -f docker-compose.training.yml up -d
+#   docker compose -f docker-compose.training.yml down
+#
+# Port assignments:
+#   dvwa        -> 127.0.0.1:4280
+#   bwapp       -> 127.0.0.1:8180
+#   mutillidae  -> 127.0.0.1:8280
+#   juice-shop  -> 127.0.0.1:3000
+#   webgoat     -> 127.0.0.1:8080 (+9090)
+#   altoro      -> 127.0.0.1:4380
+#   badstore    -> 127.0.0.1:4480
+#   crapi       -> 127.0.0.1:8888
+#   dsvw        -> 127.0.0.1:65412
+#   dvga        -> 127.0.0.1:5013
+#   gruyere     -> 127.0.0.1:8008
+#   hackazon    -> 127.0.0.1:4680
+#   nodegoat    -> 127.0.0.1:4000
+#   pixi        -> 127.0.0.1:8000
+#   railsgoat   -> 127.0.0.1:4780
+#   vampi       -> 127.0.0.1:5000
+#   vapi        -> 127.0.0.1:4880
+#   wackopicko  -> 127.0.0.1:4980
+#   xvwa        -> 127.0.0.1:5080
+#
+# Note: dvbank has no Docker image (Android app).
+
+include:
+  - docker-compose.dvwa.yml
+  - docker-compose.bwapp.yml
+  - docker-compose.mutillidae.yml
+  - docker-compose.juiceshop.yml
+  - docker-compose.webgoat.yml
+  - docker-compose.altoro.yml
+  - docker-compose.badstore.yml
+  - docker-compose.crapi.yml
+  - docker-compose.dsvw.yml
+  - docker-compose.dvga.yml
+  - docker-compose.gruyere.yml
+  - docker-compose.hackazon.yml
+  - docker-compose.nodegoat.yml
+  - docker-compose.pixi.yml
+  - docker-compose.railsgoat.yml
+  - docker-compose.vampi.yml
+  - docker-compose.vapi.yml
+  - docker-compose.wackopicko.yml
+  - docker-compose.xvwa.yml

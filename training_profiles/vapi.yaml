@@ -1,9 +1,15 @@
 name: vapi
 description: "vAPI - Vulnerable Adversely Programmed Interface"
-target: "localhost:80"
-target_ports: [80]
+target: "localhost:4880"
+target_ports: [4880]
 max_steps: 150
 required_coverage: 1.0
+
+docker:
+  compose_file: docker-compose.vapi.yml
+  service_name: vapi
+  ready_url: "http://localhost:4880/"
+
 expected_findings:
   - { title: "Broken Authentication", severity: "critical", category: "auth", plugin_hints: ["default_creds", "jwt_attack"] }
   - { title: "Broken Function Level Authorization", severity: "critical", category: "auth", plugin_hints: ["idor_check"] }

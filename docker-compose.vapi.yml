@@ -1,0 +1,20 @@
+services:
+  vapi:
+    image: roottusk/vapi
+    ports:
+      - "127.0.0.1:4880:80"
+    depends_on:
+      - vapi-db
+    environment:
+      - DB_HOST=vapi-db
+      - DB_USER=root
+      - DB_PASS=root
+      - DB_NAME=vapi
+    restart: unless-stopped
+
+  vapi-db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: vapi
+    restart: unless-stopped

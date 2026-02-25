@@ -1,0 +1,6 @@
+services:
+  dsvw:
+    image: stamparm/dsvw
+    ports:
+      - "127.0.0.1:65412:65412"
+    restart: unless-stopped

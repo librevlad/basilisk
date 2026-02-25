@@ -2,7 +2,7 @@ services:
   mutillidae:
     image: pentestlab/mutillidae
     ports:
-      - "8280:80"
+      - "127.0.0.1:8280:80"
     depends_on:
       - mutillidae-db
     links:

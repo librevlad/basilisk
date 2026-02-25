@@ -1,0 +1,6 @@
+services:
+  hackazon:
+    image: ianwijaya/hackazon
+    ports:
+      - "127.0.0.1:4680:80"
+    restart: unless-stopped

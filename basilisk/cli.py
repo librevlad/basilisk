@@ -42,6 +42,7 @@ def auto(
     campaign: bool = typer.Option(
         False, "--campaign/--no-campaign", help="Enable persistent campaign memory",
     ),
+    log_dir: str | None = typer.Option(None, "--log-dir", help="Override log directory"),
     verbose: bool = typer.Option(False, "-v", "--verbose"),
 ):
     """Autonomous audit — state-driven knowledge graph exploration."""
@@ -54,7 +55,13 @@ def auto(
         f"Autonomous audit [bold]{target}[/] (max {max_steps} steps)"
     )
 
-    b = Basilisk(target, max_steps=max_steps, config=config)
+    from basilisk.config import Settings
+
+    settings = Settings.load(config) if config else Settings.load()
+    if log_dir:
+        settings.logging.log_dir = Path(log_dir)
+
+    b = Basilisk(target, max_steps=max_steps, config=settings)
     if campaign:
         b = b.campaign()
 
@@ -234,6 +241,7 @@ def train(
     target: str | None = typer.Option(None, "--target", "-t", help="Override target"),
     max_steps: int | None = typer.Option(None, "--max-steps", "-n"),
     config: str | None = typer.Option(None, help="Config YAML path"),
+    no_docker: bool = typer.Option(False, "--no-docker", help="Skip Docker container management"),
     verbose: bool = typer.Option(False, "-v", "--verbose"),
 ):
     """Training validation — benchmark engine against known vulnerabilities."""
@@ -261,7 +269,12 @@ def train(
     from basilisk.config import Settings
 
     settings = Settings.load(config) if config else Settings.load()
-    runner = TrainingRunner(tp, target_override=target)
+    runner = TrainingRunner(
+        tp,
+        target_override=target,
+        manage_docker=not no_docker,
+        project_root=profile_path.parent,
+    )
     report = asyncio.run(runner.run(config=settings))
 
     table = Table(title=f"Training Validation: {report.profile_name}")

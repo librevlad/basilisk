@@ -4,6 +4,11 @@ target: "localhost:8008"
 target_ports: [8008]
 max_steps: 200
 required_coverage: 1.0
+docker:
+  compose_file: docker-compose.gruyere.yml
+  service_name: gruyere
+  ready_url: "http://localhost:8008/"
+
 expected_findings:
   - { title: "Remote Code Execution", severity: "critical", category: "injection", plugin_hints: ["ssti_check", "command_injection"] }
   - { title: "Elevation of Privilege", severity: "critical", category: "auth", plugin_hints: ["idor_check", "param_tampering"] }

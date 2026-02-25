@@ -1,0 +1,29 @@
+services:
+  crapi:
+    image: crapi/crapi
+    ports:
+      - "127.0.0.1:8888:8888"
+    depends_on:
+      - crapi-postgres
+      - crapi-mongo
+    environment:
+      - DB_HOST=crapi-postgres
+      - DB_PORT=5432
+      - DB_USER=admin
+      - DB_PASSWORD=admin
+      - DB_NAME=crapi
+      - MONGO_DB_HOST=crapi-mongo
+      - MONGO_DB_PORT=27017
+    restart: unless-stopped
+
+  crapi-postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: crapi
+    restart: unless-stopped
+
+  crapi-mongo:
+    image: mongo:6
+    restart: unless-stopped

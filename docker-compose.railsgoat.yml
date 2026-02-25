@@ -1,0 +1,6 @@
+services:
+  railsgoat:
+    image: owasp/railsgoat
+    ports:
+      - "127.0.0.1:4780:3000"
+    restart: unless-stopped

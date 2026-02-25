@@ -1,0 +1,9 @@
+services:
+  dvga:
+    image: dolevf/dvga
+    ports:
+      - "127.0.0.1:5013:5013"
+    environment:
+      - WEB_HOST=0.0.0.0
+      - WEB_PORT=5013
+    restart: unless-stopped

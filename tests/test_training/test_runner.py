@@ -41,11 +41,23 @@ class TestTrainingRunner:
         runner = TrainingRunner(profile)
         assert runner.target == "localhost:8080"
         assert runner.profile.name == "test_app"
+        assert runner.manage_docker is True
+        assert runner.project_root is None
 
     def test_init_with_target_override(self):
         profile = _make_profile()
         runner = TrainingRunner(profile, target_override="10.0.0.1:80")
         assert runner.target == "10.0.0.1:80"
+
+    def test_init_no_docker(self):
+        profile = _make_profile()
+        runner = TrainingRunner(profile, manage_docker=False)
+        assert runner.manage_docker is False
+
+    def test_init_project_root(self, tmp_path):
+        profile = _make_profile()
+        runner = TrainingRunner(profile, project_root=tmp_path)
+        assert runner.project_root == tmp_path
 
     def test_build_report(self):
         profile = _make_profile()

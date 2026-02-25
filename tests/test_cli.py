@@ -193,6 +193,46 @@ class TestTrainCommand:
         assert result.exit_code == 0
 
 
+    @patch("basilisk.cli.asyncio.run")
+    @patch("basilisk.training.runner.TrainingRunner")
+    @patch("basilisk.training.profile.TrainingProfile.load")
+    def test_train_no_docker_flag(self, mock_load, mock_runner_cls, mock_asyncio_run):
+        mock_profile = MagicMock()
+        mock_profile.name = "test"
+        mock_profile.target = "test.local"
+        mock_profile.max_steps = 20
+        mock_profile.expected_findings = []
+        mock_load.return_value = mock_profile
+
+        mock_report = MagicMock()
+        mock_report.profile_name = "test"
+        mock_report.coverage = 1.0
+        mock_report.discovered = 0
+        mock_report.total_expected = 0
+        mock_report.verification_rate = 0.0
+        mock_report.steps_taken = 5
+        mock_report.passed = True
+        mock_report.findings_detail = []
+        mock_asyncio_run.return_value = mock_report
+
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(suffix=".yaml", delete=False, mode="w") as f:
+            f.write("name: test\ntarget: test.local\n")
+            f.flush()
+            result = runner.invoke(app, ["train", f.name, "--no-docker"])
+
+        assert result.exit_code == 0
+        # Verify TrainingRunner was called with manage_docker=False
+        call_kwargs = mock_runner_cls.call_args
+        assert call_kwargs is not None
+        if call_kwargs.kwargs:
+            assert call_kwargs.kwargs.get("manage_docker") is False
+        else:
+            # Positional args fallback
+            assert mock_runner_cls.called
+
+
 class TestCrackCommand:
     @patch("basilisk.utils.crypto_engine.CryptoEngine")
     def test_crack_identifies_hash(self, mock_engine_cls):

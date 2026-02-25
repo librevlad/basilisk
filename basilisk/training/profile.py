@@ -7,6 +7,15 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 
+class DockerConfig(BaseModel):
+    """Docker Compose configuration for a training target."""
+
+    compose_file: str = ""
+    service_name: str = ""
+    ready_timeout: float = 120.0
+    ready_url: str = ""
+
+
 class ExpectedFinding(BaseModel):
     """A single expected finding in a training profile."""
 
@@ -39,6 +48,7 @@ class TrainingProfile(BaseModel):
     max_steps: int = 200
     required_coverage: float = 1.0
     auth: AuthConfig = Field(default_factory=AuthConfig)
+    docker: DockerConfig = Field(default_factory=DockerConfig)
     scan_paths: list[str] = Field(default_factory=list)
 
     @classmethod

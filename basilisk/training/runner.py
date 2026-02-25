@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from basilisk.training.planner_wrapper import TrainingPlanner
@@ -25,12 +26,38 @@ class TrainingRunner:
         self,
         profile: TrainingProfile,
         target_override: str | None = None,
+        manage_docker: bool = True,
+        project_root: Path | None = None,
     ) -> None:
         self.profile = profile
         self.target = target_override or profile.target
+        self.manage_docker = manage_docker
+        self.project_root = project_root
 
     async def run(self, config: Settings | None = None) -> ValidationReport:
         """Execute training run and return validation report."""
+        docker_cfg = self.profile.docker
+        docker_mgr = None
+
+        if docker_cfg.compose_file and self.manage_docker:
+            from basilisk.training.docker import DockerComposeManager
+
+            docker_mgr = DockerComposeManager()
+            if docker_mgr.available:
+                await docker_mgr.up(docker_cfg.compose_file, self.project_root)
+                await docker_mgr.wait_ready(docker_cfg.ready_url, docker_cfg.ready_timeout)
+            else:
+                logger.warning("Docker not available, skipping container management")
+                docker_mgr = None
+
+        try:
+            return await self._run_engine(config)
+        finally:
+            if docker_mgr:
+                await docker_mgr.down(docker_cfg.compose_file, self.project_root)
+
+    async def _run_engine(self, config: Settings | None = None) -> ValidationReport:
+        """Core engine execution (separated for Docker lifecycle wrapping)."""
         from basilisk.capabilities.mapping import build_capabilities
         from basilisk.config import Settings
         from basilisk.core.executor import AsyncExecutor, PluginContext
@@ -215,13 +242,12 @@ class TrainingRunner:
                         if not sp.startswith("/"):
                             sp = f"/{sp}"
                         path_part = sp.split("?")[0]
-                        has_params = "?" in sp
                         ep = Entity(
                             id=Entity.make_id(EntityType.ENDPOINT, host=host_key, path=path_part),
                             type=EntityType.ENDPOINT,
                             data={
                                 "host": host_key, "path": path_part,
-                                "has_params": has_params,
+                                "has_params": True,
                                 "scan_path": True,
                             },
                             first_seen=now, last_seen=now,

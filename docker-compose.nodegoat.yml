@@ -1,0 +1,14 @@
+services:
+  nodegoat:
+    image: owasp/nodegoat
+    ports:
+      - "127.0.0.1:4000:4000"
+    depends_on:
+      - nodegoat-mongo
+    environment:
+      - MONGODB_URI=mongodb://nodegoat-mongo:27017/nodegoat
+    restart: unless-stopped
+
+  nodegoat-mongo:
+    image: mongo:6
+    restart: unless-stopped

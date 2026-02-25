@@ -7,7 +7,28 @@ from textwrap import dedent
 
 import pytest
 
-from basilisk.training.profile import ExpectedFinding, TrainingProfile
+from basilisk.training.profile import DockerConfig, ExpectedFinding, TrainingProfile
+
+
+class TestDockerConfig:
+    def test_defaults(self):
+        dc = DockerConfig()
+        assert dc.compose_file == ""
+        assert dc.service_name == ""
+        assert dc.ready_timeout == 120.0
+        assert dc.ready_url == ""
+
+    def test_custom_values(self):
+        dc = DockerConfig(
+            compose_file="docker-compose.dvwa.yml",
+            service_name="dvwa",
+            ready_timeout=60.0,
+            ready_url="http://localhost:4280/",
+        )
+        assert dc.compose_file == "docker-compose.dvwa.yml"
+        assert dc.service_name == "dvwa"
+        assert dc.ready_timeout == 60.0
+        assert dc.ready_url == "http://localhost:4280/"
 
 
 class TestExpectedFinding:
@@ -79,6 +100,54 @@ class TestTrainingProfile:
         assert tp.expected_findings[0].title == "SQL Injection"
         assert tp.expected_findings[0].plugin_hints == ["sqli_basic"]
         assert tp.expected_findings[1].category == "xss"
+
+    def test_docker_config_defaults(self):
+        tp = TrainingProfile(
+            name="test",
+            target="localhost:80",
+            expected_findings=[ExpectedFinding(title="SQLi", severity="critical")],
+        )
+        assert tp.docker.compose_file == ""
+        assert tp.docker.service_name == ""
+        assert tp.docker.ready_timeout == 120.0
+        assert tp.docker.ready_url == ""
+
+    def test_docker_config_from_yaml(self, tmp_path: Path):
+        yaml_content = dedent("""\
+            name: test_docker
+            target: "localhost:4280"
+            docker:
+              compose_file: docker-compose.dvwa.yml
+              service_name: dvwa
+              ready_url: "http://localhost:4280/"
+              ready_timeout: 60.0
+            expected_findings:
+              - title: "SQLi"
+                severity: "critical"
+        """)
+        yaml_file = tmp_path / "test.yaml"
+        yaml_file.write_text(yaml_content, encoding="utf-8")
+
+        tp = TrainingProfile.load(yaml_file)
+        assert tp.docker.compose_file == "docker-compose.dvwa.yml"
+        assert tp.docker.service_name == "dvwa"
+        assert tp.docker.ready_url == "http://localhost:4280/"
+        assert tp.docker.ready_timeout == 60.0
+
+    def test_backward_compat_no_docker_key(self, tmp_path: Path):
+        yaml_content = dedent("""\
+            name: old_profile
+            target: "localhost:80"
+            expected_findings:
+              - title: "XSS"
+                severity: "high"
+        """)
+        yaml_file = tmp_path / "old.yaml"
+        yaml_file.write_text(yaml_content, encoding="utf-8")
+
+        tp = TrainingProfile.load(yaml_file)
+        assert tp.docker.compose_file == ""
+        assert tp.docker.service_name == ""
 
     def test_load_invalid_yaml_raises(self, tmp_path: Path):
         yaml_file = tmp_path / "bad.yaml"
