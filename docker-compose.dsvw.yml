@@ -1,6 +1,6 @@
 services:
   dsvw:
-    image: stamparm/dsvw
+    image: appsecco/dsvw
     ports:
-      - "127.0.0.1:65412:65412"
+      - "127.0.0.1:65412:8000"
     restart: unless-stopped

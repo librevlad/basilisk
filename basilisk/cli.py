@@ -273,7 +273,9 @@ def train(
         tp,
         target_override=target,
         manage_docker=not no_docker,
-        project_root=profile_path.parent,
+        project_root=profile_path.resolve().parent.parent
+        if profile_path.resolve().parent.name == "training_profiles"
+        else profile_path.resolve().parent,
     )
     report = asyncio.run(runner.run(config=settings))
 

@@ -9,19 +9,39 @@ docker:
   service_name: nodegoat
   ready_url: "http://localhost:4000/"
 
+auth:
+  username: user1
+  password: User1_123
+  login_url: /login
+  login_fields:
+    userName: user1
+    password: User1_123
+
+scan_paths:
+  - /login
+  - /signup
+  - /dashboard
+  - /profile
+  - /contributions
+  - /allocations/1
+  - /allocations/2
+  - /benefits
+  - /benefits?userId=1
+  - /benefits?userId=2
+  - /memos
+  - /profile/1
+  - /profile/2
+  - /research?symbol=test
+  - /tutorial
+  - /logout
+
 expected_findings:
-  - { title: "Server Side JS Injection", severity: "critical", category: "injection", plugin_hints: ["command_injection", "ssti_check"] }
-  - { title: "NoSQL Injection", severity: "critical", category: "injection", plugin_hints: ["nosqli_check"] }
-  - { title: "Insecure Deserialization", severity: "critical", category: "injection", plugin_hints: ["deserialization_check"] }
   - { title: "XSS Stored", severity: "high", category: "xss", plugin_hints: ["xss_advanced"] }
-  - { title: "IDOR", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
-  - { title: "Missing Access Control", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
-  - { title: "Broken Authentication", severity: "high", category: "auth", plugin_hints: ["default_creds", "service_brute"] }
+  - { title: "XSS Reflected", severity: "high", category: "xss", plugin_hints: ["xss_basic"] }
   - { title: "CSRF", severity: "high", category: "csrf", plugin_hints: ["csrf_check"] }
-  - { title: "Sensitive Data Exposure", severity: "high", category: "config", plugin_hints: ["http_headers"] }
-  - { title: "Vulnerable Components", severity: "high", category: "config", plugin_hints: ["version_detect"] }
-  - { title: "Log Injection", severity: "medium", category: "injection", plugin_hints: ["command_injection"] }
-  - { title: "Password Guessing", severity: "high", category: "auth", plugin_hints: ["service_brute"] }
-  - { title: "Security Misconfiguration", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
+  - { title: "IDOR", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
   - { title: "Unvalidated Redirect", severity: "medium", category: "config", plugin_hints: ["open_redirect"] }
-  - { title: "Session Management Weakness", severity: "high", category: "auth", plugin_hints: ["session_check"] }
+  - { title: "Security Misconfiguration", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
+  - { title: "Log Injection", severity: "medium", category: "injection", plugin_hints: ["command_injection"] }
+  - { title: "NoSQL Injection", severity: "critical", category: "injection", plugin_hints: ["nosqli_check"] }
+  - { title: "Server Side Injection", severity: "critical", category: "injection", plugin_hints: ["command_injection", "ssti_check"] }

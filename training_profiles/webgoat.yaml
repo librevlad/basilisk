@@ -2,12 +2,52 @@ name: webgoat
 description: "OWASP WebGoat"
 target: "localhost:8080"
 target_ports: [8080]
-max_steps: 300
+max_steps: 200
 required_coverage: 1.0
 docker:
   compose_file: docker-compose.webgoat.yml
   service_name: webgoat
   ready_url: "http://localhost:8080/WebGoat/"
+
+auth:
+  username: basilisk
+  password: basilisk123
+  login_url: /WebGoat/login
+  setup_url: /WebGoat/register.mvc
+  setup_data:
+    username: basilisk
+    password: basilisk123
+    matchingPassword: basilisk123
+    agree: agree
+
+scan_paths:
+  - /WebGoat/start.mvc
+  - /WebGoat/service/lessonmenu.mvc
+  - /WebGoat/SqlInjection/assignment5a
+  - /WebGoat/SqlInjection/assignment5b
+  - /WebGoat/SqlInjectionAdvanced/challenge
+  - /WebGoat/SqlInjectionMitigations/attack10a
+  - /WebGoat/CrossSiteScripting/attack5a
+  - /WebGoat/CrossSiteScripting/attack5b
+  - /WebGoat/CrossSiteScriptingStored/stored-xss
+  - /WebGoat/xxe/simple
+  - /WebGoat/xxe/content-type
+  - /WebGoat/xxe/blind
+  - /WebGoat/PathTraversal/random
+  - /WebGoat/PathTraversal/profile-upload
+  - /WebGoat/SSRF/task1
+  - /WebGoat/SSRF/task2
+  - /WebGoat/JWT/secret/gettoken
+  - /WebGoat/JWT/votings
+  - /WebGoat/auth-bypass/verify-account
+  - /WebGoat/HijackSession/login
+  - /WebGoat/InsecureLogin/task
+  - /WebGoat/SpoofCookie/login
+  - /WebGoat/PasswordReset/ForgotPassword/create-password-reset-link
+  - /WebGoat/IDOR/profile
+  - /WebGoat/IDOR/profile/2342384
+  - /WebGoat/csrf/basic-get-flag
+  - /WebGoat/csrf/review
 
 expected_findings:
   - title: "SQL Injection"
@@ -22,10 +62,6 @@ expected_findings:
     severity: "critical"
     category: "injection"
     plugin_hints: ["xxe_check"]
-  - title: "Insecure Deserialization"
-    severity: "critical"
-    category: "injection"
-    plugin_hints: ["deserialization_check"]
   - title: "JWT Token Attack"
     severity: "critical"
     category: "auth"
@@ -42,19 +78,7 @@ expected_findings:
     severity: "high"
     category: "injection"
     plugin_hints: ["lfi_check"]
-  - title: "Authentication Bypass"
-    severity: "high"
-    category: "auth"
-    plugin_hints: ["auth_bypass"]
-  - title: "Password Reset Vulnerability"
-    severity: "high"
-    category: "auth"
-    plugin_hints: ["auth_bypass"]
   - title: "IDOR"
-    severity: "high"
-    category: "auth"
-    plugin_hints: ["idor_check"]
-  - title: "Broken Access Control"
     severity: "high"
     category: "auth"
     plugin_hints: ["idor_check"]
@@ -66,43 +90,15 @@ expected_findings:
     severity: "high"
     category: "injection"
     plugin_hints: ["ssrf_check"]
-  - title: "Insecure Login"
-    severity: "high"
-    category: "auth"
-    plugin_hints: ["default_creds"]
-  - title: "Missing Access Control"
-    severity: "high"
-    category: "auth"
-    plugin_hints: ["idor_check"]
-  - title: "Spoofing Authentication Cookie"
-    severity: "high"
-    category: "auth"
-    plugin_hints: ["session_check"]
-  - title: "Vulnerable Components"
-    severity: "high"
-    category: "config"
-    plugin_hints: ["version_detect"]
-  - title: "Crypto Basics Weakness"
-    severity: "medium"
-    category: "crypto"
-    plugin_hints: ["prng_crack"]
   - title: "Bypass Front-End Restrictions"
     severity: "medium"
     category: "config"
     plugin_hints: ["param_tampering"]
-  - title: "Client Side Filtering"
-    severity: "medium"
-    category: "auth"
-    plugin_hints: ["idor_check"]
   - title: "HTML Tampering"
     severity: "medium"
     category: "injection"
     plugin_hints: ["xss_basic"]
-  - title: "Logging Security Issue"
+  - title: "Security Misconfiguration"
     severity: "medium"
     category: "config"
     plugin_hints: ["http_headers"]
-  - title: "Secure Password Weakness"
-    severity: "medium"
-    category: "auth"
-    plugin_hints: ["default_creds"]

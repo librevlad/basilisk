@@ -19,8 +19,8 @@ class TestParamTamperingMeta:
     def test_meta_category(self):
         assert ParamTamperingPlugin.meta.category == PluginCategory.PENTESTING
 
-    def test_depends_on_web_crawler(self):
-        assert "web_crawler" in ParamTamperingPlugin.meta.depends_on
+    def test_no_hard_dependency(self):
+        assert ParamTamperingPlugin.meta.depends_on == []
 
     def test_produces(self):
         assert "param_tampering" in ParamTamperingPlugin.meta.produces

@@ -55,6 +55,10 @@ class AutonomousRunner:
         self._on_step = on_step
         self._kwargs = kwargs
 
+    @property
+    def _config(self) -> Any:
+        return self._settings
+
     async def run(self, targets: list, settings: Any = None) -> RunResult:
         """Run the autonomous loop internally, return v4 RunResult."""
         settings = settings or self._settings
@@ -160,6 +164,26 @@ class AutonomousRunner:
             state=self._kwargs.get("state", {}),
         )
         bus = EventBus()
+
+        # Persistent structured logging
+        run_logger = None
+        if settings.logging.enabled:
+            try:
+                from basilisk.logging.run_logger import RunLogger
+
+                run_logger = RunLogger(
+                    log_dir=settings.logging.log_dir,
+                    target=targets[0].host if targets else "unknown",
+                    bus=bus,
+                    jsonl=settings.logging.jsonl,
+                    human_readable=settings.logging.human_readable,
+                    max_runs=settings.logging.max_runs,
+                )
+                await run_logger.open()
+            except Exception:
+                logger.warning("RunLogger init failed", exc_info=True)
+                run_logger = None
+
         safety = SafetyLimits(
             max_steps=self._max_steps,
             batch_size=5,
@@ -205,6 +229,19 @@ class AutonomousRunner:
 
         try:
             result = await loop.run(v3_targets)
+
+            # Write run summary and close logger
+            if run_logger is not None:
+                try:
+                    await run_logger.log_summary(
+                        loop.timeline,
+                        loop._history,
+                        termination_reason=result.termination_reason,
+                        graph=result.graph,
+                    )
+                    await run_logger.close()
+                except Exception:
+                    logger.warning("RunLogger summary/close failed", exc_info=True)
 
             # Persist knowledge graph to SQLite
             try:

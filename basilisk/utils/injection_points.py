@@ -13,6 +13,15 @@ from urllib.parse import parse_qs, quote, urlparse
 
 logger = logging.getLogger(__name__)
 
+# Params that are submit buttons / CSRF tokens — exclude from POST body
+# unless they are the param under test.  Some apps (e.g. XVWA) reject
+# requests when both a data param and a submit-button param are present.
+_SKIP_POST_PARAMS: frozenset[str] = frozenset({
+    "submit", "login", "logout", "reset", "user_token", "csrf_token",
+    "csrf", "_token", "token", "captcha", "recaptcha", "g-recaptcha-response",
+    "btnsubmit", "button", "go", "send", "save",
+})
+
 
 @dataclass
 class InjectionPoint:
@@ -43,10 +52,20 @@ class InjectionPoint:
         return f"{base_url}{self.path}?{'&'.join(parts)}"
 
     def build_post_data(self, param: str, value: str) -> dict[str, str]:
-        """Build POST form data, injecting value into target param."""
+        """Build POST form data, excluding skip-params not being tested.
+
+        Some apps reject requests when both a data param and a submit-button
+        param are present.  We exclude known button/token params from the body
+        unless they are the specific param under test.
+
+        Non-tested params keep their original value (empty string if empty).
+        This avoids breaking apps that check for mutual exclusion between
+        parameters (e.g. XVWA rejects when both 'item' and 'search' are set).
+        """
         return {
-            p: (value if p == param else v or "1")
+            p: (value if p == param else v)
             for p, v in self.params.items()
+            if p == param or p.lower() not in _SKIP_POST_PARAMS
         }
 
 
@@ -170,10 +189,9 @@ def collect_injection_points(
     hp = hardcoded_params or []
     for api_path in api_paths:
         if hp:
-            params = {hp[0]: "1"}
-            _add(InjectionPoint(path=api_path, params=params, source="api"))
-        else:
-            _add(InjectionPoint(path=api_path, params={}, source="api"))
+            for param in hp[:4]:
+                _add(InjectionPoint(path=api_path, params={param: "1"}, source="api"))
+        # Never add points with empty params — plugins skip them entirely
 
     # ── 4. All paths × hardcoded params (breadth-first) ──────────────
     # Merge crawled paths + hardcoded paths into a single pool,

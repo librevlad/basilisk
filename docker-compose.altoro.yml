@@ -1,6 +1,6 @@
 services:
   altoro:
-    image: wavsep/altoro-mutual
+    image: eystsen/altoro
     ports:
       - "127.0.0.1:4380:8080"
     restart: unless-stopped

@@ -10,6 +10,38 @@ docker:
   service_name: xvwa
   ready_url: "http://localhost:5080/"
 
+auth:
+  setup_url: /xvwa/setup/?action=do
+
+scan_paths:
+  - /xvwa/
+  - /xvwa/vulnerabilities/sqli/
+  - /xvwa/vulnerabilities/sqli/?item=1
+  - /xvwa/vulnerabilities/sqli_blind/
+  - /xvwa/vulnerabilities/sqli_blind/?item=1
+  - /xvwa/vulnerabilities/cmdi/
+  - /xvwa/vulnerabilities/reflected_xss/
+  - /xvwa/vulnerabilities/reflected_xss/?item=test
+  - /xvwa/vulnerabilities/stored_xss/
+  - /xvwa/vulnerabilities/dom_xss/
+  - /xvwa/vulnerabilities/fi/
+  - /xvwa/vulnerabilities/fi/?item=../../../etc/passwd
+  - /xvwa/vulnerabilities/csrf/
+  - /xvwa/vulnerabilities/ssrf_xspa/
+  - /xvwa/vulnerabilities/ssrf_xspa/?url=http://example.com
+  - /xvwa/vulnerabilities/fileupload/
+  - /xvwa/vulnerabilities/idor/
+  - /xvwa/vulnerabilities/idor/?item=1
+  - /xvwa/vulnerabilities/xpath/
+  - /xvwa/vulnerabilities/xpath/?item=test
+  - /xvwa/vulnerabilities/crypto/
+  - /xvwa/vulnerabilities/sessionflaws/
+  - /xvwa/vulnerabilities/formula_injection/
+  - /xvwa/vulnerabilities/php_object_injection/
+  - /xvwa/vulnerabilities/ssti/
+  - /xvwa/vulnerabilities/redirect/
+  - /xvwa/vulnerabilities/missfunc/
+
 expected_findings:
   - { title: "SQL Injection Error Based", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic"] }
   - { title: "SQL Injection Blind Boolean", severity: "critical", category: "sqli", plugin_hints: ["sqli_advanced"] }
@@ -29,4 +61,6 @@ expected_findings:
   - { title: "Missing Access Control", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
   - { title: "Session Fixation", severity: "high", category: "auth", plugin_hints: ["session_check"] }
   - { title: "CSRF", severity: "high", category: "csrf", plugin_hints: ["csrf_check"] }
+  - { title: "SSTI", severity: "high", category: "injection", plugin_hints: ["ssti_check"] }
+  - { title: "Open Redirect", severity: "medium", category: "injection", plugin_hints: ["open_redirect"] }
   - { title: "Weak Cryptography", severity: "medium", category: "crypto", plugin_hints: ["prng_crack"] }

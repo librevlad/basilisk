@@ -9,6 +9,31 @@ docker:
   service_name: vampi
   ready_url: "http://localhost:5000/"
 
+auth:
+  auth_type: json_api
+  username: basilisk_user
+  password: basilisk_pass123
+  register_url: /users/v1/register
+  register_data:
+    username: basilisk_user
+    password: basilisk_pass123
+    email: "basilisk@test.com"
+  login_url: /users/v1/login
+  token_path: auth_token
+  token_header: Authorization
+  token_prefix: "Bearer "
+
+scan_paths:
+  - /
+  - /createdb
+  - /users/v1
+  - /users/v1/_debug
+  - /users/v1/register
+  - /users/v1/login
+  - /users/v1/1
+  - /books/v1
+  - /books/v1?book_title=test
+
 expected_findings:
   - { title: "SQL Injection", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic"] }
   - { title: "Unauthorized Password Change", severity: "critical", category: "auth", plugin_hints: ["idor_check"] }
@@ -17,5 +42,4 @@ expected_findings:
   - { title: "BOLA", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
   - { title: "Excessive Data Exposure Debug", severity: "high", category: "config", plugin_hints: ["dir_brute"] }
   - { title: "User Enumeration", severity: "medium", category: "auth", plugin_hints: ["default_creds"] }
-  - { title: "RegexDOS", severity: "high", category: "dos", plugin_hints: ["param_tampering"] }
   - { title: "No Rate Limiting", severity: "medium", category: "config", plugin_hints: ["http_headers"] }

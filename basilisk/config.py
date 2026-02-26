@@ -111,6 +111,16 @@ class CampaignSettings(BaseSettings):
     tech_stack_min_runs: int = 3
 
 
+class LoggingSettings(BaseSettings):
+    """Persistent structured logging for autonomous runs."""
+
+    enabled: bool = True
+    log_dir: Path = Field(default_factory=lambda: Path.home() / ".basilisk" / "logs")
+    jsonl: bool = True
+    human_readable: bool = True
+    max_runs: int = 50
+
+
 class Settings(BaseSettings):
     """Root settings — merges defaults, YAML config, and env vars."""
 
@@ -123,6 +133,7 @@ class Settings(BaseSettings):
     browser: BrowserSettings = Field(default_factory=BrowserSettings)
     callback: CallbackSettings = Field(default_factory=CallbackSettings)
     campaign: CampaignSettings = Field(default_factory=CampaignSettings)
+    logging: LoggingSettings = Field(default_factory=LoggingSettings)
     wordlists_dir: Path = WORDLISTS_DIR
     log_level: str = "INFO"
 

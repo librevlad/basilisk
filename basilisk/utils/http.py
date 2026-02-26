@@ -47,6 +47,7 @@ class AsyncHttpClient:
             ssl=ssl_ctx,
         )
         self._session: aiohttp.ClientSession | None = None
+        self._extra_headers: dict[str, str] = {}
 
     async def _ensure_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
@@ -57,6 +58,19 @@ class AsyncHttpClient:
                 cookie_jar=aiohttp.CookieJar(unsafe=True),
             )
         return self._session
+
+    async def set_default_header(self, name: str, value: str) -> None:
+        """Set a header that will be sent with every request."""
+        self._extra_headers[name] = value
+
+    def _merged_headers(self, headers: dict[str, str] | None) -> dict[str, str] | None:
+        """Merge per-request headers with persistent extra headers."""
+        if not self._extra_headers:
+            return headers
+        merged = dict(self._extra_headers)
+        if headers:
+            merged.update(headers)
+        return merged
 
     async def get(
         self,
@@ -71,8 +85,9 @@ class AsyncHttpClient:
             "max_redirects": self.max_redirects,
             **kwargs,
         }
-        if headers:
-            kw["headers"] = headers
+        merged = self._merged_headers(headers)
+        if merged:
+            kw["headers"] = merged
         if timeout:
             kw["timeout"] = aiohttp.ClientTimeout(total=timeout)
         return await session.get(url, **kw)
@@ -88,6 +103,9 @@ class AsyncHttpClient:
             "allow_redirects": self.follow_redirects,
             **kwargs,
         }
+        merged = self._merged_headers(None)
+        if merged:
+            kw["headers"] = merged
         if timeout:
             kw["timeout"] = aiohttp.ClientTimeout(total=timeout)
         return await session.head(url, **kw)
@@ -105,8 +123,9 @@ class AsyncHttpClient:
             "allow_redirects": self.follow_redirects,
             **kwargs,
         }
-        if headers:
-            kw["headers"] = headers
+        merged = self._merged_headers(headers)
+        if merged:
+            kw["headers"] = merged
         if timeout:
             kw["timeout"] = aiohttp.ClientTimeout(total=timeout)
         if data is not None:
@@ -126,8 +145,9 @@ class AsyncHttpClient:
             "allow_redirects": self.follow_redirects,
             **kwargs,
         }
-        if headers:
-            kw["headers"] = headers
+        merged = self._merged_headers(headers)
+        if merged:
+            kw["headers"] = merged
         if timeout:
             kw["timeout"] = aiohttp.ClientTimeout(total=timeout)
         return await session.request(method, url, **kw)

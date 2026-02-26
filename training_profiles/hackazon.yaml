@@ -10,6 +10,30 @@ docker:
   service_name: hackazon
   ready_url: "http://localhost:4680/"
 
+auth:
+  username: test_user
+  password: useruser
+  login_url: /user/login
+  login_fields:
+    username: test_user
+    password: useruser
+
+scan_paths:
+  - /user/login
+  - /user/register
+  - /search?id=1&searchString=test
+  - /product/view?id=1
+  - /wishlist/add?id=1
+  - /review/add
+  - /checkout/
+  - /account/
+  - /account/orders
+  - /account/help_articles?id=1
+  - /contact
+  - /rest/user/login
+  - /rest/user/1
+  - /bestprice
+
 expected_findings:
   - { title: "SQL Injection", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic"] }
   - { title: "SQL Injection Blind", severity: "critical", category: "sqli", plugin_hints: ["sqli_advanced"] }

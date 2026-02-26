@@ -9,6 +9,21 @@ docker:
   service_name: dsvw
   ready_url: "http://localhost:65412/"
 
+scan_paths:
+  - /?id=1
+  - /?v=1
+  - /login?username=admin&password=admin
+  - /?domain=google.com
+  - /?include=footer.html
+  - /?path=./files/
+  - /?name=test
+  - /?comment=test
+  - /?object=test
+  - /?xml=%3Ctest%3E%3C/test%3E
+  - /?redirect=http://example.com
+  - /?style=default
+  - /?source=main
+
 expected_findings:
   - { title: "SQL Injection UNION", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic"] }
   - { title: "SQL Injection Blind Boolean", severity: "critical", category: "sqli", plugin_hints: ["sqli_advanced"] }

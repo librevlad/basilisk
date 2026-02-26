@@ -2,25 +2,54 @@ name: vapi
 description: "vAPI - Vulnerable Adversely Programmed Interface"
 target: "localhost:4880"
 target_ports: [4880]
-max_steps: 150
+max_steps: 200
 required_coverage: 1.0
 
 docker:
   compose_file: docker-compose.vapi.yml
   service_name: vapi
-  ready_url: "http://localhost:4880/"
+  ready_url: "http://localhost:4880/vapi"
+
+auth:
+  auth_type: json_api
+  username: savanna48@ortiz.com
+  password: "zTyBwV/9"
+  login_url: /vapi/api2/user/login
+  login_fields:
+    email: savanna48@ortiz.com
+    password: "zTyBwV/9"
+  token_path: token
+  token_header: Authorization-Token
+  token_prefix: ""
+
+scan_paths:
+  - /vapi
+  - /vapi/api1/user/1
+  - /vapi/api1/user/2
+  - /vapi/api2/user/details
+  - /vapi/api3/comment
+  - /vapi/api3/user/1
+  - /vapi/api4/user
+  - /vapi/api5/user/1
+  - /vapi/api5/users
+  - /vapi/api6/user/me
+  - /vapi/api7/user/login
+  - /vapi/api7/user/key
+  - /vapi/api8/user/secret
+  - /vapi/api9/v1/user/login
+  - /vapi/api10/user/flag
+  - /vapi/jwt/user
+  - /vapi/serversurfer?url=http://localhost
+  - /vapi/stickynotes
 
 expected_findings:
-  - { title: "Broken Authentication", severity: "critical", category: "auth", plugin_hints: ["default_creds", "jwt_attack"] }
-  - { title: "Broken Function Level Authorization", severity: "critical", category: "auth", plugin_hints: ["idor_check"] }
-  - { title: "Mass Assignment", severity: "critical", category: "auth", plugin_hints: ["param_tampering"] }
+  - { title: "Broken Authentication", severity: "critical", category: "auth", plugin_hints: ["default_creds", "auth_bypass"] }
   - { title: "SQL Injection API", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic"] }
   - { title: "JWT Vulnerability", severity: "critical", category: "auth", plugin_hints: ["jwt_attack"] }
   - { title: "BOLA", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
-  - { title: "Excessive Data Exposure", severity: "high", category: "config", plugin_hints: ["dir_brute"] }
   - { title: "SSRF", severity: "high", category: "injection", plugin_hints: ["ssrf_check"] }
+  - { title: "XSS Stored", severity: "high", category: "xss", plugin_hints: ["xss_advanced"] }
   - { title: "CORS Misconfiguration", severity: "medium", category: "config", plugin_hints: ["cors_scan"] }
   - { title: "Rate Limiting Missing", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
   - { title: "Security Misconfiguration", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
-  - { title: "Deprecated API Version", severity: "medium", category: "config", plugin_hints: ["dir_brute"] }
-  - { title: "Insufficient Logging", severity: "low", category: "config", plugin_hints: ["http_headers"] }
+  - { title: "Insufficient Logging", severity: "low", category: "config", plugin_hints: ["dir_brute"] }

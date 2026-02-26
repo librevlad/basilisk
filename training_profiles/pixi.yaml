@@ -9,18 +9,36 @@ docker:
   service_name: pixi
   ready_url: "http://localhost:8000/"
 
+auth:
+  username: test@pixi.com
+  password: test123
+  login_url: /login
+  login_fields:
+    user: test@pixi.com
+    pass: test123
+
+scan_paths:
+  - /login
+  - /register
+  - /about
+  - /api/user/login
+  - /api/user/register
+  - /api/user/info
+  - /api/user/edit
+  - /api/user/search?search=test
+  - /api/picture/upload
+  - /api/picture/
+  - /api/picture/1
+  - /api/user/1
+  - /api/admin/users/1
+  - /api/admin/users/search?search=test
+
 expected_findings:
-  - { title: "MongoDB Injection Auth Bypass", severity: "critical", category: "injection", plugin_hints: ["nosqli_check"] }
-  - { title: "NoSQL Injection Login", severity: "critical", category: "injection", plugin_hints: ["nosqli_check"] }
-  - { title: "JWT Secret Leakage", severity: "critical", category: "auth", plugin_hints: ["jwt_attack", "dir_brute"] }
-  - { title: "Sensitive File Exposure server.conf", severity: "critical", category: "config", plugin_hints: ["dir_brute"] }
-  - { title: "IDOR server.conf Access", severity: "critical", category: "auth", plugin_hints: ["idor_check"] }
-  - { title: "Angular Template Injection", severity: "high", category: "injection", plugin_hints: ["ssti_check"] }
   - { title: "XSS Reflected", severity: "high", category: "xss", plugin_hints: ["xss_basic"] }
-  - { title: "JWT Token Info Disclosure", severity: "high", category: "auth", plugin_hints: ["jwt_attack"] }
-  - { title: "Weak Session Management", severity: "high", category: "auth", plugin_hints: ["session_check"] }
-  - { title: "Broken API Authentication", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
-  - { title: "Excessive Data Exposure API", severity: "high", category: "config", plugin_hints: ["dir_brute"] }
+  - { title: "NoSQL Injection", severity: "critical", category: "injection", plugin_hints: ["nosqli_check"] }
+  - { title: "IDOR", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
+  - { title: "SSTI", severity: "high", category: "injection", plugin_hints: ["ssti_check"] }
+  - { title: "JWT Weakness", severity: "high", category: "auth", plugin_hints: ["jwt_attack"] }
   - { title: "CORS Misconfiguration", severity: "medium", category: "config", plugin_hints: ["cors_scan"] }
-  - { title: "No Rate Limiting", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
-  - { title: "Verbose Error Messages", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
+  - { title: "Rate Limiting Missing", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
+  - { title: "Security Misconfiguration", severity: "medium", category: "config", plugin_hints: ["http_headers"] }

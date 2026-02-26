@@ -2,12 +2,35 @@ name: juice_shop
 description: "OWASP Juice Shop"
 target: "localhost:3000"
 target_ports: [3000]
-max_steps: 400
+max_steps: 100
 required_coverage: 1.0
 docker:
   compose_file: docker-compose.juiceshop.yml
   service_name: juice-shop
   ready_url: "http://localhost:3000/"
+
+scan_paths:
+  - /rest/products/search?q=test
+  - /rest/user/login
+  - /rest/user/change-password?current=test&new=test&repeat=test
+  - /rest/user/reset-password
+  - /rest/basket/1
+  - /rest/products/1/reviews
+  - /api/Feedbacks/
+  - /api/Users/
+  - /api/Complaints/
+  - /api/Recycles/
+  - /api/SecurityQuestions/
+  - /api/Quantitys/
+  - /ftp/
+  - /encryptionkeys/
+  - /support/logs
+  - /#/score-board
+  - /metrics
+  - /api-docs/
+  - /rest/admin/application-configuration
+  - /rest/memories/
+  - /b2b/v2/orders
 
 expected_findings:
   - title: "SQL Injection Login Bypass"

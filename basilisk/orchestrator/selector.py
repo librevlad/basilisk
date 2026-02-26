@@ -23,13 +23,14 @@ _DOMAIN_ONLY_NAMES = frozenset({
 
 def _is_ip_or_local(host: str) -> bool:
     """Check if host is an IP address or localhost (with optional port)."""
-    if host in ("localhost", "127.0.0.1", "::1", "[::1]"):
+    if host.startswith("["):
+        h = host.split("]")[0][1:]
+    elif ":" in host:
+        h = host.rsplit(":", 1)[0]
+    else:
+        h = host
+    if h in ("localhost", "127.0.0.1", "::1"):
         return True
-    h = host
-    if h.startswith("["):
-        h = h.split("]")[0][1:]
-    elif "." in h and ":" in h:
-        h = h.rsplit(":", 1)[0]
     try:
         ipaddress.ip_address(h)
         return True

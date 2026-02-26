@@ -1,6 +1,12 @@
 services:
   pixi:
-    image: devslop/pixi
+    image: brightsec/pixi
     ports:
       - "127.0.0.1:8000:8000"
+    depends_on:
+      - pixidb
+    restart: unless-stopped
+
+  pixidb:
+    image: mongo:4.4
     restart: unless-stopped

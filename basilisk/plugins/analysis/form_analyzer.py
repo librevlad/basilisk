@@ -21,8 +21,11 @@ from basilisk.utils.http_check import resolve_base_url
 logger = logging.getLogger(__name__)
 
 # Input types that are never injectable (buttons, hidden tokens, etc.)
+# NOTE: "submit" is NOT skipped — submit buttons must be included in form
+# data for PHP apps that check isset($_POST['Submit']).  Pentesting plugins
+# will harmlessly iterate over them without false positives.
 _SKIP_INPUT_TYPES = frozenset({
-    "submit", "button", "image", "reset", "hidden",
+    "button", "image", "reset", "hidden",
 })
 # Hidden inputs that ARE worth testing (they carry user-supplied data)
 _TESTABLE_HIDDEN_NAMES = frozenset({
@@ -71,6 +74,8 @@ class FormAnalyzerPlugin(BasePlugin):
                     pages.append(path)
         pages = pages[:60]  # cap to avoid excessive requests
 
+        discovered_links: list[str] = []  # full URLs found in <a href>
+
         fetched = 0
         for path in pages:
             if ctx.should_stop:
@@ -82,6 +87,11 @@ class FormAnalyzerPlugin(BasePlugin):
             fetched += 1
             page_forms = self._parse_forms(body, path)
             all_forms.extend(page_forms)
+
+            # Extract <a href> links with query params for pentesting plugins
+            for link in self._extract_links(body, path, base_url):
+                if link not in discovered_links:
+                    discovered_links.append(link)
 
             for form in page_forms:
                 # Build injectable form entry for pentesting plugins
@@ -128,6 +138,21 @@ class FormAnalyzerPlugin(BasePlugin):
                         remediation="Use HTTPS for form actions",
                         tags=["analysis", "form", "ssl"],
                     ))
+
+        # Store discovered links in crawled_urls for pentesting plugins
+        if discovered_links:
+            crawled_state = ctx.state.setdefault("crawled_urls", {})
+            host_urls = crawled_state.setdefault(target.host, [])
+            added = 0
+            for link in discovered_links:
+                if link not in host_urls:
+                    host_urls.append(link)
+                    added += 1
+            if added:
+                logger.info(
+                    "form_analyzer: added %d link URLs to crawled_urls for %s",
+                    added, target.host,
+                )
 
         # Store discovered forms for pentesting plugins
         if injectable_forms:
@@ -226,6 +251,34 @@ class FormAnalyzerPlugin(BasePlugin):
                 "inputs": inputs,
             })
         return forms
+
+    @staticmethod
+    def _extract_links(html: str, page_path: str, base_url: str) -> list[str]:
+        """Extract <a href> links that have query parameters.
+
+        Returns full URLs suitable for adding to crawled_urls.
+        """
+        links: list[str] = []
+        for m in re.finditer(r'<a\s+[^>]*href\s*=\s*["\']([^"\']+)', html, re.IGNORECASE):
+            href = m.group(1)
+            if not href or href.startswith(("#", "javascript:", "mailto:")):
+                continue
+            # Only keep links with query params (useful for injection testing)
+            if "?" not in href:
+                continue
+            # Resolve relative URLs
+            if href.startswith(("http://", "https://")):
+                full_url = href
+            elif href.startswith("/"):
+                # Parse base_url to get scheme+host
+                parsed_base = urlparse(base_url)
+                full_url = f"{parsed_base.scheme}://{parsed_base.netloc}{href}"
+            else:
+                # Relative to current page
+                parent = page_path.rsplit("/", 1)[0] if "/" in page_path else ""
+                full_url = f"{base_url}{parent}/{href}"
+            links.append(full_url)
+        return links
 
     @staticmethod
     async def _fetch(url: str, ctx) -> str | None:

@@ -1,6 +1,6 @@
 services:
   xvwa:
-    image: tuxotron/xvwa
+    image: brightsec/xvwa
     ports:
       - "127.0.0.1:5080:80"
     restart: unless-stopped

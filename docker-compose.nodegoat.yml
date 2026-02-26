@@ -1,6 +1,7 @@
 services:
   nodegoat:
-    image: owasp/nodegoat
+    image: 1njected/nodegoat
+    command: node /usr/src/app/server.js
     ports:
       - "127.0.0.1:4000:4000"
     depends_on:
@@ -10,5 +11,7 @@ services:
     restart: unless-stopped
 
   nodegoat-mongo:
-    image: mongo:6
+    image: mongo:4.4
+    volumes:
+      - ./training_profiles/nodegoat-seed.js:/docker-entrypoint-initdb.d/seed.js:ro
     restart: unless-stopped

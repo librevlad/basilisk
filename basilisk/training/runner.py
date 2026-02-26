@@ -166,7 +166,7 @@ class TrainingRunner:
 
             # Training auth: run setup URL + form login if configured
             auth_cfg = self.profile.auth
-            if auth_cfg.username and ctx.http:
+            if (auth_cfg.username or auth_cfg.login_url) and ctx.http:
                 import re as _re
 
                 for target in scope:
@@ -192,33 +192,58 @@ class TrainingRunner:
                         except Exception:
                             logger.warning("Training setup failed: %s", setup_url)
 
-                    # Form login — with CSRF token extraction
-                    login_url = f"{base}{auth_cfg.login_url}" if auth_cfg.login_url else ""
-                    if login_url:
-                        try:
-                            login_page = await ctx.http.get(login_url)
-                            login_html = await login_page.text()
-                            token = _re.search(
-                                r"name=['\"]user_token['\"]\s+value=['\"]([^'\"]+)['\"]",
-                                login_html,
-                            )
-                            login_data: dict[str, str] = {
-                                "username": auth_cfg.username,
-                                "password": auth_cfg.password,
-                                "Login": "Login",
-                            }
-                            if token:
-                                login_data["user_token"] = token.group(1)
+                    if auth_cfg.auth_type == "json_api":
+                        # JSON API auth (REST apps like VamPi)
+                        await self._json_api_auth(ctx, auth_cfg, base, host_key)
+                    else:
+                        # Form login — with CSRF token extraction
+                        login_url = (
+                            f"{base}{auth_cfg.login_url}" if auth_cfg.login_url else ""
+                        )
+                        if login_url:
+                            try:
+                                login_page = await ctx.http.get(login_url)
+                                login_html = await login_page.text()
+                                csrf_tokens: dict[str, str] = {}
+                                for m in _re.finditer(
+                                    r'<input[^>]+type=["\']hidden["\'][^>]*'
+                                    r'name=["\']([^"\']*(?:csrf|token)[^"\']*)["\']'
+                                    r'[^>]*value=["\']([^"\']*)["\']',
+                                    login_html,
+                                    _re.IGNORECASE,
+                                ):
+                                    csrf_tokens[m.group(1)] = m.group(2)
+                                for m in _re.finditer(
+                                    r'<input[^>]+type=["\']hidden["\'][^>]*'
+                                    r'value=["\']([^"\']*)["\']'
+                                    r'[^>]*name=["\']([^"\']*(?:csrf|token)[^"\']*)["\']',
+                                    login_html,
+                                    _re.IGNORECASE,
+                                ):
+                                    csrf_tokens[m.group(2)] = m.group(1)
+                                if auth_cfg.login_fields:
+                                    login_data: dict[str, str] = dict(
+                                        auth_cfg.login_fields,
+                                    )
+                                else:
+                                    login_data: dict[str, str] = {
+                                        "username": auth_cfg.username,
+                                        "password": auth_cfg.password,
+                                        "Login": "Login",
+                                    }
+                                login_data.update(csrf_tokens)
 
-                            resp = await ctx.http.post(login_url, data=login_data)
-                            login_body = await resp.text()
-                            login_ok = "logout" in login_body.lower()
-                            logger.info(
-                                "Training auth login to %s: status=%s ok=%s",
-                                login_url, getattr(resp, "status", "?"), login_ok,
-                            )
-                        except Exception:
-                            logger.warning("Training auth login failed: %s", login_url)
+                                resp = await ctx.http.post(login_url, data=login_data)
+                                login_body = await resp.text()
+                                login_ok = "logout" in login_body.lower()
+                                logger.info(
+                                    "Training auth login to %s: status=%s ok=%s",
+                                    login_url, getattr(resp, "status", "?"), login_ok,
+                                )
+                            except Exception:
+                                logger.warning(
+                                    "Training auth login failed: %s", login_url,
+                                )
 
                     # Extra cookies (e.g. DVWA security=low)
                     if auth_cfg.extra_cookies:
@@ -322,6 +347,89 @@ class TrainingRunner:
         finally:
             if ctx.http:
                 await ctx.http.close()
+
+    @staticmethod
+    async def _json_api_auth(
+        ctx: PluginContext,
+        auth_cfg: Any,
+        base: str,
+        host_key: str,
+    ) -> None:
+        """JSON API auth: optional register, then login, extract JWT token."""
+        import json as _json
+        import uuid as _uuid
+
+        # Registration (optional)
+        if auth_cfg.register_url:
+            reg_url = f"{base}{auth_cfg.register_url}"
+            reg_data = dict(auth_cfg.register_data) if auth_cfg.register_data else {
+                "username": auth_cfg.username,
+                "password": auth_cfg.password,
+            }
+            # Replace {uuid} placeholders with unique values
+            run_id = _uuid.uuid4().hex[:8]
+            reg_data = {
+                k: v.replace("{uuid}", run_id) if isinstance(v, str) else v
+                for k, v in reg_data.items()
+            }
+            try:
+                resp = await ctx.http.post(reg_url, json=reg_data)
+                status = getattr(resp, "status", "?")
+                logger.info("JSON API register %s: status=%s", reg_url, status)
+            except Exception:
+                logger.warning("JSON API register failed: %s", reg_url)
+
+        # Login
+        login_url = f"{base}{auth_cfg.login_url}" if auth_cfg.login_url else ""
+        if not login_url:
+            return
+
+        try:
+            if auth_cfg.login_fields:
+                login_payload = dict(auth_cfg.login_fields)
+            else:
+                login_payload = {
+                    "username": auth_cfg.username,
+                    "password": auth_cfg.password,
+                }
+            resp = await ctx.http.post(login_url, json=login_payload)
+            body = await resp.text()
+            status = getattr(resp, "status", "?")
+
+            # Extract token from JSON response
+            token = ""
+            if auth_cfg.token_path:
+                try:
+                    data = _json.loads(body)
+                    # Support dotted paths like "data.token"
+                    for part in auth_cfg.token_path.split("."):
+                        data = data[part]
+                    token = str(data)
+                except (KeyError, TypeError, _json.JSONDecodeError):
+                    logger.warning(
+                        "Could not extract token at path '%s' from response",
+                        auth_cfg.token_path,
+                    )
+
+            if token:
+                # Store in ctx.state for plugins (jwt_attack, etc.)
+                ctx.state["auth_token"] = token
+                ctx.state["jwt_token"] = token
+                # Set default header on HTTP client
+                header_name = auth_cfg.token_header or "Authorization"
+                header_value = f"{auth_cfg.token_prefix}{token}"
+                await ctx.http.set_default_header(header_name, header_value)
+                logger.info(
+                    "JSON API login to %s: status=%s token=%s...%s ok=True",
+                    login_url, status, token[:10], token[-6:],
+                )
+            else:
+                logger.info(
+                    "JSON API login to %s: status=%s ok=False (no token)",
+                    login_url, status,
+                )
+        except Exception:
+            logger.warning("JSON API login failed: %s", login_url)
 
     @staticmethod
     async def _probe_target_scheme(ctx: PluginContext, host: str) -> str:

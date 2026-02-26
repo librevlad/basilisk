@@ -1,29 +1,112 @@
 services:
-  crapi:
-    image: crapi/crapi
+  crapi-web:
+    image: crapi/crapi-web
     ports:
-      - "127.0.0.1:8888:8888"
+      - "127.0.0.1:8888:80"
+    depends_on:
+      - crapi-identity
+      - crapi-community
+      - crapi-workshop
+    environment:
+      HTTP_PROTOCOL: http
+      COMMUNITY_SERVICE: crapi-community:8087
+      IDENTITY_SERVICE: crapi-identity:8080
+      WORKSHOP_SERVICE: crapi-workshop:8000
+      CHATBOT_SERVICE: crapi-workshop:8000
+      MAILHOG_WEB_SERVICE: crapi-mailhog:8025
+    restart: unless-stopped
+
+  crapi-identity:
+    image: crapi/crapi-identity
     depends_on:
       - crapi-postgres
       - crapi-mongo
     environment:
-      - DB_HOST=crapi-postgres
-      - DB_PORT=5432
-      - DB_USER=admin
-      - DB_PASSWORD=admin
-      - DB_NAME=crapi
-      - MONGO_DB_HOST=crapi-mongo
-      - MONGO_DB_PORT=27017
+      DB_NAME: crapi
+      DB_USER: admin
+      DB_PASSWORD: crapisecretpassword
+      DB_HOST: crapi-postgres
+      DB_PORT: 5432
+      MONGO_DB_HOST: crapi-mongo
+      MONGO_DB_PORT: 27017
+      MONGO_DB_USER: admin
+      MONGO_DB_PASSWORD: crapisecretpassword
+      MONGO_DB_NAME: crapi
+      JWT_SECRET: crapi-jwt-secret-1234
+      ENABLE_SHELL_INJECTION: "true"
+      ENABLE_LOG4J: "true"
+      SERVER_PORT: 8080
+      TLS_ENABLED: "false"
+      SMTP_HOST: crapi-mailhog
+      SMTP_PORT: 1025
+      SMTP_EMAIL: user@example.com
+      SMTP_PASS: ""
+      SMTP_FROM: no-reply@example.com
+      SMTP_AUTH: "false"
+      SMTP_STARTTLS: "false"
+      MAILHOG_HOST: crapi-mailhog
+      MAILHOG_PORT: 8025
+      MAILHOG_DOMAIN: crapi-mailhog
+      API_GATEWAY_URL: http://crapi-web:80
+      API_GATEWAY_HOST: crapi-web
+    restart: unless-stopped
+
+  crapi-community:
+    image: crapi/crapi-community
+    depends_on:
+      - crapi-postgres
+      - crapi-mongo
+    environment:
+      DB_NAME: crapi
+      DB_USER: admin
+      DB_PASSWORD: crapisecretpassword
+      DB_HOST: crapi-postgres
+      DB_PORT: 5432
+      MONGO_DB_HOST: crapi-mongo
+      MONGO_DB_PORT: 27017
+      MONGO_DB_USER: admin
+      MONGO_DB_PASSWORD: crapisecretpassword
+      MONGO_DB_NAME: crapi
+      SERVER_PORT: 8087
+      TLS_ENABLED: "false"
+    restart: unless-stopped
+
+  crapi-workshop:
+    image: crapi/crapi-workshop
+    depends_on:
+      - crapi-postgres
+      - crapi-mongo
+    environment:
+      DB_NAME: crapi
+      DB_USER: admin
+      DB_PASSWORD: crapisecretpassword
+      DB_HOST: crapi-postgres
+      DB_PORT: 5432
+      MONGO_DB_HOST: crapi-mongo
+      MONGO_DB_PORT: 27017
+      MONGO_DB_USER: admin
+      MONGO_DB_PASSWORD: crapisecretpassword
+      MONGO_DB_NAME: crapi
+      SECRET_KEY: crapi-secret-key
+      SERVER_PORT: 8000
+      TLS_ENABLED: "false"
     restart: unless-stopped
 
   crapi-postgres:
-    image: postgres:15-alpine
+    image: postgres:14-alpine
     environment:
       POSTGRES_USER: admin
-      POSTGRES_PASSWORD: admin
+      POSTGRES_PASSWORD: crapisecretpassword
       POSTGRES_DB: crapi
     restart: unless-stopped
 
   crapi-mongo:
-    image: mongo:6
+    image: mongo:4.4
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: crapisecretpassword
+    restart: unless-stopped
+
+  crapi-mailhog:
+    image: crapi/mailhog
     restart: unless-stopped

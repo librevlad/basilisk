@@ -1,6 +1,7 @@
 services:
   railsgoat:
     image: owasp/railsgoat
+    command: bash -c "bundle exec rails db:setup 2>/dev/null; bundle exec rails server -b 0.0.0.0 -p 3000 -u webrick"
     ports:
       - "127.0.0.1:4780:3000"
     restart: unless-stopped

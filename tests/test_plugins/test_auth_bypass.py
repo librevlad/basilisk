@@ -19,8 +19,8 @@ class TestAuthBypassMeta:
     def test_meta_category(self):
         assert AuthBypassPlugin.meta.category == PluginCategory.PENTESTING
 
-    def test_depends_on_web_crawler(self):
-        assert "web_crawler" in AuthBypassPlugin.meta.depends_on
+    def test_no_hard_dependency(self):
+        assert AuthBypassPlugin.meta.depends_on == []
 
     def test_produces(self):
         assert "auth_bypass" in AuthBypassPlugin.meta.produces

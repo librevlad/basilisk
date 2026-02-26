@@ -9,6 +9,27 @@ docker:
   service_name: mutillidae
   ready_url: "http://localhost:8280/"
 
+scan_paths:
+  - /index.php?page=login.php
+  - /index.php?page=user-info.php
+  - /index.php?page=add-to-your-blog.php
+  - /index.php?page=dns-lookup.php
+  - /index.php?page=text-file-viewer.php
+  - /index.php?page=source-viewer.php
+  - /index.php?page=credits.php
+  - /index.php?page=user-poll.php
+  - /index.php?page=pen-test-tool-lookup.php
+  - /index.php?page=document-viewer.php&PathToDocument=documentation/how-to-access-Mutillidae-over-Virtual-Box-network.php
+  - /index.php?page=register.php
+  - /index.php?page=view-someones-blog.php
+  - /index.php?page=arbitrary-file-inclusion.php
+  - /index.php?page=set-up-database.php
+  - /index.php?page=user-agent-impersonation.php
+  - /index.php?page=xml-validator.php
+  - /index.php?page=capture-data.php
+  - /index.php?page=phpinfo.php
+  - /robots.txt
+
 expected_findings:
   - { title: "SQL Injection Login Bypass", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic"] }
   - { title: "SQL Injection Extract Data", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic"] }

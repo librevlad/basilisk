@@ -35,6 +35,15 @@ class AuthConfig(BaseModel):
     setup_url: str = ""          # URL to POST to before login (e.g. DVWA DB reset)
     setup_data: dict[str, str] = Field(default_factory=dict)
     extra_cookies: dict[str, str] = Field(default_factory=dict)
+    login_fields: dict[str, str] = Field(default_factory=dict)  # custom form field names
+
+    # JSON API auth (for REST-only apps like VamPi)
+    auth_type: str = "form"      # "form" or "json_api"
+    register_url: str = ""       # e.g. /users/v1/register
+    register_data: dict[str, str] = Field(default_factory=dict)
+    token_path: str = ""         # JSON key for token, e.g. "auth_token"
+    token_header: str = "Authorization"
+    token_prefix: str = ""       # e.g. "Bearer "
 
 
 class TrainingProfile(BaseModel):

@@ -366,9 +366,9 @@ CAPABILITY_MAP: dict[str, dict] = {
     },
     "lfi_check": {
         "requires": ["Endpoint:params"],
-        "produces": ["Vulnerability"],
-        "cost": 5, "noise": 6,
-        "detects": ["lfi"],
+        "produces": ["Finding", "Vulnerability"],
+        "cost": 4, "noise": 5,
+        "detects": ["lfi", "path_traversal"],
     },
     "xxe_check": {
         "requires": ["Host", "Service:http"],
@@ -378,9 +378,9 @@ CAPABILITY_MAP: dict[str, dict] = {
     },
     "command_injection": {
         "requires": ["Endpoint:params"],
-        "produces": ["Vulnerability"],
-        "cost": 6, "noise": 8,
-        "detects": ["rce"],
+        "produces": ["Finding", "Vulnerability"],
+        "cost": 4, "noise": 5,
+        "detects": ["rce", "cmdi"],
     },
     "nosqli_check": {
         "requires": ["Endpoint:params"],
@@ -428,7 +428,7 @@ CAPABILITY_MAP: dict[str, dict] = {
     },
     "default_creds": {
         "requires": ["Host", "Service:http"],
-        "produces": ["Credential"],
+        "produces": ["Credential", "Finding"],
         "cost": 3, "noise": 4, "risk_domain": "auth",
         "detects": ["default_creds"],
     },
@@ -611,7 +611,7 @@ CAPABILITY_MAP: dict[str, dict] = {
         "cost": 6, "noise": 8, "risk_domain": "auth",
     },
     "service_brute": {
-        "requires": ["Service"], "produces": ["Credential"],
+        "requires": ["Service"], "produces": ["Credential", "Finding"],
         "cost": 6, "noise": 8,
     },
     "actuator_exploit": {

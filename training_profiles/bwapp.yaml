@@ -9,6 +9,57 @@ docker:
   service_name: bwapp
   ready_url: "http://localhost:8180/"
 
+auth:
+  username: bee
+  password: bug
+  login_url: /login.php
+  setup_url: /install.php
+  setup_data:
+    install: "yes"
+  login_fields:
+    login: bee
+    password: bug
+    security_level: "0"
+    form: submit
+
+scan_paths:
+  - /sqli_1.php?title=test
+  - /sqli_2.php
+  - /sqli_6.php
+  - /sqli_4.php
+  - /sqli_13.php?movie=1
+  - /sqli_14.php
+  - /sqli_15.php?title=test
+  - /xss_get.php?firstname=test&lastname=test
+  - /xss_post.php
+  - /xss_stored_1.php
+  - /xss_ajax_2-1.php?title=test
+  - /xss_back_button.php?url=http://example.com
+  - /commandi.php
+  - /commandi_blind.php
+  - /phpi.php?message=test
+  - /ssii.php?FirstName=test&LastName=test
+  - /ldapi.php
+  - /xmli_1.php
+  - /htmli_get.php?firstname=test&lastname=test
+  - /iframei.php?ParamUrl=robots.txt
+  - /rlfi.php?language=lang_en.php
+  - /directory_traversal_2.php?directory=documents
+  - /unrestricted_file_upload.php
+  - /csrf_1.php
+  - /csrf_3.php
+  - /insecure_login.php
+  - /ba_insecure_login_1.php
+  - /sm_session_id.php
+  - /insecure_direct_object_ref_1.php?ticket=1
+  - /ssrf.php
+  - /xxe-2.php
+  - /cors.php
+  - /http_response_splitting.php
+  - /open_redirect.php?url=http://example.com
+  - /hpp-1.php
+  - /robots.txt
+
 expected_findings:
   - { title: "SQL Injection GET Search", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic"] }
   - { title: "SQL Injection POST Search", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic"] }

@@ -63,7 +63,7 @@ class DockerComposeManager:
         if path_str in self._active:
             self._active.remove(path_str)
 
-    async def wait_ready(self, url: str, timeout: float = 120.0) -> bool:
+    async def wait_ready(self, url: str, timeout: float = 180.0) -> bool:
         """Poll a URL until it returns 2xx/3xx or timeout expires."""
         if not url:
             return True

@@ -1,20 +1,38 @@
 services:
   vapi:
-    image: roottusk/vapi
+    build:
+      context: ./vendor/vapi
+      dockerfile: Dockerfile
     ports:
-      - "127.0.0.1:4880:80"
+      - "127.0.0.1:4880:8000"
     depends_on:
       - vapi-db
     environment:
-      - DB_HOST=vapi-db
-      - DB_USER=root
-      - DB_PASS=root
-      - DB_NAME=vapi
+      APP_NAME: Laravel
+      APP_ENV: local
+      APP_KEY: "base64:JUXTsCKQubRlvxGv6sVwkFL2rJ/gSksD4B/68948Mww="
+      APP_DEBUG: "true"
+      APP_URL: http://localhost:4880
+      SERVER_PORT: 8000
+      LOG_CHANNEL: errorlog
+      LOG_LEVEL: debug
+      DB_CONNECTION: mysql
+      DB_HOST: vapi-db
+      DB_PORT: 3306
+      DB_DATABASE: vapi
+      DB_USERNAME: root
+      DB_PASSWORD: vapi123456
+    command: ["sh", "-c", "php /var/www/html/vapi/artisan config:clear && php /var/www/html/vapi/artisan serve --host=0.0.0.0"]
     restart: unless-stopped
 
   vapi-db:
     image: mysql:8.0
+    command: --default-authentication-plugin=mysql_native_password
     environment:
-      MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: vapi
+      MYSQL_USER: vapi
+      MYSQL_PASSWORD: vapi123456
+      MYSQL_ROOT_PASSWORD: vapi123456
+    volumes:
+      - ./vendor/vapi/database:/docker-entrypoint-initdb.d
     restart: unless-stopped

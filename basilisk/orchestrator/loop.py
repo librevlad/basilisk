@@ -112,6 +112,8 @@ class AutonomousLoop:
 
         while True:
             step += 1
+            step_start = time.monotonic()
+            entities_before = self.graph.entity_count
 
             # 1. Safety check
             if not self.safety.can_continue(step):
@@ -220,10 +222,16 @@ class AutonomousLoop:
 
                 for obs in obs_list:
                     outcome = self._state.apply_observation(obs)
+                    event_data: dict[str, Any] = {
+                        "entity_id": outcome.entity_id,
+                        "entity_type": obs.entity_type.value,
+                        "key_data": " ".join(f"{k}={v}" for k, v in obs.key_fields.items()),
+                        "confidence_delta": outcome.confidence_delta,
+                    }
                     self.bus.emit(Event(
                         EventType.ENTITY_UPDATED if not outcome.was_new
                         else EventType.ENTITY_CREATED,
-                        {"entity_id": outcome.entity_id},
+                        event_data,
                     ))
                     obs_count += 1
                     if outcome.was_new:
@@ -358,11 +366,16 @@ class AutonomousLoop:
                 self._mark_gap_satisfied(sc, produced=produced)
 
             # 8. Emit step event
+            step_duration = time.monotonic() - step_start
+            entities_gained = self.graph.entity_count - entities_before
             self.bus.emit(Event(EventType.STEP_COMPLETED, {
                 "step": step,
                 "observations": step_obs_count,
                 "entities": self.graph.entity_count,
                 "relations": self.graph.relation_count,
+                "duration": step_duration,
+                "entities_gained": entities_gained,
+                "batch_size": len(chosen),
             }))
 
             # Apply knowledge decay every 10 steps
@@ -425,6 +438,7 @@ class AutonomousLoop:
     ) -> list[Observation]:
         """Execute a single scored capability."""
         start = time.monotonic()
+        observations: list[Observation] = []
         try:
             observations = await self.executor.execute(
                 sc.capability, sc.target_entity, self.graph,
@@ -435,11 +449,15 @@ class AutonomousLoop:
         finally:
             duration = time.monotonic() - start
             decision.outcome_duration = duration
+            findings_count = sum(
+                1 for o in observations if o.entity_type == EntityType.FINDING
+            )
             self.bus.emit(Event(EventType.PLUGIN_FINISHED, {
                 "plugin": sc.capability.name,
                 "target": sc.target_entity.data.get("host", ""),
                 "duration": duration,
                 "step": step,
+                "findings_count": findings_count,
             }))
 
         # Record result in timeline with real confidence delta (computed later)

@@ -134,8 +134,9 @@ def _endpoint_without_testing(graph: KnowledgeGraph) -> list[KnowledgeGap]:
 
     Only create ONE gap per host (pentesting plugins scan all endpoints
     on a host in a single run). Skip hosts where testing already happened.
-    Waits for form analysis to complete (forms_checked) so pentesting plugins
-    have full injection point data from form_analyzer.
+    When forms haven't been analyzed yet, still create the gap (scan_paths
+    and crawled endpoints should be tested immediately) but at slightly
+    lower priority so form_analyzer runs first when possible.
     """
     gaps = []
     seen_hosts: set[str] = set()
@@ -154,22 +155,14 @@ def _endpoint_without_testing(graph: KnowledgeGraph) -> list[KnowledgeGap]:
         host = ep.data.get("host", "")
         if host in seen_hosts:
             continue
-        # Wait for form analysis before pentesting (forms provide better injection points).
-        # Only block if host has HTTP services (meaning form_analyzer can run) AND
-        # scan_path endpoints exist AND forms not yet analyzed.
-        if host and host not in hosts_forms_done and ep.data.get("scan_path"):
-            host_id = Entity.make_id(EntityType.HOST, host=host)
-            host_ent = graph.get(host_id)
-            if host_ent and any(
-                _is_http_service(s)
-                for s in graph.neighbors(host_id, RelationType.EXPOSES)
-            ):
-                continue
         seen_hosts.add(host)
+        # Lower priority when forms not yet analyzed (form_analyzer will enrich
+        # injection points), but never block — scan_paths must be tested.
+        priority = 5.0 if host in hosts_forms_done else 4.8
         gaps.append(KnowledgeGap(
             entity=ep,
             missing="vulnerability_testing",
-            priority=5.0,
+            priority=priority,
             description=f"Endpoint {ep.data.get('path', '?')} on {host} needs testing",
         ))
     return gaps

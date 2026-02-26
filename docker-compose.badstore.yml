@@ -1,6 +1,6 @@
 services:
   badstore:
-    image: jvhoof/badstore-docker
+    image: bwolmarans/badstore
     ports:
       - "127.0.0.1:4480:80"
     restart: unless-stopped

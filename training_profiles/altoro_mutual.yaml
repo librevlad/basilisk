@@ -10,8 +10,36 @@ docker:
   service_name: altoro
   ready_url: "http://localhost:4380/"
 
+auth:
+  username: admin
+  password: admin
+  login_url: /doLogin
+  login_fields:
+    uid: admin
+    passw: admin
+    btnSubmit: Login
+
+scan_paths:
+  - /login.jsp
+  - /doLogin
+  - /bank/main.jsp
+  - /bank/transaction.jsp
+  - /bank/transfer.jsp
+  - /bank/queryxpath.jsp
+  - /bank/customize.jsp
+  - /bank/apply.jsp
+  - /search.jsp?query=test
+  - /index.jsp?content=personal.htm
+  - /feedback.jsp
+  - /comment.jsp?content=test
+  - /admin/admin.jsp
+  - /swagger/index.html
+  - /api/account
+  - /api/account/1
+  - /bank/transaction.jsp?id=1
+
 expected_findings:
-  - { title: "SQL Injection Login Bypass", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic"] }
+  - { title: "SQL Injection Login Bypass", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic", "auth_bypass"] }
   - { title: "SQL Injection Cookie", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic"] }
   - { title: "Default Credentials", severity: "critical", category: "auth", plugin_hints: ["default_creds"] }
   - { title: "XSS Reflected", severity: "high", category: "xss", plugin_hints: ["xss_basic"] }
