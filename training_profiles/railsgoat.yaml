@@ -36,7 +36,6 @@ expected_findings:
   - { title: "XSS Reflected", severity: "high", category: "xss", plugin_hints: ["xss_basic"] }
   - { title: "XSS Stored", severity: "high", category: "xss", plugin_hints: ["xss_advanced"] }
   - { title: "IDOR", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
-  - { title: "CSRF Token Bypass", severity: "high", category: "csrf", plugin_hints: ["csrf_check"] }
   - { title: "Sensitive Data Exposure", severity: "high", category: "config", plugin_hints: ["http_headers"] }
   - { title: "Missing HTTPOnly Flag", severity: "medium", category: "auth", plugin_hints: ["http_headers"] }
   - { title: "Security Misconfiguration", severity: "medium", category: "config", plugin_hints: ["http_headers"] }

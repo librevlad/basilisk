@@ -6,6 +6,7 @@ services:
     depends_on:
       - pixidb
     restart: unless-stopped
+    command: ["sh", "-c", "while true; do node /usr/src/pixi/web/server.js 2>&1 || true; sleep 2; done"]
 
   pixidb:
     image: mongo:4.4

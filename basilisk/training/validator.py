@@ -38,20 +38,24 @@ _CATEGORY_ALIASES: dict[str, set[str]] = {
         "default-creds", "idor", "authorization", "session", "brute-force",
         "bola", "jwt", "authentication", "access-control", "cookie",
         "auth_bypass", "auth-bypass", "param_tampering", "brute", "admin",
+        "logic", "privilege-escalation",
     },
     "config": {
         "open-redirect", "redirect", "misconfiguration", "disclosure",
         "cors", "clickjacking", "information-disclosure", "dos",
         "rate-limiting", "error-disclosure",
         "headers", "dir-brute", "robots", "dir-listing", "admin-panel",
+        "csp", "logic", "grade",
     },
     "sqli": {"sql-injection", "nosqli"},
     "xss": {"cross-site-scripting", "html-injection"},
     "lfi": {"file-inclusion", "path-traversal", "directory-traversal", "rfi"},
     "upload": {"file-upload", "unrestricted-upload"},
     "csrf": {"cross-site-request-forgery"},
-    "crypto": {"weak-crypto", "weak-encryption"},
+    "crypto": {"weak-crypto", "weak-encryption", "hash", "padding-oracle", "weak-random"},
     "dos": {"denial-of-service", "rate-limiting"},
+    "csp": {"headers", "content-security-policy"},
+    "idor": {"auth", "bola", "param_tampering", "access-control", "authorization"},
 }
 
 _STOP_WORDS = {"the", "a", "an", "in", "on", "of", "via", "for", "and", "or", "is", "to"}

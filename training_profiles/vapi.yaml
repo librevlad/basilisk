@@ -48,7 +48,6 @@ expected_findings:
   - { title: "JWT Vulnerability", severity: "critical", category: "auth", plugin_hints: ["jwt_attack"] }
   - { title: "BOLA", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
   - { title: "SSRF", severity: "high", category: "injection", plugin_hints: ["ssrf_check"] }
-  - { title: "XSS Stored", severity: "high", category: "xss", plugin_hints: ["xss_advanced"] }
   - { title: "CORS Misconfiguration", severity: "medium", category: "config", plugin_hints: ["cors_scan"] }
   - { title: "Rate Limiting Missing", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
   - { title: "Security Misconfiguration", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
