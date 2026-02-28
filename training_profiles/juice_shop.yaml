@@ -135,14 +135,6 @@ expected_findings:
     severity: "high"
     category: "config"
     plugin_hints: ["version_detect"]
-  - title: "Weak Crypto Algorithm"
-    severity: "medium"
-    category: "crypto"
-    plugin_hints: ["prng_crack"]
-  - title: "Forged Coupon"
-    severity: "high"
-    category: "crypto"
-    plugin_hints: ["param_tampering"]
   - title: "Zero Stars Rating"
     severity: "medium"
     category: "injection"

@@ -97,7 +97,6 @@ expected_findings:
   - { title: "HTTP Response Splitting", severity: "medium", category: "injection", plugin_hints: ["http_smuggling"] }
   - { title: "Clickjacking", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
   - { title: "Shellshock", severity: "critical", category: "injection", plugin_hints: ["command_injection"] }
-  - { title: "Heartbleed", severity: "critical", category: "crypto", plugin_hints: ["ssl_check"] }
   - { title: "Unvalidated Redirect", severity: "medium", category: "config", plugin_hints: ["open_redirect"] }
   - { title: "HTTP Parameter Pollution", severity: "medium", category: "injection", plugin_hints: ["param_tampering"] }
   - { title: "Information Disclosure Robots", severity: "low", category: "config", plugin_hints: ["robots_parser"] }

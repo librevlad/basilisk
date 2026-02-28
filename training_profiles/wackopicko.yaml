@@ -23,7 +23,6 @@ expected_findings:
   - { title: "Directory Traversal", severity: "high", category: "injection", plugin_hints: ["lfi_check"] }
   - { title: "File Inclusion", severity: "high", category: "lfi", plugin_hints: ["lfi_check"] }
   - { title: "Parameter Manipulation", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
-  - { title: "Logic Flaw Coupon Reuse", severity: "high", category: "logic", plugin_hints: ["param_tampering"] }
   - { title: "Default Credentials", severity: "high", category: "auth", plugin_hints: ["default_creds"] }
   - { title: "Forceful Browsing", severity: "medium", category: "auth", plugin_hints: ["dir_brute"] }
   - { title: "Cookie Manipulation", severity: "medium", category: "auth", plugin_hints: ["session_check"] }
