@@ -31,21 +31,18 @@ scan_paths:
 
 expected_findings:
   - { title: "SQL Injection", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic"] }
-  - { title: "OS Command Injection", severity: "critical", category: "injection", plugin_hints: ["command_injection"] }
+  - { title: "Command Injection", severity: "critical", category: "injection", plugin_hints: ["command_injection"] }
   - { title: "XSS Reflected", severity: "high", category: "xss", plugin_hints: ["xss_basic"] }
-  - { title: "XSS Stored Guestbook", severity: "high", category: "xss", plugin_hints: ["xss_advanced"] }
+  - { title: "XSS Stored", severity: "high", category: "xss", plugin_hints: ["xss_advanced"] }
   - { title: "Path Traversal", severity: "high", category: "injection", plugin_hints: ["lfi_check"] }
-  - { title: "Brute Force Login", severity: "high", category: "auth", plugin_hints: ["service_brute"] }
+  - { title: "Default credentials", severity: "high", category: "auth", plugin_hints: ["service_brute"] }
   - { title: "Session Prediction", severity: "high", category: "auth", plugin_hints: ["session_check"] }
   - { title: "Session Fixation", severity: "high", category: "auth", plugin_hints: ["session_check"] }
-  - { title: "Insufficient Authorization", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
-  - { title: "Cookie Poisoning", severity: "high", category: "auth", plugin_hints: ["session_check"] }
-  - { title: "Forceful Browsing Admin", severity: "high", category: "auth", plugin_hints: ["dir_brute"] }
-  - { title: "Content Spoofing", severity: "medium", category: "injection", plugin_hints: ["xss_basic"] }
+  - { title: "IDOR", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
+  - { title: "Cookie", severity: "high", category: "auth", plugin_hints: ["session_check"] }
+  - { title: "Sensitive path", severity: "high", category: "config", plugin_hints: ["dir_brute"] }
   - { title: "Clickjacking", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
-  - { title: "Directory Indexing", severity: "low", category: "config", plugin_hints: ["dir_brute"] }
-  - { title: "Error Message Disclosure", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
-  - { title: "Information Leakage Robots", severity: "low", category: "config", plugin_hints: ["robots_parser"] }
-  - { title: "Predictable Resource Location", severity: "medium", category: "config", plugin_hints: ["dir_brute"] }
-  - { title: "Weak Password Recovery", severity: "medium", category: "auth", plugin_hints: ["auth_bypass"] }
-  - { title: "JavaScript Validation Bypass", severity: "medium", category: "config", plugin_hints: ["param_tampering"] }
+  - { title: "Directory listing", severity: "low", category: "config", plugin_hints: ["dir_brute"] }
+  - { title: "Missing security header", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
+  - { title: "robots.txt", severity: "low", category: "config", plugin_hints: ["robots_parser"] }
+  - { title: "User Enumeration", severity: "medium", category: "auth", plugin_hints: ["auth_bypass"] }

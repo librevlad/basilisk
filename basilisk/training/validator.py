@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re as _re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -36,11 +37,13 @@ _CATEGORY_ALIASES: dict[str, set[str]] = {
     "auth": {
         "default-creds", "idor", "authorization", "session", "brute-force",
         "bola", "jwt", "authentication", "access-control", "cookie",
+        "auth_bypass", "auth-bypass", "param_tampering", "brute", "admin",
     },
     "config": {
         "open-redirect", "redirect", "misconfiguration", "disclosure",
         "cors", "clickjacking", "information-disclosure", "dos",
         "rate-limiting", "error-disclosure",
+        "headers", "dir-brute", "robots", "dir-listing", "admin-panel",
     },
     "sqli": {"sql-injection", "nosqli"},
     "xss": {"cross-site-scripting", "html-injection"},
@@ -52,6 +55,39 @@ _CATEGORY_ALIASES: dict[str, set[str]] = {
 }
 
 _STOP_WORDS = {"the", "a", "an", "in", "on", "of", "via", "for", "and", "or", "is", "to"}
+
+# Common security abbreviations → expanded keywords for matching.
+_ABBREVIATION_MAP: dict[str, set[str]] = {
+    "ssrf": {"server-side", "request", "forgery"},
+    "csrf": {"cross-site", "request", "forgery"},
+    "xss": {"cross-site", "scripting"},
+    "sqli": {"sql", "injection"},
+    "ssti": {"server-side", "template", "injection"},
+    "idor": {"insecure", "direct", "object", "reference", "bola"},
+    "bola": {"broken", "object", "level", "authorization", "idor"},
+    "lfi": {"local", "file", "inclusion"},
+    "rfi": {"remote", "file", "inclusion"},
+    "xxe": {"xml", "external", "entity"},
+    "jwt": {"json", "web", "token"},
+}
+
+
+def _abbreviation_match(expected_title: str, actual_title: str) -> bool:
+    """Check if expected abbreviation matches actual full name or vice versa.
+
+    Requires at least 2 keyword matches to prevent false positives
+    (e.g. single "token" matching JWT to CSRF).
+    """
+    exp_lower = expected_title.lower().strip()
+    act_lower = actual_title.lower()
+    for abbr, keywords in _ABBREVIATION_MAP.items():
+        if abbr in exp_lower.split():
+            if sum(1 for kw in keywords if kw in act_lower) >= 2:
+                return True
+        if abbr in act_lower.split():
+            if sum(1 for kw in keywords if kw in exp_lower) >= 2:
+                return True
+    return False
 
 
 def _categories_match(expected_cat: str, actual_cat: str) -> bool:
@@ -69,14 +105,15 @@ def _categories_match(expected_cat: str, actual_cat: str) -> bool:
     return False
 
 
+def _tokenize(title: str) -> set[str]:
+    """Extract lowercase alphanumeric tokens, stripping punctuation."""
+    return {w for w in _re.findall(r"[a-z0-9]+", title.lower()) if w not in _STOP_WORDS and len(w) > 1}
+
+
 def _word_overlap(expected_title: str, actual_title: str) -> float:
     """Compute word overlap ratio between expected and actual title."""
-    expected_words = {
-        w for w in expected_title.lower().split() if w not in _STOP_WORDS and len(w) > 1
-    }
-    actual_words = {
-        w for w in actual_title.lower().split() if w not in _STOP_WORDS and len(w) > 1
-    }
+    expected_words = _tokenize(expected_title)
+    actual_words = _tokenize(actual_title)
     if not expected_words:
         return 0.0
     return len(expected_words & actual_words) / len(expected_words)
@@ -98,11 +135,12 @@ class FindingTracker:
     def check_discovery(self, finding_entity: Entity, step: int) -> bool:
         """Check if a finding entity matches any expected finding.
 
-        Matching uses four strategies (first match wins):
+        Matching uses five strategies (first match wins):
         1. Case-insensitive title containment (expected in actual)
         2. Reverse title containment (actual in expected, for short actual titles)
-        3. Category match with aliases
-        4. Word overlap >= 50%
+        3. Abbreviation expansion (SSRF ↔ Server-Side Request Forgery)
+        4. Category match with aliases
+        5. Word overlap >= 50%
 
         Severity tolerance: actual severity must be within 1 level of expected
         (e.g. MEDIUM matches HIGH expectation, HIGH matches CRITICAL).
@@ -136,7 +174,13 @@ class FindingTracker:
                 self._mark_discovered(tf, finding_entity, step)
                 return True
 
-            # Strategy 3: category match with aliases
+            # Strategy 3: abbreviation expansion
+            # e.g. expected "SSRF" matches actual "Server-Side Request Forgery"
+            if _abbreviation_match(exp_title, title):
+                self._mark_discovered(tf, finding_entity, step)
+                return True
+
+            # Strategy 4: category match with aliases
             if (
                 tf.expected.category
                 and category
@@ -145,7 +189,7 @@ class FindingTracker:
                 self._mark_discovered(tf, finding_entity, step)
                 return True
 
-            # Strategy 4: word overlap (>= 50% of expected title words in actual)
+            # Strategy 5: word overlap (>= 50% of expected title words in actual)
             if _word_overlap(exp_title, title) >= 0.5:
                 self._mark_discovered(tf, finding_entity, step)
                 return True

@@ -9,6 +9,24 @@ docker:
   service_name: juice-shop
   ready_url: "http://localhost:3000/"
 
+auth:
+  auth_type: json_api
+  username: basilisk@test.com
+  password: "Basilisk123!"
+  register_url: /api/Users/
+  register_data:
+    email: "basilisk-{uuid}@test.com"
+    password: "Basilisk123!"
+    passwordRepeat: "Basilisk123!"
+    securityAnswer: "test"
+  login_url: /rest/user/login
+  login_fields:
+    email: "basilisk-{uuid}@test.com"
+    password: "Basilisk123!"
+  token_path: authentication.token
+  token_header: Authorization
+  token_prefix: "Bearer "
+
 scan_paths:
   - /rest/products/search?q=test
   - /rest/user/login

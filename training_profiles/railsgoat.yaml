@@ -10,6 +10,14 @@ docker:
   service_name: railsgoat
   ready_url: "http://localhost:4780/"
 
+auth:
+  username: admin@metacorp.com
+  password: admin1234
+  login_url: /sessions
+  login_fields:
+    email: admin@metacorp.com
+    password: admin1234
+
 scan_paths:
   - /login
   - /signup

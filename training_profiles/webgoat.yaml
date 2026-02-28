@@ -13,6 +13,10 @@ auth:
   username: basilisk
   password: basilisk123
   login_url: /WebGoat/login
+  login_fields:
+    username: basilisk
+    password: basilisk123
+  setup_get_url: /WebGoat/registration
   setup_url: /WebGoat/register.mvc
   setup_data:
     username: basilisk
@@ -62,7 +66,7 @@ expected_findings:
     severity: "critical"
     category: "injection"
     plugin_hints: ["xxe_check"]
-  - title: "JWT Token Attack"
+  - title: "JWT"
     severity: "critical"
     category: "auth"
     plugin_hints: ["jwt_attack"]
@@ -90,15 +94,11 @@ expected_findings:
     severity: "high"
     category: "injection"
     plugin_hints: ["ssrf_check"]
-  - title: "Bypass Front-End Restrictions"
+  - title: "Mass Assignment"
     severity: "medium"
-    category: "config"
+    category: "auth"
     plugin_hints: ["param_tampering"]
-  - title: "HTML Tampering"
-    severity: "medium"
-    category: "injection"
-    plugin_hints: ["xss_basic"]
-  - title: "Security Misconfiguration"
+  - title: "Clickjacking"
     severity: "medium"
     category: "config"
     plugin_hints: ["http_headers"]

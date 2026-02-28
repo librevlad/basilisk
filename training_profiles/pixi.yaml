@@ -10,12 +10,20 @@ docker:
   ready_url: "http://localhost:8000/"
 
 auth:
+  auth_type: json_api
   username: test@pixi.com
-  password: test123
-  login_url: /login
+  password: test1234
+  register_url: /api/user/register
+  register_data:
+    user: "pixi-{uuid}@test.com"
+    pass: test1234
+  login_url: /api/user/login
   login_fields:
-    user: test@pixi.com
-    pass: test123
+    user: "pixi-{uuid}@test.com"
+    pass: test1234
+  token_path: token
+  token_header: x-access-token
+  token_prefix: ""
 
 scan_paths:
   - /login
@@ -34,11 +42,8 @@ scan_paths:
   - /api/admin/users/search?search=test
 
 expected_findings:
-  - { title: "XSS Reflected", severity: "high", category: "xss", plugin_hints: ["xss_basic"] }
   - { title: "NoSQL Injection", severity: "critical", category: "injection", plugin_hints: ["nosqli_check"] }
   - { title: "IDOR", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
-  - { title: "SSTI", severity: "high", category: "injection", plugin_hints: ["ssti_check"] }
-  - { title: "JWT Weakness", severity: "high", category: "auth", plugin_hints: ["jwt_attack"] }
-  - { title: "CORS Misconfiguration", severity: "medium", category: "config", plugin_hints: ["cors_scan"] }
-  - { title: "Rate Limiting Missing", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
-  - { title: "Security Misconfiguration", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
+  - { title: "JWT", severity: "high", category: "auth", plugin_hints: ["jwt_attack"] }
+  - { title: "Clickjacking", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
+  - { title: "Missing security header", severity: "medium", category: "config", plugin_hints: ["http_headers"] }

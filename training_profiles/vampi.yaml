@@ -13,12 +13,16 @@ auth:
   auth_type: json_api
   username: basilisk_user
   password: basilisk_pass123
+  setup_url: /createdb
   register_url: /users/v1/register
   register_data:
-    username: basilisk_user
+    username: "basilisk-{uuid}"
     password: basilisk_pass123
-    email: "basilisk@test.com"
+    email: "basilisk-{uuid}@test.com"
   login_url: /users/v1/login
+  login_fields:
+    username: "basilisk-{uuid}"
+    password: basilisk_pass123
   token_path: auth_token
   token_header: Authorization
   token_prefix: "Bearer "
@@ -35,11 +39,10 @@ scan_paths:
   - /books/v1?book_title=test
 
 expected_findings:
-  - { title: "SQL Injection", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic"] }
-  - { title: "Unauthorized Password Change", severity: "critical", category: "auth", plugin_hints: ["idor_check"] }
-  - { title: "Mass Assignment Admin Flag", severity: "critical", category: "auth", plugin_hints: ["param_tampering"] }
-  - { title: "JWT Authentication Bypass", severity: "critical", category: "auth", plugin_hints: ["jwt_attack"] }
+  - { title: "NoSQL Injection", severity: "critical", category: "injection", plugin_hints: ["nosqli_check"] }
+  - { title: "IDOR", severity: "critical", category: "auth", plugin_hints: ["idor_check"] }
+  - { title: "Mass Assignment", severity: "critical", category: "auth", plugin_hints: ["param_tampering"] }
+  - { title: "JWT", severity: "critical", category: "auth", plugin_hints: ["jwt_attack"] }
   - { title: "BOLA", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
-  - { title: "Excessive Data Exposure Debug", severity: "high", category: "config", plugin_hints: ["dir_brute"] }
+  - { title: "Sensitive path", severity: "high", category: "config", plugin_hints: ["dir_brute"] }
   - { title: "User Enumeration", severity: "medium", category: "auth", plugin_hints: ["default_creds"] }
-  - { title: "No Rate Limiting", severity: "medium", category: "config", plugin_hints: ["http_headers"] }

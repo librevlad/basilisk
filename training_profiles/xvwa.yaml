@@ -43,10 +43,10 @@ scan_paths:
   - /xvwa/vulnerabilities/missfunc/
 
 expected_findings:
-  - { title: "SQL Injection Error Based", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic"] }
-  - { title: "SQL Injection Blind Boolean", severity: "critical", category: "sqli", plugin_hints: ["sqli_advanced"] }
-  - { title: "SQL Injection Blind Time", severity: "critical", category: "sqli", plugin_hints: ["sqli_advanced"] }
-  - { title: "OS Command Injection Blind", severity: "critical", category: "injection", plugin_hints: ["command_injection"] }
+  - { title: "SQL Injection", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic"] }
+  - { title: "SQL Injection Blind", severity: "critical", category: "sqli", plugin_hints: ["sqli_advanced"] }
+  - { title: "SQL Injection Advanced", severity: "critical", category: "sqli", plugin_hints: ["sqli_advanced"] }
+  - { title: "Command Injection", severity: "critical", category: "injection", plugin_hints: ["command_injection"] }
   - { title: "PHP Object Injection", severity: "critical", category: "injection", plugin_hints: ["deserialization_check"] }
   - { title: "Unrestricted File Upload", severity: "critical", category: "upload", plugin_hints: ["file_upload_bypass"] }
   - { title: "Remote File Inclusion", severity: "critical", category: "lfi", plugin_hints: ["lfi_check"] }

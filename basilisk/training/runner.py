@@ -174,21 +174,52 @@ class TrainingRunner:
                     scheme = http_scheme.get(host_key, "http") or "http"
                     base = f"{scheme}://{host_key}"
 
-                    # Setup step (e.g. DVWA database reset) — with CSRF token
+                    # Setup step (e.g. DVWA database reset, VamPi /createdb)
                     if auth_cfg.setup_url:
                         setup_url = f"{base}{auth_cfg.setup_url}"
                         try:
-                            setup_page = await ctx.http.get(setup_url)
-                            setup_html = await setup_page.text()
-                            token = _re.search(
-                                r"name=['\"]user_token['\"]\s+value=['\"]([^'\"]+)['\"]",
-                                setup_html,
-                            )
-                            setup_data = dict(auth_cfg.setup_data)
-                            if token:
-                                setup_data["user_token"] = token.group(1)
-                            await ctx.http.post(setup_url, data=setup_data)
-                            logger.info("Training setup POST to %s", setup_url)
+                            if auth_cfg.setup_data:
+                                # POST with data + CSRF token extraction
+                                get_url = (
+                                    f"{base}{auth_cfg.setup_get_url}"
+                                    if auth_cfg.setup_get_url
+                                    else setup_url
+                                )
+                                setup_page = await ctx.http.get(get_url)
+                                setup_html = await setup_page.text()
+                                setup_data = dict(auth_cfg.setup_data)
+                                # Generic CSRF token extraction from hidden inputs
+                                for m in _re.finditer(
+                                    r'<input[^>]+type=["\']hidden["\'][^>]*'
+                                    r'name=["\']([^"\']*(?:csrf|token)[^"\']*)["\']'
+                                    r'[^>]*value=["\']([^"\']*)["\']',
+                                    setup_html,
+                                    _re.IGNORECASE,
+                                ):
+                                    setup_data[m.group(1)] = m.group(2)
+                                for m in _re.finditer(
+                                    r'<input[^>]+type=["\']hidden["\'][^>]*'
+                                    r'value=["\']([^"\']*)["\']'
+                                    r'[^>]*name=["\']([^"\']*(?:csrf|token)[^"\']*)["\']',
+                                    setup_html,
+                                    _re.IGNORECASE,
+                                ):
+                                    setup_data[m.group(2)] = m.group(1)
+                                # Also extract from meta tags (Spring Security)
+                                csrf_meta = _re.search(
+                                    r'<meta\s+name=["\']_csrf["\']'
+                                    r'\s+content=["\']([^"\']+)["\']',
+                                    setup_html,
+                                    _re.IGNORECASE,
+                                )
+                                if csrf_meta:
+                                    setup_data["_csrf"] = csrf_meta.group(1)
+                                await ctx.http.post(setup_url, data=setup_data)
+                                logger.info("Training setup POST to %s", setup_url)
+                            else:
+                                # Simple GET (e.g. VamPi /createdb)
+                                await ctx.http.get(setup_url)
+                                logger.info("Training setup GET to %s", setup_url)
                         except Exception:
                             logger.warning("Training setup failed: %s", setup_url)
 
@@ -235,7 +266,28 @@ class TrainingRunner:
 
                                 resp = await ctx.http.post(login_url, data=login_data)
                                 login_body = await resp.text()
-                                login_ok = "logout" in login_body.lower()
+                                body_lower = login_body.lower()
+                                resp_url = str(getattr(resp, "url", ""))
+                                # Redirect-based login (Spring Security):
+                                # after following redirect, check if final URL left login page
+                                redirected_away = (
+                                    resp_url
+                                    and "/login" not in resp_url.lower().split("?")[0]
+                                )
+                                login_ok = (
+                                    "logout" in body_lower
+                                    or "sign out" in body_lower
+                                    or "welcome" in body_lower
+                                    or "dashboard" in body_lower
+                                    or redirected_away
+                                )
+                                # Override: explicit error indicators in body
+                                if login_ok and (
+                                    "invalid" in body_lower
+                                    or "bad credentials" in body_lower
+                                    or "login failed" in body_lower
+                                ):
+                                    login_ok = False
                                 logger.info(
                                     "Training auth login to %s: status=%s ok=%s",
                                     login_url, getattr(resp, "status", "?"), login_ok,
@@ -359,6 +411,9 @@ class TrainingRunner:
         import json as _json
         import uuid as _uuid
 
+        # Generate a unique run_id for {uuid} placeholder replacement
+        run_id = _uuid.uuid4().hex[:8]
+
         # Registration (optional)
         if auth_cfg.register_url:
             reg_url = f"{base}{auth_cfg.register_url}"
@@ -366,8 +421,6 @@ class TrainingRunner:
                 "username": auth_cfg.username,
                 "password": auth_cfg.password,
             }
-            # Replace {uuid} placeholders with unique values
-            run_id = _uuid.uuid4().hex[:8]
             reg_data = {
                 k: v.replace("{uuid}", run_id) if isinstance(v, str) else v
                 for k, v in reg_data.items()
@@ -392,6 +445,11 @@ class TrainingRunner:
                     "username": auth_cfg.username,
                     "password": auth_cfg.password,
                 }
+            # Replace {uuid} placeholders with same run_id used for registration
+            login_payload = {
+                k: v.replace("{uuid}", run_id) if isinstance(v, str) else v
+                for k, v in login_payload.items()
+            }
             resp = await ctx.http.post(login_url, json=login_payload)
             body = await resp.text()
             status = getattr(resp, "status", "?")

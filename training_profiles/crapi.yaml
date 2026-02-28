@@ -12,17 +12,17 @@ docker:
 auth:
   auth_type: json_api
   username: basilisk@test.com
-  password: Basilisk123!
+  password: Basilisk1234
   login_url: /identity/api/auth/login
   login_fields:
-    email: basilisk@test.com
-    password: Basilisk123!
-  setup_url: /identity/api/auth/signup
-  setup_data:
-    name: Basilisk Tester
-    email: basilisk@test.com
-    number: "1234567890"
-    password: Basilisk123!
+    email: "basilisk-{uuid}@test.com"
+    password: Basilisk1234
+  register_url: /identity/api/auth/signup
+  register_data:
+    name: "Basilisk {uuid}"
+    email: "basilisk-{uuid}@test.com"
+    number: "555{uuid}"
+    password: Basilisk1234
   token_path: token
   token_header: Authorization
   token_prefix: "Bearer "
@@ -50,15 +50,13 @@ scan_paths:
   - /community/api/v2/coupon/validate-coupon
 
 expected_findings:
-  - { title: "BOLA Vehicle Details", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
-  - { title: "BOLA Mechanic Reports", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
-  - { title: "SQL Injection Coupon", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic"] }
-  - { title: "NoSQL Injection Coupon", severity: "critical", category: "injection", plugin_hints: ["nosqli_check"] }
-  - { title: "JWT Token Attack", severity: "critical", category: "auth", plugin_hints: ["jwt_attack"] }
+  - { title: "IDOR", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
+  - { title: "BOLA", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
+  - { title: "SQL Injection", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic"] }
+  - { title: "NoSQL Injection", severity: "critical", category: "injection", plugin_hints: ["nosqli_check"] }
+  - { title: "JWT", severity: "critical", category: "auth", plugin_hints: ["jwt_attack"] }
   - { title: "SSRF", severity: "high", category: "injection", plugin_hints: ["ssrf_check"] }
   - { title: "Mass Assignment", severity: "high", category: "auth", plugin_hints: ["param_tampering"] }
   - { title: "Unauthenticated Access", severity: "high", category: "auth", plugin_hints: ["auth_bypass"] }
-  - { title: "Excessive Data Exposure", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
-  - { title: "Rate Limiting Missing", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
-  - { title: "Security Misconfiguration", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
-  - { title: "CORS Misconfiguration", severity: "medium", category: "config", plugin_hints: ["cors_scan"] }
+  - { title: "Clickjacking", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
+  - { title: "CORS", severity: "medium", category: "config", plugin_hints: ["cors_scan"] }

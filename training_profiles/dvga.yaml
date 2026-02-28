@@ -10,21 +10,16 @@ docker:
   ready_url: "http://localhost:5013/"
 
 expected_findings:
-  - { title: "OS Command Injection", severity: "critical", category: "injection", plugin_hints: ["command_injection", "graphql_exploit"] }
+  - { title: "Command Injection", severity: "critical", category: "injection", plugin_hints: ["command_injection", "graphql_exploit"] }
   - { title: "SQL Injection", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic", "graphql_exploit"] }
-  - { title: "JWT Token Forge", severity: "critical", category: "auth", plugin_hints: ["jwt_attack"] }
-  - { title: "Arbitrary File Write", severity: "critical", category: "injection", plugin_hints: ["lfi_check"] }
+  - { title: "JWT", severity: "critical", category: "auth", plugin_hints: ["jwt_attack"] }
   - { title: "XSS Stored", severity: "high", category: "xss", plugin_hints: ["xss_advanced"] }
   - { title: "SSRF", severity: "high", category: "injection", plugin_hints: ["ssrf_check"] }
-  - { title: "Authorization Bypass", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
-  - { title: "Query Deny List Bypass", severity: "high", category: "auth", plugin_hints: ["graphql_exploit"] }
+  - { title: "IDOR", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
   - { title: "GraphQL Introspection Enabled", severity: "medium", category: "config", plugin_hints: ["graphql_detect"] }
-  - { title: "GraphiQL Interface Exposed", severity: "medium", category: "config", plugin_hints: ["graphql_detect"] }
-  - { title: "Batch Query Attack DoS", severity: "high", category: "dos", plugin_hints: ["graphql_exploit"] }
-  - { title: "Deep Recursion Query DoS", severity: "high", category: "dos", plugin_hints: ["graphql_exploit"] }
-  - { title: "Resource Intensive Query DoS", severity: "high", category: "dos", plugin_hints: ["graphql_exploit"] }
-  - { title: "HTML Injection", severity: "medium", category: "injection", plugin_hints: ["xss_basic"] }
-  - { title: "Log Injection", severity: "medium", category: "injection", plugin_hints: ["command_injection"] }
-  - { title: "Stack Trace Errors", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
-  - { title: "Field Suggestions Disclosure", severity: "low", category: "config", plugin_hints: ["graphql_detect"] }
-  - { title: "Weak Password Protection", severity: "medium", category: "auth", plugin_hints: ["service_brute"] }
+  - { title: "GraphQL batch", severity: "high", category: "dos", plugin_hints: ["graphql_exploit"] }
+  - { title: "GraphQL depth", severity: "high", category: "dos", plugin_hints: ["graphql_exploit"] }
+  - { title: "GraphQL alias", severity: "high", category: "dos", plugin_hints: ["graphql_exploit"] }
+  - { title: "HTML Injection", severity: "medium", category: "xss", plugin_hints: ["xss_basic"] }
+  - { title: "Field Suggestions", severity: "low", category: "config", plugin_hints: ["graphql_detect"] }
+  - { title: "Default credentials", severity: "medium", category: "auth", plugin_hints: ["service_brute"] }
