@@ -10,20 +10,17 @@ docker:
   ready_url: "http://localhost:8000/"
 
 auth:
-  auth_type: json_api
-  username: test@pixi.com
+  auth_type: form
+  username: "pixi-{uuid}@test.com"
   password: test1234
-  register_url: /api/user/register
-  register_data:
-    user: "pixi-{uuid}@test.com"
-    pass: test1234
-  login_url: /api/user/login
+  setup_url: /register
+  setup_data:
+    email: "pixi-{uuid}@test.com"
+    password: test1234
+  login_url: /login
   login_fields:
     user: "pixi-{uuid}@test.com"
     pass: test1234
-  token_path: token
-  token_header: x-access-token
-  token_prefix: ""
 
 scan_paths:
   - /login

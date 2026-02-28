@@ -10,18 +10,17 @@ docker:
   ready_url: "http://localhost:8080/WebGoat/"
 
 auth:
-  username: basilisk
-  password: basilisk123
+  username: "basi-{uuid}"
+  password: basil12
   login_url: /WebGoat/login
   login_fields:
-    username: basilisk
-    password: basilisk123
-  setup_get_url: /WebGoat/registration
+    username: "basi-{uuid}"
+    password: basil12
   setup_url: /WebGoat/register.mvc
   setup_data:
-    username: basilisk
-    password: basilisk123
-    matchingPassword: basilisk123
+    username: "basi-{uuid}"
+    password: basil12
+    matchingPassword: basil12
     agree: agree
 
 scan_paths:

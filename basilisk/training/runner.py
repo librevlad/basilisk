@@ -174,6 +174,11 @@ class TrainingRunner:
                     scheme = http_scheme.get(host_key, "http") or "http"
                     base = f"{scheme}://{host_key}"
 
+                    # Generate unique run_id for {uuid} placeholder replacement
+                    import uuid as _uuid_mod
+
+                    run_id = _uuid_mod.uuid4().hex[:8]
+
                     # Setup step (e.g. DVWA database reset, VamPi /createdb)
                     if auth_cfg.setup_url:
                         setup_url = f"{base}{auth_cfg.setup_url}"
@@ -187,7 +192,11 @@ class TrainingRunner:
                                 )
                                 setup_page = await ctx.http.get(get_url)
                                 setup_html = await setup_page.text()
-                                setup_data = dict(auth_cfg.setup_data)
+                                setup_data = {
+                                    k: v.replace("{uuid}", run_id)
+                                    if isinstance(v, str) else v
+                                    for k, v in auth_cfg.setup_data.items()
+                                }
                                 # Generic CSRF token extraction from hidden inputs
                                 for m in _re.finditer(
                                     r'<input[^>]+type=["\']hidden["\'][^>]*'
@@ -253,9 +262,11 @@ class TrainingRunner:
                                 ):
                                     csrf_tokens[m.group(2)] = m.group(1)
                                 if auth_cfg.login_fields:
-                                    login_data: dict[str, str] = dict(
-                                        auth_cfg.login_fields,
-                                    )
+                                    login_data: dict[str, str] = {
+                                        k: v.replace("{uuid}", run_id)
+                                        if isinstance(v, str) else v
+                                        for k, v in auth_cfg.login_fields.items()
+                                    }
                                 else:
                                     login_data: dict[str, str] = {
                                         "username": auth_cfg.username,
