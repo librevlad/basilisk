@@ -81,14 +81,17 @@ def _abbreviation_match(expected_title: str, actual_title: str) -> bool:
 
     Requires at least 2 keyword matches to prevent false positives
     (e.g. single "token" matching JWT to CSRF).
+    Uses regex tokenization to strip punctuation (e.g. "XSS:" -> "xss").
     """
     exp_lower = expected_title.lower().strip()
     act_lower = actual_title.lower()
+    exp_words = set(_re.findall(r"[a-z0-9]+", exp_lower))
+    act_words = set(_re.findall(r"[a-z0-9]+", act_lower))
     for abbr, keywords in _ABBREVIATION_MAP.items():
-        if abbr in exp_lower.split():
+        if abbr in exp_words:
             if sum(1 for kw in keywords if kw in act_lower) >= 2:
                 return True
-        if abbr in act_lower.split():
+        if abbr in act_words:
             if sum(1 for kw in keywords if kw in exp_lower) >= 2:
                 return True
     return False

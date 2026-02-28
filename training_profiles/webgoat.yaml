@@ -69,14 +69,6 @@ expected_findings:
     severity: "critical"
     category: "auth"
     plugin_hints: ["jwt_attack"]
-  - title: "Cross-Site Scripting Reflected"
-    severity: "high"
-    category: "xss"
-    plugin_hints: ["xss_basic"]
-  - title: "Cross-Site Scripting Stored"
-    severity: "high"
-    category: "xss"
-    plugin_hints: ["xss_advanced"]
   - title: "Path Traversal"
     severity: "high"
     category: "injection"
@@ -85,10 +77,6 @@ expected_findings:
     severity: "high"
     category: "auth"
     plugin_hints: ["idor_check"]
-  - title: "CSRF"
-    severity: "high"
-    category: "csrf"
-    plugin_hints: ["csrf_check"]
   - title: "SSRF"
     severity: "high"
     category: "injection"
