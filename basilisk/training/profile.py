@@ -33,6 +33,7 @@ class AuthConfig(BaseModel):
     password: str = ""
     login_url: str = ""
     setup_url: str = ""          # URL to POST to before login (e.g. DVWA DB reset)
+    setup_get_url: str = ""      # URL to GET before POST (for cookie/token extraction)
     setup_data: dict[str, str] = Field(default_factory=dict)
     extra_cookies: dict[str, str] = Field(default_factory=dict)
     login_fields: dict[str, str] = Field(default_factory=dict)  # custom form field names
