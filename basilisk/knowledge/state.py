@@ -71,7 +71,7 @@ class KnowledgeState:
         # Resolve source family for evidence aggregation
         source_family = ""
         if obs.source_plugin:
-            from basilisk.reasoning.belief import get_source_family
+            from basilisk.observations.source_families import get_source_family
             source_family = get_source_family(obs.source_plugin)
 
         return ObservationOutcome(
@@ -96,7 +96,7 @@ class KnowledgeState:
         )
 
     def find_gaps(self) -> list[KnowledgeGap]:
-        """Delegate gap detection to planner or graph."""
+        """Delegate gap detection to planner (always injected by loop.py)."""
         if self._planner:
             return self._planner.find_gaps(self.graph)
-        return self.graph.find_missing_knowledge()
+        return []

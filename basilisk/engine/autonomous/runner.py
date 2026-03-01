@@ -151,10 +151,13 @@ class AutonomousRunner:
                 campaign_memory = None
                 campaign_store = None
 
+        from basilisk.orchestrator.attack_paths import count_unlockable_paths
+
         scorer = Scorer(
             graph, history=history,
             hypothesis_engine=hypothesis_engine,
             campaign_memory=campaign_memory,
+            unlock_fn=count_unlockable_paths,
         )
         orch_executor = ScenarioExecutor(
             registry=scenario_registry,

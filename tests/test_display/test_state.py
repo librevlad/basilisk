@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 
 from basilisk.display.state import DisplayState, FindingEntry
+from basilisk.knowledge.snapshot import KnowledgeSnapshot
 
 
 class TestDisplayState:
@@ -63,3 +64,68 @@ class TestDisplayState:
         assert state.entity_counts["host"] == 0
         assert state.entity_counts["service"] == 0
         assert state.entity_counts["finding"] == 0
+
+
+class TestDisplayStateSnapshot:
+    """Test snapshot-driven state updates."""
+
+    def test_update_from_snapshot_returns_true_on_change(self):
+        state = DisplayState()
+        snap = KnowledgeSnapshot(
+            domains=frozenset(["example.com"]),
+            entity_count=5,
+            relation_count=3,
+            step=2,
+            fingerprint="abc123",
+        )
+        assert state.update_from_snapshot(snap) is True
+
+    def test_update_from_snapshot_returns_false_on_same_fingerprint(self):
+        state = DisplayState()
+        snap = KnowledgeSnapshot(fingerprint="abc123")
+        state.update_from_snapshot(snap)
+        assert state.update_from_snapshot(snap) is False
+
+    def test_update_from_snapshot_populates_findings(self):
+        state = DisplayState()
+        snap = KnowledgeSnapshot(
+            findings_verified=(
+                {"title": "XSS", "severity": "medium", "host": "example.com"},
+            ),
+            fingerprint="fp1",
+        )
+        state.update_from_snapshot(snap)
+        assert len(state.findings) == 1
+        assert state.findings[0].title == "XSS"
+        assert state.findings[0].severity == "medium"
+
+    def test_update_from_snapshot_populates_entity_counts(self):
+        state = DisplayState()
+        snap = KnowledgeSnapshot(
+            domains=frozenset(["a.com", "b.com"]),
+            ports=frozenset([("a.com", 80, "http")]),
+            endpoints=frozenset([("a.com", "/api")]),
+            technologies=frozenset([("a.com", "nginx")]),
+            findings_verified=(
+                {"title": "XSS", "severity": "medium", "host": "a.com"},
+            ),
+            entity_count=10,
+            relation_count=5,
+            step=3,
+            fingerprint="fp2",
+        )
+        state.update_from_snapshot(snap)
+        assert state.entity_counts["host"] == 2
+        assert state.entity_counts["service"] == 1
+        assert state.entity_counts["endpoint"] == 1
+        assert state.entity_counts["technology"] == 1
+        assert state.entity_counts["finding"] == 1
+        assert state.total_entities == 10
+        assert state.total_relations == 5
+
+    def test_snapshot_property(self):
+        state = DisplayState()
+        assert state.snapshot is None
+        snap = KnowledgeSnapshot(fingerprint="fp1")
+        state.update_from_snapshot(snap)
+        assert state.snapshot is snap

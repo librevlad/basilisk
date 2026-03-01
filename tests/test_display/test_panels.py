@@ -14,6 +14,7 @@ from basilisk.display.panels import (
     knowledge_panel,
 )
 from basilisk.display.state import DisplayState, FindingEntry, PluginActivity
+from basilisk.knowledge.snapshot import KnowledgeSnapshot
 
 
 class TestHeaderPanel:
@@ -69,7 +70,7 @@ class TestFindingsPanel:
 
 
 class TestKnowledgePanel:
-    def test_returns_panel(self):
+    def test_returns_panel_without_snapshot(self):
         state = DisplayState(
             total_entities=42,
             total_relations=15,
@@ -77,6 +78,18 @@ class TestKnowledgePanel:
                            "technology": 3, "credential": 0, "finding": 4,
                            "vulnerability": 1, "container": 0, "image": 0},
         )
+        result = knowledge_panel(state)
+        assert isinstance(result, Panel)
+
+    def test_returns_panel_with_snapshot(self):
+        state = DisplayState(total_entities=42, total_relations=15)
+        snap = KnowledgeSnapshot(
+            domains=frozenset(["example.com"]),
+            ports=frozenset([("example.com", 80, "http")]),
+            technologies=frozenset([("example.com", "nginx")]),
+            fingerprint="fp1",
+        )
+        state.update_from_snapshot(snap)
         result = knowledge_panel(state)
         assert isinstance(result, Panel)
 

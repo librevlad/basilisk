@@ -52,22 +52,33 @@ class TestLiveDisplayEvents:
         assert display.state.total_entities == 42
         assert display.state.total_relations == 15
 
-    def test_entity_created_increments_count(self):
+    def test_entity_created_populates_snapshot(self):
+        """ENTITY_CREATED flows through KnowledgeSnapshotStore → snapshot → state."""
         bus, display = self._make_display()
         bus.emit(Event(EventType.ENTITY_CREATED, {
             "entity_id": "abc123", "entity_type": "service",
-            "key_data": "host=x port=80", "confidence_delta": 0.0,
+            "host": "10.10.10.5", "port": 80, "service": "http",
+            "key_data": "host=10.10.10.5 port=80", "confidence_delta": 0.0,
         }))
-        assert display.state.entity_counts["service"] == 1
+        # Trigger refresh via step_completed
+        bus.emit(Event(EventType.STEP_COMPLETED, {
+            "step": 1, "entities": 1, "relations": 0,
+        }))
+        snap = display._store.snapshot()
+        assert ("10.10.10.5", 80, "http") in snap.ports
 
-    def test_entity_created_finding_adds_to_list(self):
+    def test_entity_created_finding_in_snapshot(self):
+        """Finding entities flow through snapshot to display state."""
         bus, display = self._make_display()
         bus.emit(Event(EventType.ENTITY_CREATED, {
             "entity_id": "f1", "entity_type": "finding",
             "title": "SQL Injection", "severity": "high", "host": "10.10.10.5",
             "key_data": "host=10.10.10.5", "confidence_delta": 0.0,
         }))
-        assert display.state.entity_counts["finding"] == 1
+        # Trigger refresh to sync snapshot → state
+        bus.emit(Event(EventType.STEP_COMPLETED, {
+            "step": 1, "entities": 1, "relations": 0,
+        }))
         assert len(display.state.findings) == 1
         assert display.state.findings[0].title == "SQL Injection"
         assert display.state.findings[0].severity == "high"
@@ -117,3 +128,23 @@ class TestLiveDisplayEvents:
         state = display.stop()
         assert state.finished is True
         assert state is display.state
+
+    def test_snapshot_store_integration(self):
+        """Full flow: entity events → store → snapshot → state."""
+        bus, display = self._make_display()
+        bus.emit(Event(EventType.ENTITY_CREATED, {
+            "entity_type": "host", "host": "example.com",
+        }))
+        bus.emit(Event(EventType.ENTITY_CREATED, {
+            "entity_type": "service", "host": "example.com",
+            "port": 443, "service": "https",
+        }))
+        # Sync snapshot via step_completed
+        bus.emit(Event(EventType.STEP_COMPLETED, {
+            "step": 1, "entities": 2, "relations": 1,
+        }))
+        snap = display._store.snapshot()
+        assert "example.com" in snap.domains
+        assert ("example.com", 443, "https") in snap.ports
+        assert display.state.entity_counts["host"] == 1
+        assert display.state.entity_counts["service"] == 1

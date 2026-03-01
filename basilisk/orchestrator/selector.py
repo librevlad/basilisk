@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import ipaddress
-
 from basilisk.capabilities.capability import Capability
 from basilisk.knowledge.entities import Entity, EntityType
 from basilisk.knowledge.graph import KnowledgeGraph
 from basilisk.knowledge.relations import RelationType
+from basilisk.orchestrator.constants import HTTP_PORTS
 from basilisk.orchestrator.planner import KnowledgeGap
 from basilisk.scoring.scorer import ScoredCapability
+from basilisk.utils.net import is_ip_or_local
 
 # Plugins that require real domain names — skip for IP/localhost targets
 _DOMAIN_ONLY_PREFIXES = ("subdomain_", "dns_", "ssl_", "tls_")
@@ -21,21 +21,7 @@ _DOMAIN_ONLY_NAMES = frozenset({
 })
 
 
-def _is_ip_or_local(host: str) -> bool:
-    """Check if host is an IP address or localhost (with optional port)."""
-    if host.startswith("["):
-        h = host.split("]")[0][1:]
-    elif ":" in host:
-        h = host.rsplit(":", 1)[0]
-    else:
-        h = host
-    if h in ("localhost", "127.0.0.1", "::1"):
-        return True
-    try:
-        ipaddress.ip_address(h)
-        return True
-    except ValueError:
-        return False
+_is_ip_or_local = is_ip_or_local  # backward-compat alias
 
 
 def _is_domain_only_plugin(name: str) -> bool:
@@ -293,7 +279,7 @@ def _matches_service_type(service_entity: Entity, svc_type: str) -> bool:
 
     if svc_type == "http":
         return (
-            port in (80, 443, 3000, 4280, 5000, 8000, 8080, 8180, 8280, 8443, 8888, 9090, 9200)
+            port in HTTP_PORTS
             or "http" in service_name
             or any(kw in banner for kw in ("http/", "apache", "nginx", "iis"))
         )

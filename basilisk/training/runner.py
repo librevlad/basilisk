@@ -118,11 +118,11 @@ class TrainingRunner:
         )
 
         # Build target scope
-        from basilisk.orchestrator.selector import _is_ip_or_local
+        from basilisk.utils.net import is_ip_or_local
 
         scope = TargetScope()
         target_str = self.target
-        if _is_ip_or_local(target_str):
+        if is_ip_or_local(target_str):
             scope.add(Target.ip(target_str))
         else:
             scope.add(Target.domain(target_str))

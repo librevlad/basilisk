@@ -141,10 +141,10 @@ class TestKnowledgeStateFindGaps:
         assert gaps[0].missing == "services"
         planner.find_gaps.assert_called_once_with(graph)
 
-    def test_without_planner_uses_graph(self):
+    def test_without_planner_returns_empty(self):
         graph = KnowledgeGraph()
         graph.add_entity(Entity.host("noplanner.com"))
         state = KnowledgeState(graph)
-        # Should not raise — delegates to graph.find_missing_knowledge()
+        # Without planner, returns empty list (planner always injected in prod)
         gaps = state.find_gaps()
-        assert isinstance(gaps, list)
+        assert gaps == []

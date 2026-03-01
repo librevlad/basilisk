@@ -1,0 +1,7 @@
+services:
+  dvws:
+    image: tssoffsec/dvws
+    ports:
+      - "127.0.0.1:4580:80"
+      - "127.0.0.1:4581:8080"
+    restart: unless-stopped

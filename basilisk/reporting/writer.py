@@ -11,8 +11,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from basilisk.reporting.builder import ReportBuilder, TrainingReportBuilder
 from basilisk.reporting.collector import ReportCollector
-from basilisk.reporting.renderer import assemble_data, render_html, render_json
+from basilisk.reporting.renderer import model_to_data, render_html, render_json
 
 if TYPE_CHECKING:
     from basilisk.events.bus import EventBus
@@ -94,8 +95,9 @@ class ReportWriter:
         Returns the report directory path.
         """
         await self._cancel_task()
-        self._collector.finalize_training(report, tracker)
-        await self._write(auto_refresh=False)
+        self._collector.finalize("training_complete")
+        self._collector.mode = "train"
+        await self._write_training(report, tracker)
         return self._report_dir
 
     # ------------------------------------------------------------------
@@ -122,7 +124,8 @@ class ReportWriter:
     async def _write(self, *, auto_refresh: bool = True) -> None:
         """Write report.html and report.json atomically."""
         try:
-            data = assemble_data(self._collector)
+            model = ReportBuilder.from_collector(self._collector)
+            data = model_to_data(model)
             html_content = render_html(data, auto_refresh=auto_refresh)
             json_content = render_json(data)
 
@@ -131,6 +134,24 @@ class ReportWriter:
             await loop.run_in_executor(None, self._write_file, "report.json", json_content)
         except Exception:
             logger.debug("Report write failed", exc_info=True)
+
+    async def _write_training(
+        self, report: ValidationReport, tracker: FindingTracker,
+    ) -> None:
+        """Write training report.html and report.json atomically."""
+        try:
+            model = TrainingReportBuilder.from_training(
+                self._collector, report, tracker,
+            )
+            data = model_to_data(model)
+            html_content = render_html(data, auto_refresh=False)
+            json_content = render_json(data)
+
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, self._write_file, "report.html", html_content)
+            await loop.run_in_executor(None, self._write_file, "report.json", json_content)
+        except Exception:
+            logger.debug("Training report write failed", exc_info=True)
 
     def _write_file(self, filename: str, content: str) -> None:
         """Atomic write: tmp file then os.replace."""

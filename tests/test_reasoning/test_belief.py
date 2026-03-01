@@ -6,7 +6,8 @@ from datetime import UTC, datetime
 
 from basilisk.knowledge.entities import Entity, EntityType
 from basilisk.knowledge.graph import KnowledgeGraph
-from basilisk.reasoning.belief import SOURCE_FAMILIES, EvidenceAggregator, get_source_family
+from basilisk.observations.source_families import SOURCE_FAMILIES, get_source_family
+from basilisk.reasoning.belief import EvidenceAggregator
 
 # ---------------------------------------------------------------------------
 # Source family tests

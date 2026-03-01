@@ -1,0 +1,17 @@
+services:
+  nodegoat:
+    image: 1njected/nodegoat
+    command: node /usr/src/app/server.js
+    ports:
+      - "127.0.0.1:4000:4000"
+    depends_on:
+      - nodegoat-mongo
+    environment:
+      - MONGODB_URI=mongodb://nodegoat-mongo:27017/nodegoat
+    restart: unless-stopped
+
+  nodegoat-mongo:
+    image: mongo:4.4
+    volumes:
+      - ./nodegoat-seed.js:/docker-entrypoint-initdb.d/seed.js:ro
+    restart: unless-stopped

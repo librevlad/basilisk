@@ -24,7 +24,7 @@ basilisk scenarios                            # all scenarios (native + legacy)
 basilisk scenarios --native                   # only native v4 scenarios
 
 # Training validation
-basilisk train training_profiles/dvwa.yaml    # benchmark against known targets
+basilisk train training/profiles/dvwa.yaml    # benchmark against known targets
 
 # Hash identification + crack
 basilisk crack <hash>
@@ -243,8 +243,8 @@ and expected findings. The validator uses multi-strategy matching (title contain
 expansion, category aliases, word overlap) with ±1 severity tolerance.
 
 ```bash
-basilisk train training_profiles/dvwa.yaml              # run against DVWA
-basilisk train training_profiles/juice_shop.yaml        # run against Juice Shop
+basilisk train training/profiles/dvwa.yaml              # run against DVWA
+basilisk train training/profiles/juice_shop.yaml        # run against Juice Shop
 ```
 
 ### Benchmark Results (20 containers, 298 expected findings)
@@ -430,7 +430,7 @@ basilisk/
     ├── post_exploit/  (7)
     └── forensics/     (6)
 
-training_profiles/                 # 20 YAML profiles for training validation
+training/                          # Training data (profiles, compose, scripts)
 tests/                             # 2611 tests, 141 files
 ```
 

@@ -11,6 +11,7 @@ from rich.text import Text
 
 if TYPE_CHECKING:
     from basilisk.display.state import DisplayState
+    from basilisk.reporting.model import ReportModel
     from basilisk.training.validator import ValidationReport
 
 SEV_STYLES = {
@@ -79,6 +80,70 @@ def print_auto_report(
             console.print(f"  [dim]... and {len(state.findings) - 20} more[/]")
     else:
         console.print("[dim]No findings.[/]")
+
+
+def print_model_report(
+    model: ReportModel,
+    console: Console | None = None,
+) -> None:
+    """Print final summary from canonical ReportModel."""
+    console = console or Console()
+
+    stats = model.statistics
+    duration = stats.duration_seconds
+    mins, secs = divmod(int(duration), 60)
+
+    summary = Text()
+    summary.append_text(Text.from_markup(
+        f"[bold green]Audit complete![/]  "
+        f"Steps: [bold]{stats.steps_completed}[/]  "
+        f"Duration: [bold]{mins:02d}:{secs:02d}[/]  "
+        f"Entities: [bold]{stats.total_entities}[/]  "
+        f"Relations: [bold]{stats.total_relations}[/]\n"
+    ))
+    if model.termination_reason:
+        summary.append_text(Text.from_markup(
+            f"Reason: [dim]{model.termination_reason}[/]"
+        ))
+    console.print(Panel(summary, border_style="green"))
+
+    # Severity summary
+    counts = stats.severity_counts
+    if counts:
+        sev_table = Table(title="Severity Summary")
+        sev_table.add_column("Severity")
+        sev_table.add_column("Count", justify="right")
+        for sev in SEV_ORDER:
+            c = counts.get(sev, 0)
+            if c > 0:
+                style = SEV_STYLES.get(sev, "")
+                sev_table.add_row(f"[{style}]{sev}[/{style}]", str(c))
+        console.print(sev_table)
+
+    # Top findings from raw
+    if model.findings_raw:
+        table = Table(title="Top Findings")
+        table.add_column("Severity", width=10)
+        table.add_column("Title")
+        table.add_column("Target", style="dim")
+
+        for f in model.findings_raw[:20]:
+            sev = f.get("severity", "INFO").upper()
+            style = SEV_STYLES.get(sev, "")
+            table.add_row(
+                f"[{style}]{sev}[/{style}]",
+                f.get("title", ""),
+                f.get("host", ""),
+            )
+        console.print(table)
+        if len(model.findings_raw) > 20:
+            console.print(f"  [dim]... and {len(model.findings_raw) - 20} more[/]")
+    else:
+        console.print("[dim]No findings.[/]")
+
+    # Risk score
+    if stats.risk_score > 0:
+        console.print(f"\n  Risk Score: [bold]{stats.risk_score:.1f}[/]/10.0")
 
 
 def print_training_report(

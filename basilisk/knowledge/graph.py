@@ -5,14 +5,11 @@ from __future__ import annotations
 import logging
 from collections import defaultdict
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from basilisk.knowledge.entities import Entity, EntityType
 from basilisk.knowledge.relations import Relation, RelationType
 from basilisk.models.target import Target, TargetType
-
-if TYPE_CHECKING:
-    from basilisk.orchestrator.planner import KnowledgeGap
 
 logger = logging.getLogger(__name__)
 
@@ -196,11 +193,6 @@ class KnowledgeGraph:
         if target_type == TargetType.IP:
             return Target.ip(host)
         return Target.domain(host)
-
-    def find_missing_knowledge(self) -> list[KnowledgeGap]:
-        """Delegate gap detection to the planner module."""
-        from basilisk.orchestrator.planner import Planner
-        return Planner().find_gaps(self)
 
     def record_execution(self, fingerprint: str) -> None:
         """Record that a capability was executed (for dedup)."""

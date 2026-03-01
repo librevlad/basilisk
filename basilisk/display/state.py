@@ -1,9 +1,13 @@
-"""DisplayState — accumulates event data for Rich Live rendering."""
+"""DisplayState — snapshot-driven state for Rich Live rendering."""
 
 from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from basilisk.knowledge.snapshot import KnowledgeSnapshot
 
 
 @dataclass
@@ -29,9 +33,11 @@ class FindingEntry:
 
 @dataclass
 class DisplayState:
-    """Mutable state accumulating event data for the live display.
+    """Mutable display state driven by KnowledgeStore snapshots.
 
-    Mutated by event handlers (sync), read by Rich Live on refresh.
+    Knowledge data (domains, ports, findings, etc.) comes from KnowledgeSnapshot.
+    Activity data (active plugins, recent plugins) comes from events directly.
+    Render is gated on snapshot fingerprint change.
     """
 
     # Step progress
@@ -39,7 +45,7 @@ class DisplayState:
     max_steps: int = 100
     started_at: float = field(default_factory=time.monotonic)
 
-    # Entity counts by type
+    # Entity counts by type (from snapshot or event-driven)
     entity_counts: dict[str, int] = field(default_factory=lambda: {
         "host": 0, "service": 0, "endpoint": 0, "technology": 0,
         "credential": 0, "finding": 0, "vulnerability": 0,
@@ -51,11 +57,11 @@ class DisplayState:
     # Gap count
     gap_count: int = 0
 
-    # Plugin activity
+    # Plugin activity (event-driven, not from snapshot)
     active_plugins: list[PluginActivity] = field(default_factory=list)
     recent_plugins: list[PluginActivity] = field(default_factory=list)
 
-    # Findings
+    # Findings (from snapshot)
     findings: list[FindingEntry] = field(default_factory=list)
 
     # Hypothesis stats
@@ -70,6 +76,10 @@ class DisplayState:
     # Termination
     finished: bool = False
     termination_reason: str = ""
+
+    # Snapshot tracking (for diff-based rendering)
+    _snapshot: KnowledgeSnapshot | None = field(default=None, repr=False)
+    _prev_fingerprint: str = field(default="", repr=False)
 
     @property
     def elapsed(self) -> float:
@@ -96,3 +106,39 @@ class DisplayState:
     def total_findings(self) -> int:
         """Total number of findings."""
         return len(self.findings)
+
+    @property
+    def snapshot(self) -> KnowledgeSnapshot | None:
+        """Current knowledge snapshot."""
+        return self._snapshot
+
+    def update_from_snapshot(self, snapshot: KnowledgeSnapshot) -> bool:
+        """Update state from knowledge snapshot. Returns True if changed."""
+        if snapshot.fingerprint == self._prev_fingerprint:
+            return False
+        self._snapshot = snapshot
+        self._prev_fingerprint = snapshot.fingerprint
+
+        # Update totals from snapshot
+        self.step = snapshot.step if snapshot.step > 0 else self.step
+        self.total_entities = snapshot.entity_count or self.total_entities
+        self.total_relations = snapshot.relation_count or self.total_relations
+
+        # Rebuild findings from snapshot
+        self.findings = [
+            FindingEntry(
+                title=f.get("title", ""),
+                severity=f.get("severity", "info"),
+                host=f.get("host", ""),
+            )
+            for f in snapshot.findings_verified
+        ]
+
+        # Update entity counts from snapshot sets
+        self.entity_counts["host"] = len(snapshot.domains)
+        self.entity_counts["service"] = len(snapshot.ports)
+        self.entity_counts["endpoint"] = len(snapshot.endpoints)
+        self.entity_counts["technology"] = len(snapshot.technologies)
+        self.entity_counts["finding"] = len(snapshot.findings_verified)
+
+        return True

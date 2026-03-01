@@ -9,7 +9,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from basilisk.decisions.decision import Decision, EvaluatedOption
 from basilisk.events.bus import Event, EventBus, EventType
@@ -18,11 +18,35 @@ from basilisk.knowledge.graph import KnowledgeGraph
 from basilisk.knowledge.relations import Relation, RelationType
 from basilisk.knowledge.state import KnowledgeState
 from basilisk.observations.observation import Observation
+from basilisk.orchestrator.constants import (
+    GAP_CONFIG_AUDITED,
+    GAP_CONTAINER_RUNTIME_CHECKED,
+    GAP_CONTAINERS_ENUMERATED,
+    GAP_ENDPOINTS_CHECKED,
+    GAP_FORMS_CHECKED,
+    GAP_SERVICES_CHECKED,
+    GAP_TECH_CHECKED,
+    GAP_VERIFIED,
+    GAP_VERSION_CHECKED,
+    GAP_VULNERABILITIES_CHECKED,
+)
 from basilisk.orchestrator.planner import Planner
 from basilisk.orchestrator.safety import SafetyLimits
 from basilisk.orchestrator.selector import Selector
 from basilisk.orchestrator.timeline import Timeline
 from basilisk.scoring.scorer import ScoredCapability, Scorer
+
+if TYPE_CHECKING:
+    from basilisk.memory.history import History
+    from basilisk.orchestrator.cost_tracker import CostTracker
+    from basilisk.orchestrator.coverage_tracker import CoverageTracker
+    from basilisk.orchestrator.executor_protocol import ExecutorProtocol
+    from basilisk.orchestrator.goals import GoalEngine
+    from basilisk.reasoning.belief import EvidenceAggregator
+    from basilisk.reasoning.hypothesis import HypothesisEngine
+    from basilisk.verification.confidence import ConfidenceModel
+    from basilisk.verification.confirmer import FindingConfirmer
+    from basilisk.verification.revalidator import ReValidator
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +64,7 @@ class LoopResult:
     results: dict[str, Any] = field(default_factory=dict)
     plugin_results: dict[str, Any] = field(default_factory=dict)
     decisions: list[Decision] = field(default_factory=list)
-    history: Any = None  # History | None
+    history: History | None = None
 
 
 class AutonomousLoop:
@@ -62,20 +86,20 @@ class AutonomousLoop:
         planner: Planner,
         selector: Selector,
         scorer: Scorer,
-        executor: Any,  # OrchestratorExecutor
+        executor: ExecutorProtocol,
         bus: EventBus,
         safety: SafetyLimits,
         on_progress: Callable | None = None,
-        history: Any = None,  # History | None
+        history: History | None = None,
         exploration_rate: float = 0.15,
-        cost_tracker: Any = None,  # CostTracker | None
-        goal_engine: Any = None,  # GoalEngine | None
-        hypothesis_engine: Any = None,  # HypothesisEngine | None
-        evidence_aggregator: Any = None,  # EvidenceAggregator | None
-        coverage_tracker: Any = None,  # CoverageTracker | None
-        confirmer: Any = None,  # FindingConfirmer | None
-        confidence_model: Any = None,  # ConfidenceModel | None
-        revalidator: Any = None,  # ReValidator | None
+        cost_tracker: CostTracker | None = None,
+        goal_engine: GoalEngine | None = None,
+        hypothesis_engine: HypothesisEngine | None = None,
+        evidence_aggregator: EvidenceAggregator | None = None,
+        coverage_tracker: CoverageTracker | None = None,
+        confirmer: FindingConfirmer | None = None,
+        confidence_model: ConfidenceModel | None = None,
+        revalidator: ReValidator | None = None,
     ) -> None:
         self.graph = graph
         self.planner = planner
@@ -271,6 +295,18 @@ class AutonomousLoop:
                             runtime=decision.outcome_duration,
                         )
 
+                    # Emit decision outcome for timeline / reporting
+                    self.bus.emit(Event(EventType.DECISION_OUTCOME, {
+                        "decision_id": decision.id,
+                        "plugin": decision.chosen_plugin,
+                        "target": decision.chosen_target,
+                        "step": step,
+                        "observations": obs_count,
+                        "new_entities": new_entities,
+                        "duration": decision.outcome_duration,
+                        "was_productive": decision.was_productive,
+                    }))
+
             total_obs += step_obs_count
 
             # 7x. Track coverage
@@ -337,7 +373,7 @@ class AutonomousLoop:
                     plugin_name = d.chosen_plugin if d else ""
                     for obs in obs_list:
                         entity_id = Entity.make_id(obs.entity_type, **obs.key_fields)
-                        from basilisk.reasoning.belief import get_source_family
+                        from basilisk.observations.source_families import get_source_family
                         family = get_source_family(plugin_name)
                         changed = self._hypothesis_engine.update_from_observation(
                             entity_id=entity_id,
@@ -594,7 +630,7 @@ class AutonomousLoop:
             and entity.type == EntityType.HOST
             and produced
         ):
-            entity.data["services_checked"] = True
+            entity.data[GAP_SERVICES_CHECKED] = True
 
         # Mark tech detection complete — only if execution actually produced entities,
         # so that other tech-producing plugins still get a chance to run
@@ -603,7 +639,7 @@ class AutonomousLoop:
             and entity.type == EntityType.HOST
             and produced
         ):
-            entity.data["tech_checked"] = True
+            entity.data[GAP_TECH_CHECKED] = True
 
         # Mark endpoint discovery complete — only if execution produced entities
         if (
@@ -611,23 +647,23 @@ class AutonomousLoop:
             and entity.type == EntityType.HOST
             and produced
         ):
-            entity.data["endpoints_checked"] = True
+            entity.data[GAP_ENDPOINTS_CHECKED] = True
             # form_analyzer / web_crawler also produce Endpoint — mark forms checked
             if cap.plugin_name in (
                 "form_analyzer", "web_crawler", "link_extractor",
             ):
-                entity.data["forms_checked"] = True
+                entity.data[GAP_FORMS_CHECKED] = True
 
         # Mark technology version check complete
         if entity.type == EntityType.TECHNOLOGY:
-            entity.data["version_checked"] = True
+            entity.data[GAP_VERSION_CHECKED] = True
 
         # Mark container runtime check complete
         if (
             "Technology:container_runtime" in cap.produces_knowledge
             and entity.type == EntityType.HOST
         ):
-            entity.data["container_runtime_checked"] = True
+            entity.data[GAP_CONTAINER_RUNTIME_CHECKED] = True
 
         # Mark container enumeration complete
         if (
@@ -635,19 +671,19 @@ class AutonomousLoop:
             and entity.type == EntityType.TECHNOLOGY
             and entity.data.get("is_container_runtime")
         ):
-            entity.data["containers_enumerated"] = True
+            entity.data[GAP_CONTAINERS_ENUMERATED] = True
 
         # Mark container config audit complete
         if cap.plugin_name == "container_config_audit" and entity.type == EntityType.CONTAINER:
-            entity.data["config_audited"] = True
+            entity.data[GAP_CONFIG_AUDITED] = True
 
         # Mark image analysis complete
         if cap.plugin_name == "image_fingerprint" and entity.type == EntityType.IMAGE:
-            entity.data["vulnerabilities_checked"] = True
+            entity.data[GAP_VULNERABILITIES_CHECKED] = True
 
         # Mark findings as verified when a verification plugin runs
         if cap.reduces_uncertainty and entity.type == EntityType.FINDING:
-            entity.data["verified"] = True
+            entity.data[GAP_VERIFIED] = True
             self.bus.emit(Event(EventType.FINDING_VERIFIED, {
                 "entity_id": entity.id,
                 "plugin": cap.plugin_name,

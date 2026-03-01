@@ -6,8 +6,9 @@ from io import StringIO
 
 from rich.console import Console
 
-from basilisk.display.report import print_auto_report, print_training_report
+from basilisk.display.report import print_auto_report, print_model_report, print_training_report
 from basilisk.display.state import DisplayState, FindingEntry
+from basilisk.reporting.model import ReportModel, ReportStatistics
 
 
 class TestPrintAutoReport:
@@ -50,6 +51,48 @@ class TestPrintAutoReport:
         print_auto_report(state, console)
         output = out.getvalue()
         assert "5 more" in output
+
+
+class TestPrintModelReport:
+    """Test print_model_report — renders from canonical ReportModel."""
+
+    def test_basic_output(self):
+        model = ReportModel(
+            target="example.com",
+            status="completed",
+            termination_reason="no_gaps",
+            statistics=ReportStatistics(
+                steps_completed=10,
+                duration_seconds=30.0,
+                total_entities=42,
+                total_relations=15,
+                findings_total=2,
+                severity_counts={"HIGH": 1, "MEDIUM": 1},
+                risk_score=3.5,
+            ),
+            findings_raw=[
+                {"title": "SQL Injection", "severity": "HIGH", "host": "example.com"},
+                {"title": "Missing HSTS", "severity": "MEDIUM", "host": "example.com"},
+            ],
+        )
+        out = StringIO()
+        console = Console(file=out, force_terminal=True, width=120)
+        print_model_report(model, console)
+        output = out.getvalue()
+        assert "Audit complete" in output
+        assert "SQL Injection" in output
+        assert "no_gaps" in output
+
+    def test_empty_model(self):
+        model = ReportModel(
+            target="example.com",
+            statistics=ReportStatistics(),
+        )
+        out = StringIO()
+        console = Console(file=out, no_color=True, width=120)
+        print_model_report(model, console)
+        output = out.getvalue()
+        assert "No findings" in output
 
 
 class TestPrintTrainingReport:

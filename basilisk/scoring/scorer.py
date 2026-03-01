@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
@@ -41,12 +42,14 @@ class Scorer:
         cost_tracker: CostTracker | None = None,
         campaign_memory: CampaignMemory | None = None,
         hypothesis_engine: HypothesisEngine | None = None,
+        unlock_fn: Callable[[list[str], KnowledgeGraph], int] | None = None,
     ) -> None:
         self.graph = graph
         self._history = history
         self._cost_tracker = cost_tracker
         self._campaign = campaign_memory
         self._hypothesis_engine = hypothesis_engine
+        self._unlock_fn = unlock_fn
 
     def rank(
         self,
@@ -205,10 +208,9 @@ class Scorer:
         A capability that produces Endpoint knowledge is valuable even without
         immediate findings because it opens vulnerability_testing paths.
         """
-        from basilisk.orchestrator.attack_paths import count_unlockable_paths
-
-        n_unlocked = count_unlockable_paths(cap.produces_knowledge, self.graph)
-        # Each unlocked path contributes 0.3 to the score
+        if self._unlock_fn is None:
+            return 0.0
+        n_unlocked = self._unlock_fn(cap.produces_knowledge, self.graph)
         return n_unlocked * 0.3
 
     @staticmethod

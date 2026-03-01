@@ -7,6 +7,18 @@ from typing import TYPE_CHECKING
 
 from basilisk.knowledge.entities import Entity, EntityType
 from basilisk.knowledge.relations import RelationType
+from basilisk.orchestrator.constants import (
+    GAP_CONFIG_AUDITED,
+    GAP_CONTAINER_RUNTIME_CHECKED,
+    GAP_CONTAINERS_ENUMERATED,
+    GAP_ENDPOINTS_CHECKED,
+    GAP_FORMS_CHECKED,
+    GAP_SERVICES_CHECKED,
+    GAP_TECH_CHECKED,
+    GAP_VERSION_CHECKED,
+    GAP_VULNERABILITIES_CHECKED,
+    HTTP_PORTS,
+)
 
 if TYPE_CHECKING:
     from basilisk.knowledge.graph import KnowledgeGraph
@@ -44,7 +56,7 @@ def _host_without_services(graph: KnowledgeGraph) -> list[KnowledgeGap]:
     gaps = []
     for host in graph.hosts():
         services = graph.neighbors(host.id, RelationType.EXPOSES)
-        if not services and "services_checked" not in host.data:
+        if not services and GAP_SERVICES_CHECKED not in host.data:
             gaps.append(KnowledgeGap(
                 entity=host,
                 missing="services",
@@ -78,7 +90,7 @@ def _http_service_without_tech(graph: KnowledgeGraph) -> list[KnowledgeGap]:
         )
         if has_http_service:
             techs = graph.neighbors(host.id, RelationType.RUNS)
-            if not techs and "tech_checked" not in host.data:
+            if not techs and GAP_TECH_CHECKED not in host.data:
                 gaps.append(KnowledgeGap(
                     entity=host,
                     missing="technology",
@@ -96,7 +108,7 @@ def _http_service_without_endpoints(graph: KnowledgeGraph) -> list[KnowledgeGap]
         has_http = any(_is_http_service(svc) for svc in services)
         if has_http:
             endpoints = graph.neighbors(host.id, RelationType.HAS_ENDPOINT)
-            if not endpoints and "endpoints_checked" not in host.data:
+            if not endpoints and GAP_ENDPOINTS_CHECKED not in host.data:
                 gaps.append(KnowledgeGap(
                     entity=host,
                     missing="endpoints",
@@ -119,7 +131,7 @@ def _http_endpoints_without_forms(graph: KnowledgeGraph) -> list[KnowledgeGap]:
         if not has_http:
             continue
         endpoints = graph.neighbors(host.id, RelationType.HAS_ENDPOINT)
-        if endpoints and "forms_checked" not in host.data:
+        if endpoints and GAP_FORMS_CHECKED not in host.data:
             gaps.append(KnowledgeGap(
                 entity=host,
                 missing="forms",
@@ -143,7 +155,7 @@ def _endpoint_without_testing(graph: KnowledgeGraph) -> list[KnowledgeGap]:
     # Pre-check which hosts have forms_checked
     hosts_forms_done: set[str] = set()
     for host in graph.hosts():
-        if "forms_checked" in host.data:
+        if GAP_FORMS_CHECKED in host.data:
             hosts_forms_done.add(host.data.get("host", ""))
     for ep in graph.endpoints():
         has_injectable = (
@@ -195,7 +207,7 @@ def _technology_without_version(graph: KnowledgeGraph) -> list[KnowledgeGap]:
     """Technology exists but version unknown → need version_detect."""
     gaps = []
     for tech in graph.technologies():
-        if not tech.data.get("version") and "version_checked" not in tech.data:
+        if not tech.data.get("version") and GAP_VERSION_CHECKED not in tech.data:
             gaps.append(KnowledgeGap(
                 entity=tech,
                 missing="version",
@@ -266,7 +278,7 @@ def _is_http_service(entity: Entity) -> bool:
     service_name = entity.data.get("service", "")
     banner = str(entity.data.get("banner", "")).lower()
 
-    if port in (80, 443, 3000, 4280, 5000, 8000, 8080, 8180, 8280, 8443, 8888, 9090, 9200):
+    if port in HTTP_PORTS:
         return True
     if protocol in ("http", "https"):
         return True
@@ -311,7 +323,7 @@ def _host_without_container_check(graph: KnowledgeGraph) -> list[KnowledgeGap]:
     docker_ports = {2375, 2376, 2377, 5000, 10250}
     gaps = []
     for host in graph.hosts():
-        if "container_runtime_checked" in host.data:
+        if GAP_CONTAINER_RUNTIME_CHECKED in host.data:
             continue
         # Check services on docker-related ports
         services = graph.neighbors(host.id, RelationType.EXPOSES)
@@ -335,7 +347,7 @@ def _container_runtime_without_enumeration(graph: KnowledgeGraph) -> list[Knowle
     for tech in graph.technologies():
         if not tech.data.get("is_container_runtime"):
             continue
-        if "containers_enumerated" in tech.data:
+        if GAP_CONTAINERS_ENUMERATED in tech.data:
             continue
         gaps.append(KnowledgeGap(
             entity=tech,
@@ -351,7 +363,7 @@ def _container_without_config_audit(graph: KnowledgeGraph) -> list[KnowledgeGap]
     gaps = []
     seen_hosts: set[str] = set()
     for container in graph.containers():
-        if "config_audited" in container.data:
+        if GAP_CONFIG_AUDITED in container.data:
             continue
         host = container.data.get("host", "")
         if host in seen_hosts:
@@ -370,7 +382,7 @@ def _container_without_image_analysis(graph: KnowledgeGraph) -> list[KnowledgeGa
     """Image exists but vulnerabilities not checked."""
     gaps = []
     for image in graph.images():
-        if "vulnerabilities_checked" in image.data:
+        if GAP_VULNERABILITIES_CHECKED in image.data:
             continue
         image_name = image.data.get("image_name", "?")
         gaps.append(KnowledgeGap(

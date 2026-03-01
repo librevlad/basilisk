@@ -174,23 +174,16 @@ ALLOWED_DEPENDENCIES: dict[str, set[str]] = {
     "engine": {
         "bridge", "campaign", "capabilities", "config", "core", "domain",
         "events", "knowledge", "logging", "memory", "models",
-        "orchestrator", "reasoning", "scoring", "verification",
+        "orchestrator", "reasoning", "scoring", "utils", "verification",
     },
 
     # -- knowledge spine --
-    "knowledge": {
-        "decisions", "models", "observations",
-        "orchestrator",  # TODO(v4-cycle): graph.find_missing_knowledge → Planner
-        "reasoning",  # TODO(v4-cycle): state → get_source_family
-    },
+    "knowledge": {"decisions", "models", "observations"},
     "observations": {"knowledge", "models"},
 
     # -- reasoning / scoring --
-    "reasoning": {"knowledge"},
-    "scoring": {
-        "capabilities", "knowledge",
-        "orchestrator",  # TODO(v4-cycle): scorer → attack_paths
-    },
+    "reasoning": {"knowledge", "observations"},
+    "scoring": {"capabilities", "knowledge"},
     "capabilities": {
         "bridge",  # TODO(v4-cycle): mapping → LegacyPluginScenario
         "core",
@@ -200,8 +193,7 @@ ALLOWED_DEPENDENCIES: dict[str, set[str]] = {
     "orchestrator": {
         "bridge", "capabilities", "decisions", "domain", "events",
         "knowledge", "models", "observations",
-        "reasoning",  # loop.py → belief
-        "scoring",
+        "scoring", "utils",
     },
 
     # -- supporting infrastructure --
@@ -218,6 +210,8 @@ ALLOWED_DEPENDENCIES: dict[str, set[str]] = {
     },
 
     "logging": {"events"},
+    "reporting": {"events"},
+    "display": {"events", "knowledge"},
 
     # -- v3 legacy leaf nodes --
     "utils": {"data", "models"},
@@ -530,9 +524,6 @@ class TestFindingOwnership:
 _KNOWN_CYCLES: set[frozenset[str]] = {
     frozenset({"bridge", "capabilities"}),     # mapping ↔ legacy_scenario
     frozenset({"knowledge", "observations"}),  # state ↔ adapter/observation
-    frozenset({"knowledge", "orchestrator"}),  # graph → Planner
-    frozenset({"knowledge", "reasoning"}),     # state → get_source_family
-    frozenset({"orchestrator", "scoring"}),    # scorer → attack_paths
 }
 
 
@@ -582,6 +573,20 @@ class TestNoCircularTopLevel:
                 f"{formatted}\n"
                 f"  Known cycles: {len(_KNOWN_CYCLES)}. "
                 f"Do not add new ones — break the dependency instead."
+            )
+
+    def test_no_ungoverned_packages(self) -> None:
+        """Every top-level basilisk package must be listed in ALLOWED_DEPENDENCIES."""
+        all_packages = {
+            p.name for p in BASILISK_ROOT.iterdir()
+            if p.is_dir() and (p / "__init__.py").exists()
+            and p.name != "__pycache__"
+        }
+        ungoverned = all_packages - set(ALLOWED_DEPENDENCIES.keys())
+        if ungoverned:
+            pytest.fail(
+                f"Ungoverned packages: {sorted(ungoverned)}. "
+                f"Add them to ALLOWED_DEPENDENCIES."
             )
 
     def test_known_cycles_still_exist(self) -> None:

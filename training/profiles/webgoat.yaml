@@ -1,0 +1,91 @@
+name: webgoat
+description: "OWASP WebGoat"
+target: "localhost:8080"
+target_ports: [8080]
+max_steps: 200
+required_coverage: 1.0
+docker:
+  compose_file: training/compose/webgoat.yml
+  service_name: webgoat
+  ready_url: "http://localhost:8080/WebGoat/"
+
+auth:
+  username: "basi-{uuid}"
+  password: basil12
+  login_url: /WebGoat/login
+  login_fields:
+    username: "basi-{uuid}"
+    password: basil12
+  setup_url: /WebGoat/register.mvc
+  setup_data:
+    username: "basi-{uuid}"
+    password: basil12
+    matchingPassword: basil12
+    agree: agree
+
+scan_paths:
+  - /WebGoat/start.mvc
+  - /WebGoat/service/lessonmenu.mvc
+  - /WebGoat/SqlInjection/assignment5a
+  - /WebGoat/SqlInjection/assignment5b
+  - /WebGoat/SqlInjectionAdvanced/challenge
+  - /WebGoat/SqlInjectionMitigations/attack10a
+  - /WebGoat/CrossSiteScripting/attack5a
+  - /WebGoat/CrossSiteScripting/attack5b
+  - /WebGoat/CrossSiteScriptingStored/stored-xss
+  - /WebGoat/xxe/simple
+  - /WebGoat/xxe/content-type
+  - /WebGoat/xxe/blind
+  - /WebGoat/PathTraversal/random
+  - /WebGoat/PathTraversal/profile-upload
+  - /WebGoat/SSRF/task1
+  - /WebGoat/SSRF/task2
+  - /WebGoat/JWT/secret/gettoken
+  - /WebGoat/JWT/votings
+  - /WebGoat/auth-bypass/verify-account
+  - /WebGoat/HijackSession/login
+  - /WebGoat/InsecureLogin/task
+  - /WebGoat/SpoofCookie/login
+  - /WebGoat/PasswordReset/ForgotPassword/create-password-reset-link
+  - /WebGoat/IDOR/profile
+  - /WebGoat/IDOR/profile/2342384
+  - /WebGoat/csrf/basic-get-flag
+  - /WebGoat/csrf/review
+
+expected_findings:
+  - title: "SQL Injection"
+    severity: "critical"
+    category: "sqli"
+    plugin_hints: ["sqli_basic", "sqli_advanced"]
+  - title: "SQL Injection Advanced"
+    severity: "critical"
+    category: "sqli"
+    plugin_hints: ["sqli_basic"]
+  - title: "XML External Entity"
+    severity: "critical"
+    category: "injection"
+    plugin_hints: ["xxe_check"]
+  - title: "JWT"
+    severity: "critical"
+    category: "auth"
+    plugin_hints: ["jwt_attack"]
+  - title: "Path Traversal"
+    severity: "high"
+    category: "injection"
+    plugin_hints: ["lfi_check"]
+  - title: "IDOR"
+    severity: "high"
+    category: "auth"
+    plugin_hints: ["idor_check"]
+  - title: "SSRF"
+    severity: "high"
+    category: "injection"
+    plugin_hints: ["ssrf_check"]
+  - title: "Mass Assignment"
+    severity: "medium"
+    category: "auth"
+    plugin_hints: ["param_tampering"]
+  - title: "Clickjacking"
+    severity: "medium"
+    category: "config"
+    plugin_hints: ["http_headers"]

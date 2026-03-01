@@ -1,4 +1,9 @@
-"""HTML + JSON report renderer — self-contained cyberpunk dashboard."""
+"""HTML + JSON report renderer — self-contained cyberpunk dashboard.
+
+Renderers are PURE PRESENTATION. All business logic (risk score, severity counts,
+kill chain, etc.) is computed by ReportBuilder. Renderers accept a data dict derived
+from a canonical ReportModel and assemble HTML/JSON — nothing more.
+"""
 
 from __future__ import annotations
 
@@ -7,129 +12,85 @@ import json
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from basilisk.reporting.builder import KILL_CHAIN_PHASES
+
 if TYPE_CHECKING:
     from basilisk.reporting.collector import ReportCollector
+    from basilisk.reporting.model import ReportModel
 
 _VERSION = "4.0.0"
 
-_KILL_CHAIN_PHASES = [
-    ("Recon", [
-        "dns_enum", "subdomain_enum", "whois_lookup", "port_scan",
-        "ssl_check", "certificate_transparency", "dns_zone_transfer",
-        "cloud_enum",
-    ]),
-    ("Mapping", [
-        "web_crawler", "sitemap_parser", "tech_fingerprint",
-        "cms_detection", "waf_detection", "api_discovery",
-        "form_analyzer", "directory_bruteforce", "vhost_discovery",
-        "container_discovery", "container_enumeration",
-    ]),
-    ("Exploit", [
-        "sqli_basic", "xss_scanner", "command_injection", "lfi_rfi",
-        "ssrf_scanner", "xxe_scanner", "ssti_scanner",
-        "nosqli_scanner", "ldap_injection", "csrf_scanner",
-        "cors_check", "open_redirect", "parameter_pollution",
-        "http_method_test", "crlf_injection",
-        "deserialization_scanner", "graphql_scanner",
-        "prototype_pollution", "web_cache_poisoning",
-    ]),
-    ("Privesc", [
-        "container_escape_probe", "privilege_escalation",
-        "lateral_movement", "credential_bruteforce",
-        "session_analysis", "jwt_analyzer",
-    ]),
-    ("Verify", [
-        "finding_confirmer", "finding_revalidator",
-        "container_verification",
-    ]),
-]
+# Re-export for backward compat (now canonical source is builder)
+_KILL_CHAIN_PHASES = KILL_CHAIN_PHASES
 
 
 def assemble_data(collector: ReportCollector) -> dict[str, Any]:
-    """Convert collector state to a JSON-serializable dict."""
+    """Convert collector state to a JSON-serializable dict via ReportBuilder.
+
+    Delegates all computation to the builder, then converts to the
+    renderer-compatible dict format.
+    """
+    from basilisk.reporting.builder import ReportBuilder
+
+    model = ReportBuilder.from_collector(collector)
+    return model_to_data(model)
+
+
+def model_to_data(model: ReportModel) -> dict[str, Any]:
+    """Convert a frozen ReportModel to the renderer-compatible dict format.
+
+    This is the bridge between the canonical data model and the HTML template.
+    """
     now = datetime.now(tz=UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
+    stats = model.statistics
+
+    training_data = None
+    if model.training is not None:
+        t = model.training
+        # false_positives carries full expected_findings when built from legacy dict
+        expected_findings = t.false_positives if t.false_positives else [
+            {
+                "title": m.get("title", ""),
+                "severity": m.get("severity", ""),
+                "discovered": False,
+                "verified": False,
+                "discovery_step": None,
+            }
+            for m in t.missed
+        ]
+        training_data = {
+            "profile_name": t.profile_name,
+            "coverage": t.coverage_percent / 100.0 if t.coverage_percent else 0.0,
+            "verification_rate": t.verification_rate / 100.0 if t.verification_rate else 0.0,
+            "passed": t.passed,
+            "expected_findings": expected_findings,
+        }
+
     return {
         "version": _VERSION,
-        "status": collector.status,
-        "mode": collector.mode,
-        "target": collector.target,
+        "status": model.status,
+        "mode": model.mode,
+        "target": model.target,
         "timestamp": now,
-        "duration_seconds": round(collector.elapsed, 1),
-        "termination_reason": collector.termination_reason,
+        "duration_seconds": stats.duration_seconds,
+        "termination_reason": model.termination_reason,
         "summary": {
-            "steps": collector.step,
-            "max_steps": collector.max_steps,
-            "total_entities": collector.total_entities,
-            "total_relations": collector.total_relations,
-            "total_findings": len(collector.findings),
-            "total_gaps": collector.gap_count,
-            "entity_counts": dict(collector.entity_counts),
-            "severity_counts": collector.severity_counts,
-            "risk_score": round(collector.risk_score, 1),
+            "steps": stats.steps_completed,
+            "max_steps": stats.max_steps,
+            "total_entities": stats.total_entities,
+            "total_relations": stats.total_relations,
+            "total_findings": stats.findings_total,
+            "total_gaps": stats.total_gaps,
+            "entity_counts": dict(stats.entity_counts),
+            "severity_counts": dict(stats.severity_counts),
+            "risk_score": stats.risk_score,
         },
-        "findings": [
-            {
-                "title": f.title,
-                "severity": f.severity.upper(),
-                "host": f.host,
-                "evidence": f.evidence,
-                "description": f.description,
-                "tags": f.tags,
-                "confidence": f.confidence,
-                "verified": f.verified,
-                "step": f.step,
-            }
-            for f in collector.findings
-        ],
-        "decisions": [
-            {
-                "step": d.step,
-                "plugin": d.plugin,
-                "target": d.target,
-                "score": round(d.score, 3),
-                "reasoning": d.reasoning,
-                "productive": d.productive,
-                "duration": round(d.duration, 2),
-                "new_entities": d.new_entities,
-            }
-            for d in collector.decisions
-        ],
-        "plugins": [
-            {
-                "name": p.name,
-                "target": p.target,
-                "duration": round(p.duration, 2),
-                "findings_count": p.findings_count,
-                "step": p.step,
-            }
-            for p in collector.plugins
-        ],
-        "step_history": [
-            {
-                "step": s.step,
-                "entities": s.entities,
-                "relations": s.relations,
-                "gaps": s.gaps,
-                "entities_gained": s.entities_gained,
-            }
-            for s in collector.step_history
-        ],
-        "reasoning": {
-            "hypotheses_confirmed": collector.hypotheses_confirmed,
-            "hypotheses_rejected": collector.hypotheses_rejected,
-            "hypotheses_active": collector.hypotheses_active,
-            "beliefs_strengthened": collector.beliefs_strengthened,
-            "beliefs_weakened": collector.beliefs_weakened,
-            "events": [
-                {
-                    "type": e.event_type,
-                    "data": e.data,
-                    "step": e.step,
-                }
-                for e in collector.reasoning_events
-            ],
-        },
-        "training": collector.training,
+        "findings": list(model.findings_raw),
+        "decisions": list(model.decisions),
+        "plugins": list(model.plugins_raw),
+        "step_history": list(model.step_history),
+        "reasoning": dict(model.reasoning),
+        "training": training_data,
     }
 
 

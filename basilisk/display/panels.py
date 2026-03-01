@@ -12,6 +12,7 @@ from rich.text import Text
 
 if TYPE_CHECKING:
     from basilisk.display.state import DisplayState
+    from basilisk.knowledge.snapshot import KnowledgeSnapshot
 
 SEV_STYLES = {
     "CRITICAL": "bold red",
@@ -104,7 +105,52 @@ def findings_panel(state: DisplayState) -> Panel:
 
 
 def knowledge_panel(state: DisplayState) -> Panel:
-    """Entity breakdown — verbose only."""
+    """Entity breakdown — verbose only.
+
+    If a KnowledgeSnapshot is available, shows discovered knowledge map
+    (domains, ports, endpoints, technologies). Falls back to entity counts.
+    """
+    snapshot = state.snapshot
+    if snapshot and (snapshot.domains or snapshot.ports or snapshot.technologies):
+        return _knowledge_snapshot_panel(snapshot, state)
+    return _knowledge_counts_panel(state)
+
+
+def _knowledge_snapshot_panel(snapshot: KnowledgeSnapshot, state: DisplayState) -> Panel:
+    """Render discovered knowledge as a growing map."""
+    table = Table.grid(padding=(0, 2))
+    table.add_column("type", style="cyan")
+    table.add_column("detail")
+
+    if snapshot.domains:
+        table.add_row("Domains", ", ".join(sorted(snapshot.domains)[:10]))
+
+    if snapshot.ports:
+        ports_str = ", ".join(
+            f"{h}:{p}/{s}" for h, p, s in sorted(snapshot.ports)[:10]
+        )
+        table.add_row("Ports", ports_str)
+
+    if snapshot.endpoints:
+        eps_str = ", ".join(
+            f"{h}{p}" for h, p in sorted(snapshot.endpoints)[:10]
+        )
+        table.add_row("Endpoints", eps_str)
+
+    if snapshot.technologies:
+        techs_str = ", ".join(
+            f"{t}" for _, t in sorted(snapshot.technologies)[:10]
+        )
+        table.add_row("Technologies", techs_str)
+
+    table.add_row("[bold]Total[/]", f"[bold]{state.total_entities}[/] entities")
+    table.add_row("Relations", str(state.total_relations))
+
+    return Panel(table, title="Knowledge Graph", border_style="dim")
+
+
+def _knowledge_counts_panel(state: DisplayState) -> Panel:
+    """Fallback: entity count table."""
     table = Table.grid(padding=(0, 2))
     table.add_column("type", style="cyan")
     table.add_column("count", justify="right")

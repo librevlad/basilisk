@@ -1,0 +1,56 @@
+name: altoro_mutual
+description: "Altoro Mutual / TestFire"
+target: "localhost:4380"
+target_ports: [4380]
+max_steps: 200
+required_coverage: 1.0
+
+docker:
+  compose_file: training/compose/altoro.yml
+  service_name: altoro
+  ready_url: "http://localhost:4380/"
+
+auth:
+  username: admin
+  password: admin
+  login_url: /doLogin
+  login_fields:
+    uid: admin
+    passw: admin
+    btnSubmit: Login
+
+scan_paths:
+  - /login.jsp
+  - /doLogin
+  - /bank/main.jsp
+  - /bank/transaction.jsp
+  - /bank/transfer.jsp
+  - /bank/queryxpath.jsp
+  - /bank/customize.jsp
+  - /bank/apply.jsp
+  - /search.jsp?query=test
+  - /index.jsp?content=personal.htm
+  - /feedback.jsp
+  - /comment.jsp?content=test
+  - /admin/admin.jsp
+  - /swagger/index.html
+  - /api/account
+  - /api/account/1
+  - /bank/transaction.jsp?id=1
+
+expected_findings:
+  - { title: "SQL Injection Login Bypass", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic", "auth_bypass"] }
+  - { title: "SQL Injection Search", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic"] }
+  - { title: "Default Credentials", severity: "critical", category: "auth", plugin_hints: ["default_creds"] }
+  - { title: "XSS Reflected", severity: "high", category: "xss", plugin_hints: ["xss_basic"] }
+  - { title: "XSS Stored", severity: "high", category: "xss", plugin_hints: ["xss_advanced"] }
+  - { title: "CSRF", severity: "high", category: "csrf", plugin_hints: ["csrf_check"] }
+  - { title: "IDOR", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
+  - { title: "Session Fixation", severity: "high", category: "auth", plugin_hints: ["session_check"] }
+  - { title: "Unauthenticated Access", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
+  - { title: "File Inclusion", severity: "high", category: "lfi", plugin_hints: ["lfi_check"] }
+  - { title: "HTML Injection", severity: "medium", category: "xss", plugin_hints: ["xss_basic"] }
+  - { title: "Open Redirect", severity: "medium", category: "config", plugin_hints: ["open_redirect"] }
+  - { title: "Clickjacking", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
+  - { title: "Cookie", severity: "medium", category: "auth", plugin_hints: ["http_headers"] }
+  - { title: "Directory listing", severity: "low", category: "config", plugin_hints: ["dir_brute"] }

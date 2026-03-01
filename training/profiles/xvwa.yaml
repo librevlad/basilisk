@@ -1,0 +1,64 @@
+name: xvwa
+description: "Xtreme Vulnerable Web Application"
+target: "localhost:5080"
+target_ports: [5080]
+max_steps: 250
+required_coverage: 1.0
+
+docker:
+  compose_file: training/compose/xvwa.yml
+  service_name: xvwa
+  ready_url: "http://localhost:5080/"
+
+auth:
+  setup_url: /xvwa/setup/?action=do
+
+scan_paths:
+  - /xvwa/
+  - /xvwa/vulnerabilities/sqli/
+  - /xvwa/vulnerabilities/sqli/?item=1
+  - /xvwa/vulnerabilities/sqli_blind/
+  - /xvwa/vulnerabilities/sqli_blind/?item=1
+  - /xvwa/vulnerabilities/cmdi/
+  - /xvwa/vulnerabilities/reflected_xss/
+  - /xvwa/vulnerabilities/reflected_xss/?item=test
+  - /xvwa/vulnerabilities/stored_xss/
+  - /xvwa/vulnerabilities/dom_xss/
+  - /xvwa/vulnerabilities/fi/
+  - /xvwa/vulnerabilities/fi/?item=../../../etc/passwd
+  - /xvwa/vulnerabilities/csrf/
+  - /xvwa/vulnerabilities/ssrf_xspa/
+  - /xvwa/vulnerabilities/ssrf_xspa/?url=http://example.com
+  - /xvwa/vulnerabilities/fileupload/
+  - /xvwa/vulnerabilities/idor/
+  - /xvwa/vulnerabilities/idor/?item=1
+  - /xvwa/vulnerabilities/xpath/
+  - /xvwa/vulnerabilities/xpath/?item=test
+  - /xvwa/vulnerabilities/crypto/
+  - /xvwa/vulnerabilities/sessionflaws/
+  - /xvwa/vulnerabilities/formula_injection/
+  - /xvwa/vulnerabilities/php_object_injection/
+  - /xvwa/vulnerabilities/ssti/
+  - /xvwa/vulnerabilities/redirect/
+  - /xvwa/vulnerabilities/missfunc/
+
+expected_findings:
+  - { title: "SQL Injection", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic"] }
+  - { title: "SQL Injection Blind", severity: "critical", category: "sqli", plugin_hints: ["sqli_advanced"] }
+  - { title: "Command Injection", severity: "critical", category: "injection", plugin_hints: ["command_injection"] }
+  - { title: "PHP Object Injection", severity: "critical", category: "injection", plugin_hints: ["deserialization_check"] }
+  - { title: "Remote File Inclusion", severity: "critical", category: "lfi", plugin_hints: ["lfi_check"] }
+  - { title: "Unrestricted File Upload", severity: "critical", category: "upload", plugin_hints: ["file_upload_bypass"] }
+  - { title: "XSS Reflected", severity: "high", category: "xss", plugin_hints: ["xss_basic"] }
+  - { title: "XSS Stored", severity: "high", category: "xss", plugin_hints: ["xss_advanced"] }
+  - { title: "XSS DOM", severity: "high", category: "xss", plugin_hints: ["xss_dom"] }
+  - { title: "SSRF", severity: "high", category: "injection", plugin_hints: ["ssrf_check"] }
+  - { title: "Local File Inclusion", severity: "high", category: "lfi", plugin_hints: ["lfi_check"] }
+  - { title: "XPath Injection", severity: "high", category: "injection", plugin_hints: ["sqli_basic"] }
+  - { title: "Formula Injection", severity: "high", category: "injection", plugin_hints: ["param_tampering"] }
+  - { title: "IDOR", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
+  - { title: "Missing Access Control", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
+  - { title: "Session Fixation", severity: "high", category: "auth", plugin_hints: ["session_check"] }
+  - { title: "CSRF", severity: "high", category: "csrf", plugin_hints: ["csrf_check"] }
+  - { title: "SSTI", severity: "high", category: "injection", plugin_hints: ["ssti_check"] }
+  - { title: "Open Redirect", severity: "medium", category: "injection", plugin_hints: ["open_redirect"] }

@@ -1,0 +1,62 @@
+name: crapi
+description: "OWASP crAPI - Completely Ridiculous API"
+target: "localhost:8888"
+target_ports: [8888]
+max_steps: 250
+required_coverage: 1.0
+docker:
+  compose_file: training/compose/crapi.yml
+  service_name: crapi-web
+  ready_url: "http://localhost:8888/health"
+
+auth:
+  auth_type: json_api
+  username: basilisk@test.com
+  password: Basilisk1234
+  login_url: /identity/api/auth/login
+  login_fields:
+    email: "basilisk-{uuid}@test.com"
+    password: Basilisk1234
+  register_url: /identity/api/auth/signup
+  register_data:
+    name: "Basilisk {uuid}"
+    email: "basilisk-{uuid}@test.com"
+    number: "555{uuid}"
+    password: Basilisk1234
+  token_path: token
+  token_header: Authorization
+  token_prefix: "Bearer "
+
+scan_paths:
+  - /identity/api/auth/signup
+  - /identity/api/auth/login
+  - /identity/api/auth/forget-password
+  - /identity/api/v2/user/dashboard
+  - /identity/api/v2/user/change-email
+  - /identity/api/v2/user/reset-password
+  - /identity/api/v2/user/videos
+  - /identity/api/v2/user/videos/1
+  - /identity/api/v2/vehicle/vehicles
+  - /identity/api/v2/vehicle/add_vehicle
+  - /workshop/api/shop/orders
+  - /workshop/api/shop/orders/1
+  - /workshop/api/shop/apply_coupon
+  - /workshop/api/shop/return_order?order_id=1
+  - /workshop/api/mechanic/receive_report
+  - /workshop/api/mechanic/mechanic_report?mechanic_id=1
+  - /workshop/api/merchant/contact_mechanic
+  - /community/api/v2/community/posts
+  - /community/api/v2/community/posts/recent
+  - /community/api/v2/coupon/validate-coupon
+
+expected_findings:
+  - { title: "IDOR", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
+  - { title: "BOLA", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
+  - { title: "SQL Injection", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic"] }
+  - { title: "NoSQL Injection", severity: "critical", category: "injection", plugin_hints: ["nosqli_check"] }
+  - { title: "JWT", severity: "critical", category: "auth", plugin_hints: ["jwt_attack"] }
+  - { title: "SSRF", severity: "high", category: "injection", plugin_hints: ["ssrf_check"] }
+  - { title: "Mass Assignment", severity: "high", category: "auth", plugin_hints: ["param_tampering"] }
+  - { title: "Unauthenticated Access", severity: "high", category: "auth", plugin_hints: ["auth_bypass"] }
+  - { title: "Clickjacking", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
+  - { title: "CORS", severity: "medium", category: "config", plugin_hints: ["cors_scan"] }

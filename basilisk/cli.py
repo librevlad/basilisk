@@ -231,13 +231,20 @@ def train(
 
     settings = Settings.load(config) if config else Settings.load()
     bus = EventBus()
+    resolved = profile_path.resolve()
+    pdir = resolved.parent
+    if pdir.name == "training_profiles":
+        proj_root = pdir.parent
+    elif pdir.name == "profiles" and pdir.parent.name == "training":
+        proj_root = pdir.parent.parent
+    else:
+        proj_root = pdir
+
     runner = TrainingRunner(
         tp,
         target_override=target,
         manage_docker=not no_docker,
-        project_root=profile_path.resolve().parent.parent
-        if profile_path.resolve().parent.name == "training_profiles"
-        else profile_path.resolve().parent,
+        project_root=proj_root,
     )
 
     from basilisk.training.validator import FindingTracker

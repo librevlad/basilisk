@@ -29,6 +29,7 @@ class EventType(StrEnum):
     BELIEF_WEAKENED = "belief_weakened"
     HYPOTHESIS_CONFIRMED = "hypothesis_confirmed"
     HYPOTHESIS_REJECTED = "hypothesis_rejected"
+    DECISION_OUTCOME = "decision_outcome"
 
 
 @dataclass

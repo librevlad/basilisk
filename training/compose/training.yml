@@ -1,0 +1,49 @@
+# Master compose file — start all 20 training containers at once.
+#
+# Usage:
+#   docker compose -f training/compose/training.yml up -d
+#   docker compose -f training/compose/training.yml down
+#
+# Port assignments (20 containers):
+#   dvwa        -> 127.0.0.1:4280
+#   bwapp       -> 127.0.0.1:8180
+#   mutillidae  -> 127.0.0.1:8280
+#   juice-shop  -> 127.0.0.1:3000
+#   webgoat     -> 127.0.0.1:8080 (+9090)
+#   altoro      -> 127.0.0.1:4380
+#   badstore    -> 127.0.0.1:4480
+#   dvws        -> 127.0.0.1:4580
+#   crapi       -> 127.0.0.1:8888
+#   dsvw        -> 127.0.0.1:65412
+#   dvga        -> 127.0.0.1:5013
+#   gruyere     -> 127.0.0.1:8008
+#   hackazon    -> 127.0.0.1:4680
+#   nodegoat    -> 127.0.0.1:4000
+#   pixi        -> 127.0.0.1:8000
+#   railsgoat   -> 127.0.0.1:4780
+#   vampi       -> 127.0.0.1:5000
+#   vapi        -> 127.0.0.1:4880
+#   wackopicko  -> 127.0.0.1:4980
+#   xvwa        -> 127.0.0.1:5080
+
+include:
+  - dvwa.yml
+  - bwapp.yml
+  - mutillidae.yml
+  - juiceshop.yml
+  - webgoat.yml
+  - altoro.yml
+  - badstore.yml
+  - dvws.yml
+  - crapi.yml
+  - dsvw.yml
+  - dvga.yml
+  - gruyere.yml
+  - hackazon.yml
+  - nodegoat.yml
+  - pixi.yml
+  - railsgoat.yml
+  - vampi.yml
+  - vapi.yml
+  - wackopicko.yml
+  - xvwa.yml

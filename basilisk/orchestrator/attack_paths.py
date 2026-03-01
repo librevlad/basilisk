@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from basilisk.knowledge.entities import EntityType
+from basilisk.orchestrator.constants import HTTP_PORTS
 
 if TYPE_CHECKING:
     from basilisk.knowledge.graph import KnowledgeGraph
@@ -141,7 +142,7 @@ def _precondition_met(precondition: str, graph: KnowledgeGraph) -> bool:
             return False
         if subtype == "http":
             return any(
-                s.data.get("port") in (80, 443, 8080, 8443, 3000, 5000, 8000, 8888, 9090)
+                s.data.get("port") in HTTP_PORTS
                 or "http" in str(s.data.get("service", "")).lower()
                 for s in services
             )

@@ -2,28 +2,14 @@
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from basilisk.domain.target import BaseTarget, LiveTarget, TrainingTarget
+from basilisk.utils.net import is_ip_or_local as _is_ip_or_local
 
 if TYPE_CHECKING:
     from basilisk.config import Settings
-
-_IP_PATTERN = re.compile(
-    r"^(\d{1,3}\.){3}\d{1,3}$"
-    r"|^localhost$"
-    r"|^\[?[0-9a-fA-F:]+\]?$"
-)
-
-
-def _is_ip_or_local(host: str) -> bool:
-    """Check if a host string looks like an IP or localhost."""
-    bare = host.split(":")[0] if "." in host and ":" in host else host
-    if bare.startswith("["):
-        bare = bare.strip("[]")
-    return bool(_IP_PATTERN.match(bare))
 
 
 def _split_host_port(raw: str) -> tuple[str, int | None]:

@@ -3,12 +3,30 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import logging
 import socket
 
 from basilisk.models.types import PortInfo, PortState
 
 logger = logging.getLogger(__name__)
+
+
+def is_ip_or_local(host: str) -> bool:
+    """Check if host is an IP address or localhost (with optional port)."""
+    if host.startswith("["):
+        h = host.split("]")[0][1:]
+    elif ":" in host:
+        h = host.rsplit(":", 1)[0]
+    else:
+        h = host
+    if h in ("localhost", "127.0.0.1", "::1"):
+        return True
+    try:
+        ipaddress.ip_address(h)
+        return True
+    except ValueError:
+        return False
 
 
 class NetUtils:

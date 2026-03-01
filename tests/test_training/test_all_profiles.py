@@ -1,6 +1,6 @@
 """Tests for loading and validating all 20 training profile YAML files.
 
-Each profile is loaded from training_profiles/ and checked for:
+Each profile is loaded from training/profiles/ and checked for:
 - Required fields (name, target, expected_findings)
 - Structural integrity (ports, coverage, max_steps)
 - Docker configuration consistency
@@ -15,7 +15,7 @@ import pytest
 
 from basilisk.training.profile import TrainingProfile
 
-PROFILES_DIR = Path(__file__).resolve().parents[2] / "training_profiles"
+PROFILES_DIR = Path(__file__).resolve().parents[2] / "training" / "profiles"
 
 # All 20 profiles in alphabetical order
 ALL_PROFILES = sorted(p.stem for p in PROFILES_DIR.glob("*.yaml"))
@@ -118,7 +118,7 @@ class TestDockerConfig:
     def test_compose_file_exists(self, profile: TrainingProfile):
         if profile.name in self.DOCKER_EXEMPT:
             pytest.skip(f"{profile.name} has no Docker config")
-        compose_path = PROFILES_DIR.parent / profile.docker.compose_file
+        compose_path = PROFILES_DIR.parent.parent / profile.docker.compose_file
         assert compose_path.exists(), (
             f"{profile.name}: compose file not found: {profile.docker.compose_file}"
         )

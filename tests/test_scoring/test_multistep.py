@@ -6,6 +6,7 @@ from basilisk.capabilities.capability import Capability
 from basilisk.knowledge.entities import Entity
 from basilisk.knowledge.graph import KnowledgeGraph
 from basilisk.knowledge.relations import Relation, RelationType
+from basilisk.orchestrator.attack_paths import count_unlockable_paths
 from basilisk.orchestrator.cost_tracker import CostTracker
 from basilisk.scoring.scorer import Scorer
 
@@ -41,7 +42,7 @@ class TestUnlockValue:
         g = KnowledgeGraph()
         host = _host()
         g.add_entity(host)
-        scorer = Scorer(g)
+        scorer = Scorer(g, unlock_fn=count_unlockable_paths)
 
         # Producing Service should unlock HTTP-dependent paths
         cap = _cap("port_scan", produces=["Service"])
@@ -59,7 +60,7 @@ class TestUnlockValue:
             source_id=host.id, target_id=svc.id, type=RelationType.EXPOSES,
         ))
 
-        scorer = Scorer(g)
+        scorer = Scorer(g, unlock_fn=count_unlockable_paths)
         # Producing Endpoint should unlock injection/credential paths
         cap = _cap("web_crawler", produces=["Endpoint"])
         scored = scorer.rank([(cap, host)])

@@ -14,7 +14,7 @@ from basilisk.knowledge.entities import Entity, EntityType
 from basilisk.training.profile import TrainingProfile
 from basilisk.training.validator import FindingTracker
 
-PROFILES_DIR = Path(__file__).resolve().parents[2] / "training_profiles"
+PROFILES_DIR = Path(__file__).resolve().parents[2] / "training" / "profiles"
 
 
 def _entity(title: str, severity: str, category: str = "", eid: str = "") -> Entity:

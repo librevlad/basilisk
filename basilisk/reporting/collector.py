@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -116,6 +117,9 @@ class ReportCollector:
     beliefs_strengthened: int = 0
     beliefs_weakened: int = 0
 
+    # Timeline events (for ReportModel)
+    timeline_events: list[dict[str, Any]] = field(default_factory=list)
+
     # Active plugin tracking (for duration calc)
     _active_plugins: dict[str, float] = field(default_factory=dict)
 
@@ -166,6 +170,7 @@ class ReportCollector:
         bus.subscribe(EventType.BELIEF_WEAKENED, self._on_belief_weakened)
         bus.subscribe(EventType.HYPOTHESIS_CONFIRMED, self._on_hypothesis_confirmed)
         bus.subscribe(EventType.HYPOTHESIS_REJECTED, self._on_hypothesis_rejected)
+        bus.subscribe(EventType.DECISION_OUTCOME, self._on_decision_outcome)
 
     def finalize(self, termination_reason: str = "") -> None:
         """Mark collection as complete."""
@@ -206,6 +211,13 @@ class ReportCollector:
         key = f"{plugin}:{target}:{event.data.get('step', 0)}"
         self._active_plugins[key] = time.monotonic()
 
+        self.timeline_events.append({
+            "timestamp": datetime.now(UTC).isoformat(),
+            "scenario": plugin,
+            "action": "started",
+            "result": {"target": target, "step": event.data.get("step", 0)},
+        })
+
     def _on_plugin_finished(self, event: Event) -> None:
         plugin = event.data.get("plugin", "")
         target = event.data.get("target", "")
@@ -223,6 +235,17 @@ class ReportCollector:
             name=plugin, target=target, duration=duration,
             findings_count=findings_count, step=step,
         ))
+
+        action = "completed" if findings_count >= 0 else "failed"
+        self.timeline_events.append({
+            "timestamp": datetime.now(UTC).isoformat(),
+            "scenario": plugin,
+            "action": action,
+            "result": {
+                "target": target, "step": step,
+                "duration": duration, "findings_count": findings_count,
+            },
+        })
 
     def _on_step_completed(self, event: Event) -> None:
         self.step = event.data.get("step", self.step)
@@ -257,6 +280,12 @@ class ReportCollector:
                 confidence=event.data.get("confidence", 0.0),
                 step=event.data.get("step", self.step),
             ))
+            self.timeline_events.append({
+                "timestamp": datetime.now(UTC).isoformat(),
+                "scenario": "",
+                "action": "finding_created",
+                "result": {"title": title, "severity": event.data.get("severity", "info")},
+            })
 
     def _on_entity_updated(self, event: Event) -> None:
         pass
@@ -275,6 +304,12 @@ class ReportCollector:
         for f in self.findings:
             if f.title == title:
                 f.verified = True
+                self.timeline_events.append({
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "scenario": event.data.get("plugin", ""),
+                    "action": "verification_passed",
+                    "result": {"title": title},
+                })
                 break
 
     def _on_belief_strengthened(self, event: Event) -> None:
@@ -312,3 +347,13 @@ class ReportCollector:
             data=dict(event.data),
             step=self.step,
         ))
+
+    def _on_decision_outcome(self, event: Event) -> None:
+        """Update decision with outcome data from DECISION_OUTCOME event."""
+        plugin = event.data.get("plugin", "")
+        for d in self.decisions:
+            if d.plugin == plugin and d.step == event.data.get("step", 0):
+                d.productive = event.data.get("was_productive", False)
+                d.duration = event.data.get("duration", 0.0)
+                d.new_entities = event.data.get("new_entities", 0)
+                break
