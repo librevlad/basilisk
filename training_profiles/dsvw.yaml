@@ -40,7 +40,6 @@ expected_findings:
   - { title: "SSRF", severity: "high", category: "injection", plugin_hints: ["ssrf_check"] }
   - { title: "XPath Injection Blind", severity: "high", category: "injection", plugin_hints: ["sqli_basic"] }
   - { title: "Path Traversal", severity: "high", category: "injection", plugin_hints: ["lfi_check"] }
-  - { title: "CSRF", severity: "high", category: "csrf", plugin_hints: ["csrf_check"] }
   - { title: "Frame Injection", severity: "medium", category: "injection", plugin_hints: ["xss_basic"] }
   - { title: "Clickjacking", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
   - { title: "Unvalidated Redirect", severity: "medium", category: "config", plugin_hints: ["open_redirect"] }

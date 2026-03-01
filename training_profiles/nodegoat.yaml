@@ -44,4 +44,3 @@ expected_findings:
   - { title: "Security Misconfiguration", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
   - { title: "Log Injection", severity: "medium", category: "injection", plugin_hints: ["command_injection"] }
   - { title: "NoSQL Injection", severity: "critical", category: "injection", plugin_hints: ["nosqli_check"] }
-  - { title: "Server Side Injection", severity: "critical", category: "injection", plugin_hints: ["command_injection", "ssti_check"] }

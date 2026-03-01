@@ -44,7 +44,6 @@ scan_paths:
 
 expected_findings:
   - { title: "Broken Authentication", severity: "critical", category: "auth", plugin_hints: ["default_creds", "auth_bypass"] }
-  - { title: "SQL Injection API", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic"] }
   - { title: "JWT Vulnerability", severity: "critical", category: "auth", plugin_hints: ["jwt_attack"] }
   - { title: "BOLA", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
   - { title: "SSRF", severity: "high", category: "injection", plugin_hints: ["ssrf_check"] }

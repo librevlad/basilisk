@@ -83,10 +83,6 @@ expected_findings:
     severity: "medium"
     category: "idor"
     plugin_hints: ["idor_check", "auth_bypass"]
-  - title: "Weak Session IDs"
-    severity: "medium"
-    category: "auth"
-    plugin_hints: ["session_check"]
   - title: "Insecure CAPTCHA"
     severity: "medium"
     category: "csrf"

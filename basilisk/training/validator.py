@@ -52,7 +52,7 @@ _CATEGORY_ALIASES: dict[str, set[str]] = {
     "lfi": {"file-inclusion", "path-traversal", "directory-traversal", "rfi"},
     "upload": {"file-upload", "unrestricted-upload"},
     "csrf": {"cross-site-request-forgery"},
-    "crypto": {"weak-crypto", "weak-encryption", "hash", "padding-oracle", "weak-random"},
+    "crypto": {"weak-crypto", "weak-encryption", "hash", "padding-oracle", "weak-random", "prng"},
     "dos": {"denial-of-service", "rate-limiting"},
     "csp": {"headers", "content-security-policy"},
     "idor": {"auth", "bola", "param_tampering", "access-control", "authorization"},

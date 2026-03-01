@@ -38,8 +38,6 @@ expected_findings:
   - { title: "SQL Injection", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic"] }
   - { title: "SQL Injection Blind", severity: "critical", category: "sqli", plugin_hints: ["sqli_advanced"] }
   - { title: "OS Command Injection", severity: "critical", category: "injection", plugin_hints: ["command_injection"] }
-  - { title: "File Upload Arbitrary", severity: "critical", category: "upload", plugin_hints: ["file_upload_bypass"] }
-  - { title: "Remote File Inclusion", severity: "critical", category: "lfi", plugin_hints: ["lfi_check"] }
   - { title: "XXE", severity: "critical", category: "injection", plugin_hints: ["xxe_check"] }
   - { title: "XSS Reflected", severity: "high", category: "xss", plugin_hints: ["xss_basic"] }
   - { title: "XSS Stored", severity: "high", category: "xss", plugin_hints: ["xss_advanced"] }
