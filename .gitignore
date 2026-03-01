@@ -46,6 +46,12 @@ uv.lock
 *.p12
 secrets.yaml
 
+# Logs and temp outputs
+*.log
+training_results.json
+vampi_output.txt
+wg_exit.txt
+
 # Coverage
 .coverage
 .coverage.*
