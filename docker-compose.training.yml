@@ -1,10 +1,10 @@
-# Master compose file — start all 19 training containers at once.
+# Master compose file — start all 20 training containers at once.
 #
 # Usage:
 #   docker compose -f docker-compose.training.yml up -d
 #   docker compose -f docker-compose.training.yml down
 #
-# Port assignments:
+# Port assignments (20 containers):
 #   dvwa        -> 127.0.0.1:4280
 #   bwapp       -> 127.0.0.1:8180
 #   mutillidae  -> 127.0.0.1:8280
@@ -12,6 +12,7 @@
 #   webgoat     -> 127.0.0.1:8080 (+9090)
 #   altoro      -> 127.0.0.1:4380
 #   badstore    -> 127.0.0.1:4480
+#   dvws        -> 127.0.0.1:4580
 #   crapi       -> 127.0.0.1:8888
 #   dsvw        -> 127.0.0.1:65412
 #   dvga        -> 127.0.0.1:5013
@@ -24,8 +25,6 @@
 #   vapi        -> 127.0.0.1:4880
 #   wackopicko  -> 127.0.0.1:4980
 #   xvwa        -> 127.0.0.1:5080
-#
-# Note: dvbank has no Docker image (Android app).
 
 include:
   - docker-compose.dvwa.yml
@@ -35,6 +34,7 @@ include:
   - docker-compose.webgoat.yml
   - docker-compose.altoro.yml
   - docker-compose.badstore.yml
+  - docker-compose.dvws.yml
   - docker-compose.crapi.yml
   - docker-compose.dsvw.yml
   - docker-compose.dvga.yml

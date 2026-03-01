@@ -47,7 +47,7 @@ PROFILE_ORDER = [
     "webgoat",      # 23.1%
     "railsgoat",    # 22.2%
     "pixi",         # 0% last time
-    # "dvbank",     # Android app, no Docker
+    "dvws",         # NEW: WebSocket vulnerabilities
 ]
 
 

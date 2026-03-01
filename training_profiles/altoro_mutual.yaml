@@ -39,8 +39,8 @@ scan_paths:
   - /bank/transaction.jsp?id=1
 
 expected_findings:
-  - { title: "SQL Injection", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic", "auth_bypass"] }
-  - { title: "SQL Injection", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic"] }
+  - { title: "SQL Injection Login Bypass", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic", "auth_bypass"] }
+  - { title: "SQL Injection Search", severity: "critical", category: "sqli", plugin_hints: ["sqli_basic"] }
   - { title: "Default Credentials", severity: "critical", category: "auth", plugin_hints: ["default_creds"] }
   - { title: "XSS Reflected", severity: "high", category: "xss", plugin_hints: ["xss_basic"] }
   - { title: "XSS Stored", severity: "high", category: "xss", plugin_hints: ["xss_advanced"] }

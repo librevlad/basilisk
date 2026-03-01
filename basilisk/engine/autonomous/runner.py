@@ -163,7 +163,7 @@ class AutonomousRunner:
             tools=self._kwargs.get("tools", {}),
             state=self._kwargs.get("state", {}),
         )
-        bus = EventBus()
+        bus = self._kwargs.get("bus") or EventBus()
 
         # Persistent structured logging
         run_logger = None

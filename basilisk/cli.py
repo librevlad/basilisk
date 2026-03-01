@@ -49,77 +49,43 @@ def auto(
     _setup_logging(verbose)
 
     from basilisk import Basilisk
-
-    console.print(
-        f"[bold blue]Basilisk v{__version__}[/] — "
-        f"Autonomous audit [bold]{target}[/] (max {max_steps} steps)"
-    )
-
     from basilisk.config import Settings
+    from basilisk.display import LiveDisplay, print_auto_report
+    from basilisk.events.bus import EventBus
 
     settings = Settings.load(config) if config else Settings.load()
     if log_dir:
         settings.logging.log_dir = Path(log_dir)
 
-    b = Basilisk(target, max_steps=max_steps, config=settings)
+    bus = EventBus()
+    display = LiveDisplay(bus, max_steps=max_steps, verbose=verbose, console=console)
+
+    b = Basilisk(target, max_steps=max_steps, config=settings, bus=bus)
     if campaign:
         b = b.campaign()
 
-    result = asyncio.run(b.run())
+    from basilisk.reporting import ReportWriter
 
-    # Print summary
-    console.print(f"\n[bold green]Audit complete![/] {len(result.findings)} findings")
-    console.print(f"  Steps: {result.steps}")
-    console.print(f"  Duration: {result.duration:.1f}s")
-    console.print(f"  Reason: {result.termination_reason}")
-    if result.graph_data:
-        console.print(
-            f"  Graph: {result.graph_data.get('entity_count', 0)} entities, "
-            f"{result.graph_data.get('relation_count', 0)} relations"
-        )
+    writer = ReportWriter(bus, target=target, max_steps=max_steps, mode="auto")
 
-    if result.findings:
-        _print_findings_table(result.findings)
+    async def _run_with_display() -> tuple:
+        display.start()
+        report_dir = await writer.start()
+        try:
+            result = await b.run()
+        finally:
+            state = display.stop()
+            state.termination_reason = ""  # will be set from result
+        await writer.finalize(termination_reason=result.termination_reason)
+        return result, report_dir
 
+    result, report_dir = asyncio.run(_run_with_display())
 
-def _print_findings_table(findings: list) -> None:
-    """Print severity summary and top findings."""
-    # Severity summary
-    counts: dict[str, int] = {}
-    for f in findings:
-        name = f.severity.name if hasattr(f.severity, "name") else str(f.severity)
-        counts[name] = counts.get(name, 0) + 1
+    # Update display state with final result info
+    display.state.termination_reason = result.termination_reason
+    print_auto_report(display.state, console)
+    console.print(f"\n[dim]Report:[/] {report_dir / 'report.html'}")
 
-    sev_colors = {
-        "CRITICAL": "bold red", "HIGH": "red", "MEDIUM": "yellow",
-        "LOW": "green", "INFO": "dim",
-    }
-
-    summary = Table(title="Severity Summary")
-    summary.add_column("Severity")
-    summary.add_column("Count", justify="right")
-    sev_order = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
-    for sev in sev_order:
-        if sev in counts:
-            style = sev_colors.get(sev, "")
-            summary.add_row(f"[{style}]{sev}[/{style}]", str(counts[sev]))
-    console.print(summary)
-
-    # Top findings (max 20)
-    table = Table(title="Top Findings")
-    table.add_column("Severity", width=10)
-    table.add_column("Title")
-    table.add_column("Target", style="dim")
-
-    for f in findings[:20]:
-        sev = f.severity.name if hasattr(f.severity, "name") else str(f.severity)
-        style = sev_colors.get(sev, "")
-        target = getattr(f, "target", "") or ""
-        table.add_row(f"[{style}]{sev}[/{style}]", f.title, target)
-
-    console.print(table)
-    if len(findings) > 20:
-        console.print(f"  [dim]... and {len(findings) - 20} more[/]")
 
 
 @app.command(name="run")
@@ -247,6 +213,8 @@ def train(
     """Training validation — benchmark engine against known vulnerabilities."""
     _setup_logging(verbose)
 
+    from basilisk.display import TrainingDisplay, print_training_report
+    from basilisk.events.bus import EventBus
     from basilisk.training.profile import TrainingProfile
     from basilisk.training.runner import TrainingRunner
 
@@ -259,16 +227,10 @@ def train(
     if max_steps is not None:
         tp.max_steps = max_steps
 
-    console.print(
-        f"[bold blue]Basilisk v{__version__}[/] — Training validation: "
-        f"[bold]{tp.name}[/] ({len(tp.expected_findings)} expected findings)"
-    )
-    console.print(f"  Target: [bold]{target or tp.target}[/]")
-    console.print(f"  Max steps: {tp.max_steps}")
-
     from basilisk.config import Settings
 
     settings = Settings.load(config) if config else Settings.load()
+    bus = EventBus()
     runner = TrainingRunner(
         tp,
         target_override=target,
@@ -277,46 +239,34 @@ def train(
         if profile_path.resolve().parent.name == "training_profiles"
         else profile_path.resolve().parent,
     )
-    report = asyncio.run(runner.run(config=settings))
 
-    table = Table(title=f"Training Validation: {report.profile_name}")
-    table.add_column("Finding", style="cyan")
-    table.add_column("Severity")
-    table.add_column("Category", style="dim")
-    table.add_column("Discovered")
-    table.add_column("Verified")
-    table.add_column("Step")
+    from basilisk.training.validator import FindingTracker
 
-    for fd in report.findings_detail:
-        sev = fd["expected_severity"]
-        sev_colors = {
-            "critical": "bold red", "high": "red", "medium": "yellow", "low": "green",
-        }
-        sev_style = sev_colors.get(sev, "")
-        disc = "[green]YES[/]" if fd["discovered"] else "[red]NO[/]"
-        verif = "[green]YES[/]" if fd["verified"] else "[yellow]NO[/]"
-        step = str(fd.get("discovery_step", "-") or "-")
-        table.add_row(
-            fd["expected_title"],
-            f"[{sev_style}]{sev}[/{sev_style}]",
-            fd.get("category", ""),
-            disc,
-            verif,
-            step,
-        )
-
-    console.print(table)
-    console.print(
-        f"\n  Coverage: [bold]{report.coverage * 100:.1f}%[/] "
-        f"({report.discovered}/{report.total_expected})"
+    tracker = FindingTracker(tp)
+    display = TrainingDisplay(
+        bus, tracker, max_steps=tp.max_steps, verbose=verbose, console=console,
     )
-    console.print(f"  Verification: {report.verification_rate * 100:.1f}%")
-    console.print(f"  Steps: {report.steps_taken}")
 
-    if report.passed:
-        console.print("[bold green]PASSED[/]")
-    else:
-        console.print("[bold red]FAILED[/] — coverage below required threshold")
+    from basilisk.reporting import ReportWriter
+
+    train_target = target or tp.target
+    writer = ReportWriter(bus, target=train_target, max_steps=tp.max_steps, mode="train")
+
+    async def _run_with_display() -> tuple:
+        display.start()
+        report_dir = await writer.start()
+        try:
+            result = await runner.run(config=settings, bus=bus, tracker=tracker)
+        finally:
+            display.stop()
+        await writer.finalize_training(result, tracker)
+        return result, report_dir
+
+    report, report_dir = asyncio.run(_run_with_display())
+    print_training_report(report, console)
+    console.print(f"\n[dim]Report:[/] {report_dir / 'report.html'}")
+
+    if not report.passed:
         raise typer.Exit(1)
 
 

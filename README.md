@@ -2,7 +2,7 @@
 
 Professional modular security framework for autonomous reconnaissance, analysis, and pentesting.
 
-188 auto-discovered plugins across 10 categories, all wrapped as v4 Scenarios. Unified autonomous engine with knowledge graph, deterministic decision traces, cognitive reasoning, and persistent campaign memory. Training validation benchmarked against 18 vulnerable containers with **68.9% average coverage**.
+188 auto-discovered plugins across 10 categories, all wrapped as v4 Scenarios. Unified autonomous engine with knowledge graph, deterministic decision traces, cognitive reasoning, and persistent campaign memory. Rich live visualization with real-time progress tracking. Training validation benchmarked against 20 vulnerable containers (298 expected findings) with **~97% guided validation coverage**.
 
 ## Quick Start
 
@@ -35,6 +35,8 @@ basilisk crack <hash>
 ```
 CLI (cli.py) / Basilisk class (__init__.py)
     |
+Display (display/live.py, panels.py, report.py, training.py)
+    |  Rich live visualization + progress tracking
 Engine (engine/autonomous/runner.py)
     |  ScenarioRegistry + ScenarioExecutor (v4 active path)
 Orchestrator (loop, planner, selector, scorer)
@@ -237,37 +239,44 @@ HOST --[EXPOSES]--> SERVICE(:2375)
 
 Benchmarking system for measuring detection coverage against known vulnerable targets. Each
 training profile defines a target, Docker compose configuration, authentication, scan paths,
-and expected findings.
+and expected findings. The validator uses multi-strategy matching (title containment, abbreviation
+expansion, category aliases, word overlap) with ±1 severity tolerance.
 
 ```bash
 basilisk train training_profiles/dvwa.yaml              # run against DVWA
 basilisk train training_profiles/juice_shop.yaml        # run against Juice Shop
 ```
 
-### Benchmark Results (18 containers)
+### Benchmark Results (20 containers, 298 expected findings)
 
-| # | Target | Coverage | Verified | Category |
-|---|--------|----------|----------|----------|
-| 1 | XVWA | 95.2% (20/21) | 55.0% | PHP vulns |
-| 2 | WackoPicko | 93.8% (15/16) | 46.7% | Classic web |
-| 3 | DSVW | 90.9% (20/22) | 80.0% | Python vulns |
-| 4 | DVWA | 87.5% (14/16) | 28.6% | PHP vulns |
-| 5 | bWAPP | 87.5% (35/40) | 68.6% | PHP vulns |
-| 6 | VAmPi | 87.5% (7/8) | 0.0% | REST API |
-| 7 | Hackazon | 85.7% (12/14) | 25.0% | E-commerce |
-| 8 | Mutillidae | 83.3% (25/30) | 56.0% | OWASP Top 10 |
-| 9 | Juice Shop | 82.8% (24/29) | 8.3% | Modern JS app |
-| 10 | vAPI | 80.0% (8/10) | 0.0% | REST API |
-| 11 | Gruyere | 69.2% (9/13) | 22.2% | Python app |
-| 12 | NodeGoat | 66.7% (6/9) | 33.3% | Node.js |
-| 13 | DVGA | 66.7% (12/18) | 16.7% | GraphQL |
-| 14 | BadStore | 63.2% (12/19) | 33.3% | Classic web |
-| 15 | Altoro Mutual | 56.2% (9/16) | 33.3% | Banking app |
-| 16 | crAPI | 33.3% (4/12) | 0.0% | Microservices API |
-| 17 | WebGoat | 23.1% (3/13) | 0.0% | Lesson-based |
-| 18 | RailsGoat | 22.2% (2/9) | 0.0% | Ruby on Rails |
+| # | Target | Findings | Auth | Category |
+|---|--------|----------|------|----------|
+| 1 | bWAPP | 39 | form | PHP vulns (OWASP Top 10) |
+| 2 | Mutillidae | 30 | form | OWASP Top 10 |
+| 3 | Juice Shop | 27 | json_api | Modern JS app |
+| 4 | DSVW | 21 | form | Python vulns |
+| 5 | XVWA | 19 | form | PHP vulns |
+| 6 | BadStore | 16 | form | Classic web |
+| 7 | Altoro Mutual | 15 | form | Banking app |
+| 8 | DVWA | 15 | form | PHP vulns |
+| 9 | WackoPicko | 15 | form | Classic web |
+| 10 | DVGA | 13 | form | GraphQL API |
+| 11 | Hackazon | 12 | form | E-commerce |
+| 12 | Gruyere | 11 | form | Python app |
+| 13 | crAPI | 10 | json_api | Microservices API |
+| 14 | DVWS | 10 | form | WebSocket security |
+| 15 | WebGoat | 9 | form | Lesson-based |
+| 16 | NodeGoat | 8 | form | Node.js |
+| 17 | RailsGoat | 8 | form | Ruby on Rails |
+| 18 | vAPI | 8 | json_api | REST API |
+| 19 | VAmPi | 7 | json_api | REST API |
+| 20 | Pixi | 5 | form | OWASP DevSlop |
 
-**Average coverage: 68.9%** across 18 vulnerable applications.
+**Guided validation coverage: ~97%** (289/297) across 19 tested containers, 13 at 100%.
+
+> **Note:** Coverage is measured with pre-seeded endpoints, configured authentication, and
+> multi-strategy validator matching. This measures the framework's detection capability when
+> given optimal conditions, not blind discovery from scratch.
 
 ---
 
@@ -405,6 +414,7 @@ basilisk/
 ├── orchestrator/                  # Autonomous loop, planner, selector, goals, safety, coverage
 ├── verification/                  # Finding verification (confidence calculator, confirmer)
 ├── training/                      # Training validation (profiles, runner, validator)
+├── display/                       # Rich live visualization (LiveDisplay, TrainingDisplay, panels)
 ├── events/                        # Event bus (14 event types)
 ├── utils/                         # HTTP client, DNS, rate limiter, payloads, WAF bypass
 ├── storage/                       # SQLite WAL (async, bulk ops, migrations)
@@ -420,8 +430,8 @@ basilisk/
     ├── post_exploit/  (7)
     └── forensics/     (6)
 
-training_profiles/                 # 18 YAML profiles for training validation
-tests/                             # 1974 tests, 90+ files
+training_profiles/                 # 20 YAML profiles for training validation
+tests/                             # 2611 tests, 141 files
 ```
 
 ## Stack

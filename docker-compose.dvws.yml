@@ -1,0 +1,13 @@
+services:
+  dvws:
+    image: tssoffsec/dvws-node
+    ports:
+      - "127.0.0.1:4580:8080"
+    environment:
+      - MONGO_HOST=dvws-mongo
+    depends_on:
+      - dvws-mongo
+    restart: unless-stopped
+  dvws-mongo:
+    image: mongo:6
+    restart: unless-stopped

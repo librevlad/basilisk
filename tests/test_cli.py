@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
@@ -13,14 +14,18 @@ runner = CliRunner()
 
 
 def _make_auto_result(**overrides):
-    """Create a mock RunResult for auto command tests."""
+    """Create a mock RunResult for auto command tests.
+
+    Returns (result, report_dir) tuple as expected by the auto command.
+    """
     r = MagicMock()
     r.findings = overrides.get("findings", [])
     r.steps = overrides.get("steps", 5)
     r.duration = overrides.get("duration", 10.0)
     r.termination_reason = overrides.get("termination_reason", "no_gaps")
     r.graph_data = overrides.get("graph_data", {"entity_count": 10, "relation_count": 5})
-    return r
+    report_dir = overrides.get("report_dir", Path("reports/test"))
+    return r, report_dir
 
 
 def _make_finding(severity_name="HIGH", severity_value=3, title="Test Finding"):
@@ -92,22 +97,21 @@ class TestAutoCommand:
         mock_asyncio_run.return_value = _make_auto_result()
         result = runner.invoke(app, ["auto", "example.com", "-n", "25"])
         assert result.exit_code == 0
-        assert "25" in result.output
+        assert "Audit complete" in result.output
 
     @patch("basilisk.cli.asyncio.run")
-    def test_auto_shows_findings_table(self, mock_asyncio_run):
-        findings = [_make_finding("HIGH", 3, "SQL Injection in /search")]
-        mock_asyncio_run.return_value = _make_auto_result(findings=findings)
+    def test_auto_shows_audit_complete(self, mock_asyncio_run):
+        mock_asyncio_run.return_value = _make_auto_result()
         result = runner.invoke(app, ["auto", "example.com"])
         assert result.exit_code == 0
-        assert "1 findings" in result.output
+        assert "Audit complete" in result.output
 
     @patch("basilisk.cli.asyncio.run")
-    def test_auto_no_findings_message(self, mock_asyncio_run):
-        mock_asyncio_run.return_value = _make_auto_result(findings=[])
+    def test_auto_shows_termination_reason(self, mock_asyncio_run):
+        mock_asyncio_run.return_value = _make_auto_result(termination_reason="no_gaps")
         result = runner.invoke(app, ["auto", "example.com"])
         assert result.exit_code == 0
-        assert "0 findings" in result.output
+        assert "no_gaps" in result.output
 
     @patch("basilisk.cli.asyncio.run")
     def test_auto_verbose_flag(self, mock_asyncio_run):
@@ -181,7 +185,7 @@ class TestTrainCommand:
         mock_report.steps_taken = 10
         mock_report.passed = True
         mock_report.findings_detail = []
-        mock_asyncio_run.return_value = mock_report
+        mock_asyncio_run.return_value = (mock_report, Path("reports/test"))
 
         import tempfile
 
@@ -191,7 +195,6 @@ class TestTrainCommand:
             result = runner.invoke(app, ["train", f.name])
 
         assert result.exit_code == 0
-
 
     @patch("basilisk.cli.asyncio.run")
     @patch("basilisk.training.runner.TrainingRunner")
@@ -213,7 +216,7 @@ class TestTrainCommand:
         mock_report.steps_taken = 5
         mock_report.passed = True
         mock_report.findings_detail = []
-        mock_asyncio_run.return_value = mock_report
+        mock_asyncio_run.return_value = (mock_report, Path("reports/test"))
 
         import tempfile
 

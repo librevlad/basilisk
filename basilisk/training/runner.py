@@ -34,7 +34,12 @@ class TrainingRunner:
         self.manage_docker = manage_docker
         self.project_root = project_root
 
-    async def run(self, config: Settings | None = None) -> ValidationReport:
+    async def run(
+        self,
+        config: Settings | None = None,
+        bus: Any | None = None,
+        tracker: FindingTracker | None = None,
+    ) -> ValidationReport:
         """Execute training run and return validation report."""
         docker_cfg = self.profile.docker
         docker_mgr = None
@@ -51,12 +56,17 @@ class TrainingRunner:
                 docker_mgr = None
 
         try:
-            return await self._run_engine(config)
+            return await self._run_engine(config, bus=bus, tracker=tracker)
         finally:
             if docker_mgr:
                 await docker_mgr.down(docker_cfg.compose_file, self.project_root)
 
-    async def _run_engine(self, config: Settings | None = None) -> ValidationReport:
+    async def _run_engine(
+        self,
+        config: Settings | None = None,
+        bus: Any | None = None,
+        tracker: FindingTracker | None = None,
+    ) -> ValidationReport:
         """Core engine execution (separated for Docker lifecycle wrapping)."""
         from basilisk.capabilities.mapping import build_capabilities
         from basilisk.config import Settings
@@ -118,7 +128,7 @@ class TrainingRunner:
             scope.add(Target.domain(target_str))
 
         graph = KnowledgeGraph()
-        tracker = FindingTracker(self.profile)
+        tracker = tracker or FindingTracker(self.profile)
         planner = Planner()
         capabilities = build_capabilities(registry)
         selector = Selector(capabilities)
@@ -131,7 +141,7 @@ class TrainingRunner:
 
         core_executor = AsyncExecutor(max_concurrency=settings.scan.max_concurrency)
         orch_executor = OrchestratorExecutor(registry, core_executor, ctx)
-        bus = EventBus()
+        bus = bus or EventBus()
         safety = SafetyLimits(
             max_steps=self.profile.max_steps,
             max_duration_seconds=7200.0,

@@ -29,10 +29,13 @@ class Basilisk:
         result = await Basilisk("10.10.10.1", "10.10.10.2").run()
     """
 
-    def __init__(self, *targets: str, max_steps: int = 100, config: Any = None):
+    def __init__(
+        self, *targets: str, max_steps: int = 100, config: Any = None, bus: Any = None,
+    ):
         self._targets = list(targets)
         self._max_steps = max_steps
         self._config = config
+        self._bus = bus
         self._campaign_enabled = False
         self._plugin_filter: list[str] = []
         self._exclude_patterns: list[str] = []
@@ -73,6 +76,9 @@ class Basilisk:
         settings = self._resolve_config()
         targets = TargetLoader.load(self._targets, settings)
         actor = CompositeActor.build(settings)
+        kwargs: dict[str, Any] = {}
+        if self._bus is not None:
+            kwargs["bus"] = self._bus
         runner = AutonomousRunner(
             settings=settings,
             actor=actor,
@@ -82,6 +88,7 @@ class Basilisk:
             exclude_patterns=self._exclude_patterns or None,
             on_finding=self._on_finding,
             on_step=self._on_step,
+            **kwargs,
         )
         return await runner.run(targets, settings)
 

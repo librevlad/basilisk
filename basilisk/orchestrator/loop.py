@@ -228,6 +228,11 @@ class AutonomousLoop:
                         "key_data": " ".join(f"{k}={v}" for k, v in obs.key_fields.items()),
                         "confidence_delta": outcome.confidence_delta,
                     }
+                    # Enrich finding events with display data
+                    if obs.entity_type == EntityType.FINDING:
+                        event_data["title"] = obs.entity_data.get("title", "")
+                        event_data["severity"] = obs.entity_data.get("severity", "")
+                        event_data["host"] = obs.key_fields.get("host", "")
                     self.bus.emit(Event(
                         EventType.ENTITY_UPDATED if not outcome.was_new
                         else EventType.ENTITY_CREATED,
