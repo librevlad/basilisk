@@ -15,7 +15,6 @@ if TYPE_CHECKING:
     from basilisk.core.executor import AsyncExecutor, PluginContext
     from basilisk.core.registry import PluginRegistry
     from basilisk.knowledge.graph import KnowledgeGraph
-    from basilisk.models.target import Target
     from basilisk.observations.observation import Observation
 
 logger = logging.getLogger(__name__)
@@ -46,7 +45,7 @@ class OrchestratorExecutor:
             logger.warning("Plugin %s not found in registry", capability.plugin_name)
             return []
 
-        target = self._entity_to_target(target_entity, graph)
+        target = entity_to_target(target_entity, graph)
         plugin = plugin_cls()
 
         # Pass service port info through ctx.state for service-targeted plugins
@@ -82,7 +81,3 @@ class OrchestratorExecutor:
         """Populate ctx.state with data pentesting plugins need."""
         populate_state(self.ctx.state, result)
 
-    @staticmethod
-    def _entity_to_target(entity: Entity, graph: KnowledgeGraph) -> Target:
-        """Convert an entity to a Target object for plugin execution."""
-        return entity_to_target(entity, graph)

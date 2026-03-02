@@ -53,6 +53,13 @@ class NetUtils:
         except (ConnectionRefusedError, OSError):
             return PortInfo(port=port, state=PortState.CLOSED)
 
+    async def port_open(
+        self, host: str, port: int, timeout: float | None = None
+    ) -> bool:
+        """Check if a TCP port is open. Convenience wrapper around check_port."""
+        info = await self.check_port(host, port, timeout=timeout)
+        return info.state == PortState.OPEN
+
     async def scan_ports(
         self, host: str, ports: list[int], timeout: float | None = None
     ) -> list[PortInfo]:

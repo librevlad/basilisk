@@ -69,7 +69,7 @@ class ScenarioExecutor:
             logger.warning("Scenario %s not found in registry", capability.plugin_name)
             return []
 
-        v3_target = self._entity_to_target(target_entity, graph)
+        v3_target = entity_to_target(target_entity, graph)
         v4_target = LiveTarget(
             host=v3_target.host,
             ports=v3_target.ports,
@@ -118,7 +118,3 @@ class ScenarioExecutor:
         """Populate ctx.state with data pentesting plugins need."""
         populate_state(self.ctx.state, result)
 
-    @staticmethod
-    def _entity_to_target(entity: Entity, graph: KnowledgeGraph) -> Any:
-        """Convert an entity to a v3 Target for scenario execution."""
-        return entity_to_target(entity, graph)

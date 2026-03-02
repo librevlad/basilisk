@@ -9,6 +9,7 @@ from basilisk.knowledge.graph import KnowledgeGraph
 from basilisk.models.result import PluginResult
 from basilisk.models.target import TargetType
 from basilisk.orchestrator.executor import OrchestratorExecutor
+from basilisk.orchestrator.executor_utils import entity_to_target
 
 
 def _make_executor(*, result: PluginResult | None = None) -> OrchestratorExecutor:
@@ -320,7 +321,7 @@ class TestEntityToTargetIp:
         graph = KnowledgeGraph()
         ep = Entity.endpoint("127.0.0.1:4280", "/vuln")
         graph.add_entity(ep)
-        target = OrchestratorExecutor._entity_to_target(ep, graph)
+        target = entity_to_target(ep, graph)
         assert target.type == TargetType.IP
         assert target.host == "127.0.0.1:4280"
 
@@ -328,7 +329,7 @@ class TestEntityToTargetIp:
         graph = KnowledgeGraph()
         ep = Entity.endpoint("example.com", "/search")
         graph.add_entity(ep)
-        target = OrchestratorExecutor._entity_to_target(ep, graph)
+        target = entity_to_target(ep, graph)
         assert target.type == TargetType.DOMAIN
         assert target.host == "example.com"
 
@@ -336,14 +337,14 @@ class TestEntityToTargetIp:
         graph = KnowledgeGraph()
         ep = Entity.endpoint("10.0.0.1:8080", "/api")
         graph.add_entity(ep)
-        target = OrchestratorExecutor._entity_to_target(ep, graph)
+        target = entity_to_target(ep, graph)
         assert target.type == TargetType.IP
 
     def test_host_entity_delegates_to_graph(self):
         graph = KnowledgeGraph()
         host = Entity.host("test.com")
         graph.add_entity(host)
-        target = OrchestratorExecutor._entity_to_target(host, graph)
+        target = entity_to_target(host, graph)
         assert target.host == "test.com"
 
 

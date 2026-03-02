@@ -38,19 +38,19 @@ basilisk/
 ├── core/            # BasePlugin, PluginRegistry (Kahn's topo sort), AsyncExecutor+PluginContext, ProviderPool, AuthManager
 ├── knowledge/       # KnowledgeGraph (9 entity types, 11 relation types), KnowledgeState, KnowledgeStore, VulnRegistry
 ├── observations/    # Observation model, adapt_result(): PluginResult → Observations → KG
-├── capabilities/    # Capability+ActionType, CAPABILITY_MAP (145 explicit + auto-inference)
+├── capabilities/    # Capability+ActionType, CAPABILITY_MAP (216 explicit)
 ├── reasoning/       # HypothesisEngine (5 detectors), EvidenceAggregator (6 source families)
 ├── decisions/       # Decision, ContextSnapshot, EvaluatedOption
 ├── memory/          # History: decision log, repetition penalty, JSON persistence
 ├── scoring/         # Scorer: multi-component priority formula
 ├── orchestrator/    # Planner (18 gap rules), Selector, ScenarioExecutor, AutonomousLoop, GoalEngine, AttackPaths, CostTracker, CoverageTracker, SafetyLimits, Timeline
 ├── campaign/        # CampaignStore (SQLite), CampaignMemory, extractor
-├── events/          # EventBus: 14 event types
+├── events/          # EventBus: 15 event types
 ├── utils/           # http, dns, net, rate_limiter, wordlists, batch_check, browser, payloads, waf_bypass, etc.
 ├── storage/         # SQLite WAL: Schema+PRAGMA+migrations, Repository (CRUD, bulk, pagination)
 └── plugins/         # 188 auto-discovered: recon(23), scanning(19), analysis(23), pentesting(60), exploitation(23), crypto(8), lateral(12), privesc(7), post_exploit(7), forensics(6)
 
-tests/               # ~1974 теста, 90+ файлов, зеркальная структура
+tests/               # ~2837 тестов, 90+ файлов, зеркальная структура
 ```
 
 ### v4 Layer Stack
