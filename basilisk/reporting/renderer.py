@@ -2047,6 +2047,145 @@ _RISK_WEIGHTS: dict[str, int] = {
 }
 
 
+def _endpoint_base_url(host: str, services: list[dict]) -> str:
+    """Build the best base URL for a host from its services list.
+
+    Prefers https over http, includes non-standard ports.
+    Falls back to ``https://<host>`` when no services are known.
+    """
+    https_port: int | None = None
+    http_port: int | None = None
+    for svc in services:
+        name = str(svc.get("service", "")).lower().strip()
+        port = svc.get("port", 0)
+        if name in ("https", "https-alt") and https_port is None:
+            https_port = port
+        elif name in ("http", "http-proxy") and http_port is None:
+            http_port = port
+
+    if https_port is not None:
+        suffix = "" if https_port == 443 else ":" + str(https_port)
+        return "https://" + host + suffix
+    if http_port is not None:
+        suffix = "" if http_port == 80 else ":" + str(http_port)
+        return "http://" + host + suffix
+    return "https://" + host
+
+
+def _endpoint_link(path: str, base_url: str) -> str:
+    """Render an endpoint path as a clickable ``<a>`` element."""
+    safe_path = _e(path)
+    href = _e(base_url + path)
+    return (
+        '<a href="' + href + '" target="_blank"'
+        ' rel="noopener" style="color:var(--neon-cyan);'
+        'text-decoration:none">' + safe_path + "</a>"
+    )
+
+
+_INTERESTING_PREFIXES = frozenset({
+    "api", "admin", "auth", "login", "logout", "register", "signup",
+    "graphql", "swagger", "openapi", "debug", "console", "config",
+    "internal", "private", "secret", "token", "oauth", "callback",
+    "webhook", "upload", "download", "export", "import", "backup",
+    "dashboard", "panel", "manage", "reset", "verify", "confirm",
+    ".env", ".git", "wp-admin", "wp-login", "phpmyadmin", "actuator",
+})
+
+_INTERESTING_EXTENSIONS = frozenset({
+    ".json", ".yaml", ".yml", ".xml", ".env", ".bak", ".sql", ".log",
+    ".conf", ".cfg", ".ini", ".php", ".asp", ".aspx", ".jsp",
+})
+
+
+def _is_interesting_endpoint(path: str) -> bool:
+    """Return True if path looks security-relevant."""
+    low = path.lower().lstrip("/")
+    first_seg = low.split("/")[0] if "/" in low else low
+    if first_seg in _INTERESTING_PREFIXES:
+        return True
+    for prefix in _INTERESTING_PREFIXES:
+        if first_seg.startswith(prefix):
+            return True
+    return any(low.endswith(ext) for ext in _INTERESTING_EXTENSIONS)
+
+
+def _endpoint_tree_html(endpoints: list[str], base_url: str) -> str:
+    """Build a grouped tree of endpoints with clickable links.
+
+    Groups by first path segment; interesting groups are expanded.
+    """
+    # Group by first segment
+    groups: dict[str, list[str]] = {}
+    root_files: list[str] = []
+    for ep in endpoints:
+        stripped = ep.lstrip("/")
+        if "/" in stripped:
+            seg = stripped.split("/", 1)[0]
+            groups.setdefault(seg, []).append(ep)
+        else:
+            root_files.append(ep)
+
+    parts: list[str] = []
+
+    # Root-level files first (always shown)
+    interesting_root: list[str] = []
+    boring_root: list[str] = []
+    for f in root_files:
+        if _is_interesting_endpoint(f):
+            interesting_root.append(f)
+        else:
+            boring_root.append(f)
+
+    for f in interesting_root:
+        parts.append("<div>" + _endpoint_link(f, base_url) + "</div>")
+
+    if boring_root:
+        if len(boring_root) <= 3:
+            for f in boring_root:
+                parts.append("<div>" + _endpoint_link(f, base_url) + "</div>")
+        else:
+            items = "".join(
+                "<div>" + _endpoint_link(f, base_url) + "</div>"
+                for f in boring_root
+            )
+            parts.append(
+                '<details class="nm-endpoints-toggle">'
+                "<summary>/" + " (" + str(len(boring_root))
+                + " files)</summary>"
+                '<div class="nm-endpoints-list">'
+                + items + "</div></details>"
+            )
+
+    # Sorted groups
+    sorted_groups = sorted(groups.items(), key=lambda x: (
+        0 if _is_interesting_endpoint("/" + x[0]) else 1, x[0],
+    ))
+
+    for seg, paths in sorted_groups:
+        interesting = _is_interesting_endpoint("/" + seg)
+        count = len(paths)
+        items = "".join(
+            "<div>" + _endpoint_link(p, base_url) + "</div>"
+            for p in paths
+        )
+        if count <= 3:
+            # Inline, no toggle needed
+            parts.append(items)
+        else:
+            open_attr = " open" if interesting else ""
+            parts.append(
+                '<details class="nm-endpoints-toggle"'
+                + open_attr + ">"
+                "<summary>/" + _e(seg) + "/ ("
+                + str(count) + ")</summary>"
+                '<div class="nm-endpoints-list">'
+                + items + "</div></details>"
+            )
+
+    return '<div class="nm-endpoints">' + "".join(parts) + "</div>"
+
+
 def _host_risk_score(host: str, findings: list[dict]) -> int:
     """Sum severity weights for all findings belonging to host."""
     total = 0
@@ -2227,7 +2366,6 @@ def _network_map_html(data: dict) -> str:
 
     # Build cards
     cards: list[str] = []
-    max_inline = 5
     for host_name, topo in ordered:
         safe_host = _e(host_name)
         is_sub = topo.get("is_subdomain", False)
@@ -2333,33 +2471,12 @@ def _network_map_html(data: dict) -> str:
                     '<div class="nm-port-bar">' + segs + "</div>"
                 )
 
-        # Endpoints: first 5 inline, rest behind <details>
+        # Endpoints: grouped tree with clickable links
         endpoints_html = ""
         eps = topo.get("endpoints", [])
         if eps:
-            inline = eps[:max_inline]
-            ep_items = "".join(
-                "<div>" + _e(p) + "</div>" for p in inline
-            )
-            toggle = ""
-            if len(eps) > max_inline:
-                remaining = eps[max_inline:]
-                remaining_items = "".join(
-                    "<div>" + _e(p) + "</div>" for p in remaining
-                )
-                toggle = (
-                    '<details class="nm-endpoints-toggle">'
-                    "<summary>" + str(len(remaining))
-                    + " more endpoint"
-                    + ("s" if len(remaining) != 1 else "")
-                    + "</summary>"
-                    '<div class="nm-endpoints-list">'
-                    + remaining_items + "</div></details>"
-                )
-            endpoints_html = (
-                '<div class="nm-endpoints">'
-                + ep_items + toggle + "</div>"
-            )
+            base_url = _endpoint_base_url(host_name, svcs)
+            endpoints_html = _endpoint_tree_html(eps, base_url)
 
         # Technologies
         tech_html = ""

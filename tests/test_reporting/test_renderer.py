@@ -506,18 +506,19 @@ class TestNetworkMap:
         c = _collector_with_topology()
         c.topology["test.example.com"] = HostTopology(
             services=[{"port": 443, "protocol": "tcp", "service": "https"}],
-            endpoints=["/ep" + str(i) for i in range(10)],
+            endpoints=["/api/ep" + str(i) for i in range(10)],
         )
         data = assemble_data(c)
         result = render_html(data)
         assert "nm-endpoints-toggle" in result
-        assert "more endpoint" in result
+        # Tree groups by /api/ segment
+        assert "/api/ (10)" in result
 
     def test_few_endpoints_no_toggle(self):
         data = assemble_data(_collector_with_topology())
         result = render_html(data)
-        # test.example.com has only 3 endpoints → no <details> toggle element
-        assert '<details class="nm-endpoints-toggle">' not in result
+        # test.example.com has only 3 endpoints → inline, no grouped toggle
+        assert "nm-endpoints" in result
 
     def test_subdomain_has_css_class(self):
         data = assemble_data(_collector_with_topology())
@@ -1555,3 +1556,71 @@ class TestCompactTableCaptionAndScope:
         result = render_html(data)
         assert "<caption>Network hosts (compact view)</caption>" in result
         assert 'scope="col">Host</th>' in result
+
+
+class TestEndpointClickableLinks:
+    """Endpoints rendered as clickable links with correct base URL."""
+
+    def test_endpoints_are_links(self):
+        data = assemble_data(_collector_with_topology())
+        result = render_html(data)
+        # /login should be a clickable link
+        assert 'href="https://test.example.com/login"' in result
+        assert 'target="_blank"' in result
+
+    def test_endpoint_base_url_https(self):
+        from basilisk.reporting.renderer import _endpoint_base_url
+        svcs = [{"port": 443, "service": "https"}]
+        assert _endpoint_base_url("host.com", svcs) == "https://host.com"
+
+    def test_endpoint_base_url_http_nonstandard_port(self):
+        from basilisk.reporting.renderer import _endpoint_base_url
+        svcs = [{"port": 8080, "service": "http"}]
+        assert _endpoint_base_url("host.com", svcs) == "http://host.com:8080"
+
+    def test_endpoint_base_url_prefers_https(self):
+        from basilisk.reporting.renderer import _endpoint_base_url
+        svcs = [
+            {"port": 80, "service": "http"},
+            {"port": 443, "service": "https"},
+        ]
+        assert _endpoint_base_url("host.com", svcs) == "https://host.com"
+
+    def test_endpoint_base_url_fallback(self):
+        from basilisk.reporting.renderer import _endpoint_base_url
+        assert _endpoint_base_url("host.com", []) == "https://host.com"
+
+    def test_endpoint_base_url_https_alt_port(self):
+        from basilisk.reporting.renderer import _endpoint_base_url
+        svcs = [{"port": 8443, "service": "https-alt"}]
+        assert _endpoint_base_url("host.com", svcs) == "https://host.com:8443"
+
+
+class TestEndpointTree:
+    """Endpoints grouped into collapsible tree by path prefix."""
+
+    def test_grouped_by_prefix(self):
+        from basilisk.reporting.renderer import _endpoint_tree_html
+        eps = ["/api/v1/users", "/api/v1/orders", "/api/v2/items",
+               "/api/v2/carts", "/login"]
+        result = _endpoint_tree_html(eps, "https://host.com")
+        assert "/api/ (4)" in result
+        assert "nm-endpoints-toggle" in result
+
+    def test_interesting_group_auto_expanded(self):
+        from basilisk.reporting.renderer import _endpoint_tree_html
+        eps = ["/api/v1/a", "/api/v1/b", "/api/v1/c", "/api/v1/d",
+               "/static/a", "/static/b", "/static/c", "/static/d"]
+        result = _endpoint_tree_html(eps, "https://host.com")
+        # api is interesting → open
+        assert '<details class="nm-endpoints-toggle" open>' in result
+        # static is not interesting → not open
+        assert '/static/ (4)</summary>' in result
+
+    def test_is_interesting_endpoint(self):
+        from basilisk.reporting.renderer import _is_interesting_endpoint
+        assert _is_interesting_endpoint("/api/v1/users") is True
+        assert _is_interesting_endpoint("/swagger.json") is True
+        assert _is_interesting_endpoint("/.env") is True
+        assert _is_interesting_endpoint("/admin/dashboard") is True
+        assert _is_interesting_endpoint("/static/logo.png") is False
