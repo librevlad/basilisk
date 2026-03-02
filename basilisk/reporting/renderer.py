@@ -2913,7 +2913,7 @@ _JS = (
     "\n"
     "function applyFilters() {\n"
     "  var active = [];\n"
-    "  document.querySelectorAll('.filter-chip.active')"
+    "  document.querySelectorAll('#findings .filter-chip.active')"
     ".forEach(function(c) {\n"
     "    active.push(c.dataset.sev);\n"
     "  });\n"
