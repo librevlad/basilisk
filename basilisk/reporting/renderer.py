@@ -147,11 +147,13 @@ def render_html(
         "</title>\n",
         _CSS,
         "\n</head>\n<body>\n",
+        '<a href="#command-center" class="skip-link">'
+        "Skip to content</a>\n",
         "<script>const DATA = ",
         safe_json,
         ";</script>\n",
         _sidebar_html(data),
-        "\n<div class=\"main\">\n",
+        "\n<main class=\"main\">\n",
         _command_center_html(data),
         "\n",
         _kill_chain_html(data),
@@ -175,7 +177,7 @@ def render_html(
         _training_html(data),
         "\n",
         _footer_html(data),
-        "\n</div>\n",
+        "\n</main>\n",
         _JS,
         "\n</body>\n</html>",
     ]
@@ -280,6 +282,25 @@ _CSS = (  # noqa: E501
     "    animation-iteration-count: 1 !important;\n"
     "    transition-duration: 0.01ms !important;\n"
     "  }\n"
+    "}\n"
+    "\n"
+    "*:focus-visible {\n"
+    "  outline: 2px solid var(--neon-green);\n"
+    "  outline-offset: 2px;\n"
+    "}\n"
+    "\n"
+    ".skip-link {\n"
+    "  position: absolute; left: -9999px; top: auto;\n"
+    "  width: 1px; height: 1px; overflow: hidden;\n"
+    "  z-index: 10000; padding: var(--sp-2) var(--sp-3);\n"
+    "  background: var(--bg); color: var(--neon-green);\n"
+    "  font-weight: 600; text-decoration: none;\n"
+    "  border: 2px solid var(--neon-green);\n"
+    "  border-radius: var(--radius-sm);\n"
+    "}\n"
+    ".skip-link:focus {\n"
+    "  position: fixed; left: var(--sp-3); top: var(--sp-3);\n"
+    "  width: auto; height: auto;\n"
     "}\n"
     "\n"
     ".sidebar {\n"
@@ -1015,6 +1036,8 @@ _CSS = (  # noqa: E501
     "}\n"
     ".nm-compact-table tr:hover td {"
     " background: var(--surface-3); }\n"
+    ".nm-compact-table tbody tr:nth-child(even) td {"
+    " background: rgba(0,255,106,0.015); }\n"
     ".nm-view-btn {\n"
     "  background: var(--surface-3); border: 1px solid var(--border);\n"
     "  color: var(--fg-dim); cursor: pointer;\n"
@@ -1114,6 +1137,8 @@ _CSS = (  # noqa: E501
     " border-bottom: 1px solid var(--border); }\n"
     ".perf-table tr:hover td {"
     " background: rgba(0,255,106,0.02); }\n"
+    ".perf-table tbody tr:nth-child(even) td {"
+    " background: rgba(0,255,106,0.015); }\n"
     "\n"
     ".reasoning-grid {\n"
     "  display: grid; grid-template-columns:"
@@ -1145,6 +1170,8 @@ _CSS = (  # noqa: E501
     ".training-table td {"
     " padding: var(--sp-2);"
     " border-bottom: 1px solid var(--border); }\n"
+    ".training-table tbody tr:nth-child(even) td {"
+    " background: rgba(0,255,106,0.015); }\n"
     ".pass-badge {\n"
     "  padding: 2px 10px;"
     " border-radius: var(--radius-sm);"
@@ -1192,6 +1219,12 @@ _CSS = (  # noqa: E501
     "/* Evidence expand/collapse */\n"
     ".evidence-block { position: relative; transition: max-height 0.3s; }\n"
     ".evidence-block.expanded { max-height: none !important; }\n"
+    ".evidence-block.overflows:not(.expanded)::after {\n"
+    "  content: ''; position: absolute;"
+    " bottom: 0; left: 0; right: 0;\n"
+    "  height: 40px; pointer-events: none;\n"
+    "  background: linear-gradient(transparent, var(--bg));\n"
+    "}\n"
     ".evidence-toggle {\n"
     "  display: none; position: absolute; bottom: 0; left: 0; right: 0;\n"
     "  background: linear-gradient(transparent, var(--bg) 60%);\n"
@@ -1262,6 +1295,23 @@ _CSS = (  # noqa: E501
     "  color: var(--neon-green); font-size: var(--text-xs);\n"
     "  font-weight: 600;\n"
     "}\n"
+    ".decisions-show-more {\n"
+    "  display: block; margin: var(--sp-3) auto 0;\n"
+    "  padding: var(--sp-2) var(--sp-4);\n"
+    "  background: var(--surface-2); color: var(--neon-cyan);\n"
+    "  border: 1px solid var(--border); border-radius: var(--radius-sm);\n"
+    "  cursor: pointer; font-size: var(--text-sm); font-weight: 600;\n"
+    "}\n"
+    ".decisions-show-more:hover { border-color: var(--neon-cyan); }\n"
+    "\n"
+    ".export-json-btn {\n"
+    "  display: inline-block; margin-top: var(--sp-2);\n"
+    "  padding: var(--sp-1) var(--sp-3);\n"
+    "  background: transparent; color: var(--neon-cyan);\n"
+    "  border: 1px solid var(--border); border-radius: var(--radius-sm);\n"
+    "  cursor: pointer; font-size: var(--text-xs); font-weight: 600;\n"
+    "}\n"
+    ".export-json-btn:hover { border-color: var(--neon-cyan); }\n"
     "\n"
     "/* Entity breakdown in sidebar */\n"
     ".entity-breakdown {\n"
@@ -1304,6 +1354,24 @@ _CSS = (  # noqa: E501
     "    border: 1px solid #ddd;"
     " box-shadow: none; background: #fff;\n"
     "    animation: none;\n"
+    "  }\n"
+    "  .filter-bar, .search-box, .nm-sort-bar, .nm-toggle-btn,"
+    " .nm-view-btn, .nm-kb-hint,\n"
+    "  .evidence-toggle, .evidence-copy, .export-json-btn,"
+    " .host-copy, .skip-link,\n"
+    "  .decisions-show-more {"
+    " display: none !important; }\n"
+    "  .section, .finding-card, .timeline-item {"
+    " page-break-inside: avoid; }\n"
+    "  details > *:not(summary) {"
+    " display: block !important; }\n"
+    "  .evidence-block {"
+    " max-height: none !important;"
+    " overflow: visible !important; }\n"
+    "  .sev-badge {\n"
+    "    border: 1px solid #666;"
+    " color: #1a1e2e !important;"
+    " background: transparent !important;\n"
     "  }\n"
     "}\n"
     "</style>"
@@ -1399,7 +1467,7 @@ def _sidebar_html(data: dict) -> str:
         + status_class + '">'
         + _e(status) + "</span></div>\n"
         "  </div>\n"
-        "  <nav>\n"
+        '  <nav aria-label="Report sections">\n'
         '    <a href="#command-center">Command Center</a>\n'
         '    <a href="#kill-chain">Kill Chain</a>\n'
         '    <a href="#kg-growth">KG Growth</a>\n'
@@ -1462,7 +1530,8 @@ def _command_center_html(data: dict) -> str:
         if cnt > 0:
             pct = _fmt(cnt / total_sev * 100, ".1f")
             sev_bar_parts.append(
-                '<div class="seg" style="width:'
+                '<div class="seg" title="'
+                + sev + ": " + str(cnt) + '" style="width:'
                 + pct + "%;background:" + color + '"></div>'
             )
     sev_bar = "".join(sev_bar_parts)
@@ -1486,7 +1555,10 @@ def _command_center_html(data: dict) -> str:
         + "</span>\n"
         "  </div>\n"
         '  <div class="progress-container">\n'
-        '    <div class="progress-bar" style="width:'
+        '    <div class="progress-bar" role="progressbar"'
+        ' aria-valuenow="' + str(steps) + '"'
+        ' aria-valuemax="' + str(max_steps) + '"'
+        ' style="width:'
         + progress_str + '%"></div>\n'
         "  </div>\n"
         '  <div style="font-size:var(--text-xs);'
@@ -1592,7 +1664,9 @@ def _kg_growth_html(data: dict) -> str:
         h_str = _fmt(h, ".0f")
         bars_parts.append(
             '<div class="growth-bar" style="height:'
-            + h_str + '%">'
+            + h_str + '%" title="Step '
+            + str(step) + ": +" + str(gained)
+            + ' entities">'
             '<span class="tooltip">Step '
             + str(step) + ": +" + str(gained)
             + " entities</span></div>"
@@ -1617,14 +1691,15 @@ def _findings_html(data: dict) -> str:
     for sev in ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]:
         cnt = sev_counts.get(sev, 0)
         chip_parts.append(
-            '<button class="filter-chip active" data-sev="'
+            '<button class="filter-chip active" aria-pressed="true"'
+            ' data-sev="'
             + sev + '" onclick="toggleFilter(this)">'
             + sev + " (" + str(cnt) + ")</button>"
         )
     chips = "".join(chip_parts)
 
     card_parts: list[str] = []
-    for f in findings:
+    for idx, f in enumerate(findings):
         sev = f.get("severity", "INFO").upper()
         title = _e(f.get("title", ""))
         host = _e(f.get("host", ""))
@@ -1680,7 +1755,8 @@ def _findings_html(data: dict) -> str:
         )
 
         card_parts.append(
-            '<details class="finding-card" data-sev="'
+            '<details class="finding-card" id="finding-'
+            + str(idx) + '" data-sev="'
             + sev + '">\n'
             "  <summary>\n"
             '    <span class="sev-badge sev-'
@@ -1722,6 +1798,7 @@ def _findings_html(data: dict) -> str:
         '  <div class="filter-bar">\n'
         "    " + chips + "\n"
         '    <input type="text" class="search-box"'
+        ' aria-label="Search findings"'
         ' placeholder="Search findings..."'
         ' oninput="applyFilters()">\n'
         '    <button class="nm-toggle-btn"'
@@ -1786,10 +1863,11 @@ def _vulnerabilities_html(data: dict) -> str:
         '  <div class="section-title">'
         "Vulnerabilities (Deduplicated)</div>\n"
         '  <table class="perf-table sortable">\n'
+        "    <caption>Deduplicated vulnerabilities</caption>\n"
         "    <thead><tr>"
-        "<th>Severity</th><th>Type</th>"
-        "<th>Affected Surfaces</th><th>Confidence</th>"
-        "<th>Scenarios</th><th>Proof</th>"
+        '<th scope="col">Severity</th><th scope="col">Type</th>'
+        '<th scope="col">Affected Surfaces</th><th scope="col">Confidence</th>'
+        '<th scope="col">Scenarios</th><th scope="col">Proof</th>'
         "</tr></thead>\n"
         "    <tbody>" + rows + "</tbody>\n"
         "  </table>\n"
@@ -1855,6 +1933,19 @@ def _decisions_html(data: dict) -> str:
             '<div style="color:var(--fg-dim);'
             'padding:var(--sp-3)">No decisions yet</div>'
         )
+    elif len(item_parts) > 10:
+        overflow_count = len(item_parts) - 10
+        label = "Show " + str(overflow_count) + " more decisions"
+        items = (
+            "".join(item_parts[:10])
+            + '<div id="decisions-overflow" style="display:none">'
+            + "".join(item_parts[10:])
+            + "</div>"
+            + '<button class="decisions-show-more"'
+            ' data-label="' + _e(label) + '"'
+            ' onclick="toggleDecisions(this)">'
+            + label + "</button>"
+        )
     else:
         items = "".join(item_parts)
 
@@ -1898,7 +1989,8 @@ def _attack_surface_html(data: dict) -> str:
             "  </div>\n"
             '  <div class="surface-bar">\n'
             '    <div class="surface-bar-fill" style="width:'
-            + bar_w + "%;background:var(" + color + ')">'
+            + bar_w + "%;background:var(" + color + ')"'
+            ' title="' + str(count) + " (" + bar_w + '%)">'
             "</div>\n"
             "  </div>\n"
             "</div>"
@@ -2086,7 +2178,8 @@ def _network_map_html(data: dict) -> str:
         cnt = sev_dist.get(sev, 0)
         if cnt > 0:
             filter_chip_parts.append(
-                '<button class="filter-chip active" data-sev="'
+                '<button class="filter-chip active" aria-pressed="true"'
+                ' data-sev="'
                 + sev + '" onclick="toggleHostFilter(this)">'
                 + sev + " (" + str(cnt) + ")</button>"
             )
@@ -2120,6 +2213,7 @@ def _network_map_html(data: dict) -> str:
     # Search input
     search_html = (
         '<input class="nm-search" type="text"'
+        ' aria-label="Filter hosts"'
         ' placeholder="Filter hosts..."'
         ' oninput="applyHostFilters()">\n'
     )
@@ -2399,9 +2493,12 @@ def _network_map_html(data: dict) -> str:
         )
     compact_table_html = (
         '<table class="nm-compact-table sortable">\n'
+        "<caption>Network hosts (compact view)</caption>\n"
         "<thead><tr>"
-        "<th>Host</th><th>Risk</th><th>Severity</th>"
-        "<th>Findings</th><th>Services</th><th>Technologies</th>"
+        '<th scope="col">Host</th><th scope="col">Risk</th>'
+        '<th scope="col">Severity</th>'
+        '<th scope="col">Findings</th><th scope="col">Services</th>'
+        '<th scope="col">Technologies</th>'
         "</tr></thead>\n"
         "<tbody>" + "".join(compact_rows) + "</tbody>\n"
         "</table>\n"
@@ -2489,10 +2586,11 @@ def _plugin_perf_html(data: dict) -> str:
         '  <div class="section-title">'
         "Plugin Performance</div>\n"
         '  <table class="perf-table sortable">\n'
+        "    <caption>Plugin execution performance</caption>\n"
         "    <thead><tr>"
-        "<th>Plugin</th><th>Target</th>"
-        "<th>Duration</th><th>Findings</th>"
-        "<th>Step</th>"
+        '<th scope="col">Plugin</th><th scope="col">Target</th>'
+        '<th scope="col">Duration</th><th scope="col">Findings</th>'
+        '<th scope="col">Step</th>'
         "</tr></thead>\n"
         "    <tbody>" + rows + "</tbody>\n"
         "  </table>\n"
@@ -2655,12 +2753,13 @@ def _training_html(data: dict) -> str:
         ' style="width:' + pct_str + '%"></div>\n'
         "  </div>\n"
         '  <table class="training-table">\n'
+        "    <caption>Expected findings validation</caption>\n"
         "    <thead><tr>"
-        "<th>Expected Finding</th>"
-        "<th>Severity</th>"
-        "<th>Discovered</th>"
-        "<th>Verified</th>"
-        "<th>Step</th>"
+        '<th scope="col">Expected Finding</th>'
+        '<th scope="col">Severity</th>'
+        '<th scope="col">Discovered</th>'
+        '<th scope="col">Verified</th>'
+        '<th scope="col">Step</th>'
         "</tr></thead>\n"
         "    <tbody>" + rows + "</tbody>\n"
         "  </table>\n"
@@ -2676,6 +2775,8 @@ def _footer_html(data: dict) -> str:
         "  Basilisk v" + v
         + " &middot; " + ts
         + " &middot; Confidential\n"
+        '  <button class="export-json-btn"'
+        ' onclick="downloadJson()">Export JSON</button>\n'
         "</div>"
     )
 
@@ -2688,6 +2789,8 @@ _JS = (
     "<script>\n"
     "function toggleFilter(btn) {\n"
     "  btn.classList.toggle('active');\n"
+    "  btn.setAttribute('aria-pressed',"
+    " btn.classList.contains('active'));\n"
     "  applyFilters();\n"
     "}\n"
     "\n"
@@ -2726,8 +2829,11 @@ _JS = (
     "      var id = entry.target.id;\n"
     "      document.querySelectorAll('.sidebar nav a')"
     ".forEach(function(a) {\n"
-    "        a.classList.toggle('active',"
-    " a.getAttribute('href') === '#' + id);\n"
+    "        var match ="
+    " a.getAttribute('href') === '#' + id;\n"
+    "        a.classList.toggle('active', match);\n"
+    "        if (match) a.setAttribute('aria-current', 'true');\n"
+    "        else a.removeAttribute('aria-current');\n"
     "      });\n"
     "    }\n"
     "  });\n"
@@ -2742,7 +2848,7 @@ _JS = (
     "    th.style.cursor = 'pointer';\n"
     "    th.addEventListener('click', function() {\n"
     "      var tbody = table.querySelector('tbody');\n"
-    "      var rows ="
+    "      var allRows ="
     " Array.from(tbody.querySelectorAll('tr'));\n"
     "      var asc ="
     " !th.classList.contains('sort-asc');\n"
@@ -2750,9 +2856,21 @@ _JS = (
     " h.classList.remove('sort-asc', 'sort-desc'); });\n"
     "      th.classList.add("
     "asc ? 'sort-asc' : 'sort-desc');\n"
-    "      rows.sort(function(a, b) {\n"
-    "        var av = a.cells[idx].textContent.trim();\n"
-    "        var bv = b.cells[idx].textContent.trim();\n"
+    "      var groups = [];\n"
+    "      for (var i = 0; i < allRows.length; i++) {\n"
+    "        if (allRows[i].classList.contains('repro-row'))"
+    " continue;\n"
+    "        var group = [allRows[i]];\n"
+    "        var j = i + 1;\n"
+    "        while (j < allRows.length"
+    " && allRows[j].classList.contains('repro-row')) {\n"
+    "          group.push(allRows[j]); j++;\n"
+    "        }\n"
+    "        groups.push(group);\n"
+    "      }\n"
+    "      groups.sort(function(a, b) {\n"
+    "        var av = a[0].cells[idx].textContent.trim();\n"
+    "        var bv = b[0].cells[idx].textContent.trim();\n"
     "        var an = parseFloat(av),"
     " bn = parseFloat(bv);\n"
     "        if (!isNaN(an) && !isNaN(bn))"
@@ -2760,8 +2878,9 @@ _JS = (
     "        return asc ?"
     " av.localeCompare(bv) : bv.localeCompare(av);\n"
     "      });\n"
-    "      rows.forEach(function(r) {"
-    " tbody.appendChild(r); });\n"
+    "      groups.forEach(function(g) {"
+    " g.forEach(function(r) {"
+    " tbody.appendChild(r); }); });\n"
     "    });\n"
     "  });\n"
     "});\n"
@@ -2817,6 +2936,8 @@ _JS = (
     "\n"
     "function toggleHostFilter(btn) {\n"
     "  btn.classList.toggle('active');\n"
+    "  btn.setAttribute('aria-pressed',"
+    " btn.classList.contains('active'));\n"
     "  applyHostFilters();\n"
     "}\n"
     "\n"
@@ -2943,6 +3064,7 @@ _JS = (
     "  document.querySelectorAll('.nm-filter-bar .filter-chip')"
     ".forEach(function(c) {\n"
     "    c.classList.add('active');\n"
+    "    c.setAttribute('aria-pressed', 'true');\n"
     "  });\n"
     "  var box = document.querySelector('.nm-search');\n"
     "  if (box) box.value = '';\n"
@@ -2992,5 +3114,25 @@ _JS = (
     "    }\n"
     "  });\n"
     "})();\n"
+    "\n"
+    "function downloadJson() {\n"
+    "  var blob = new Blob([JSON.stringify(DATA, null, 2)],"
+    " {type: 'application/json'});\n"
+    "  var a = document.createElement('a');\n"
+    "  a.href = URL.createObjectURL(blob);\n"
+    "  a.download = 'basilisk-report.json';\n"
+    "  a.click();\n"
+    "  URL.revokeObjectURL(a.href);\n"
+    "}\n"
+    "\n"
+    "function toggleDecisions(btn) {\n"
+    "  var el = document.getElementById('decisions-overflow');\n"
+    "  if (!el) return;\n"
+    "  var show = el.style.display === 'none';\n"
+    "  el.style.display = show ? '' : 'none';\n"
+    "  btn.textContent = show"
+    " ? 'Hide extra decisions'"
+    " : btn.dataset.label;\n"
+    "}\n"
     "</script>"
 )

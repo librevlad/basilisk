@@ -954,12 +954,12 @@ class TestNetworkMap:
     def test_compact_table_has_columns(self):
         data = assemble_data(_collector_with_topology())
         result = render_html(data)
-        assert "<th>Host</th>" in result
-        assert "<th>Risk</th>" in result
-        assert "<th>Severity</th>" in result
-        assert "<th>Findings</th>" in result
-        assert "<th>Services</th>" in result
-        assert "<th>Technologies</th>" in result
+        assert 'scope="col">Host</th>' in result
+        assert 'scope="col">Risk</th>' in result
+        assert 'scope="col">Severity</th>' in result
+        assert 'scope="col">Findings</th>' in result
+        assert 'scope="col">Services</th>' in result
+        assert 'scope="col">Technologies</th>' in result
 
     def test_compact_view_button_present(self):
         data = assemble_data(_collector_with_topology())
@@ -1124,7 +1124,7 @@ class TestReproductionSteps:
             }
         ]
         result = render_html(data)
-        assert "repro-row" not in result
+        assert 'class="repro-row"' not in result
         assert "reproduction steps" not in result
 
 
@@ -1178,3 +1178,380 @@ class TestContrastReadability:
         data = assemble_data(_sample_collector())
         result = render_html(data)
         assert "--text-xs: 0.65rem" in result
+
+
+# ===== UX Batch 2 tests =====
+
+
+def _data_with_vulns_and_repro():
+    """Data with vulns that have repro-rows for sort testing."""
+    data = assemble_data(_sample_collector())
+    data["vulnerabilities"] = [
+        {
+            "vulnerability_id": "v1",
+            "vuln_type": "sqli",
+            "severity": "HIGH",
+            "affected_surfaces": ["/login"],
+            "scenarios": ["sqli_basic"],
+            "confidence_aggregate": 0.9,
+            "proofs": ["payload returned 200"],
+            "reproduction_steps": ["Open /login", "Enter payload", "Observe response"],
+        },
+        {
+            "vulnerability_id": "v2",
+            "vuln_type": "xss",
+            "severity": "MEDIUM",
+            "affected_surfaces": ["/search"],
+            "scenarios": ["xss_basic"],
+            "confidence_aggregate": 0.7,
+            "proofs": ["<script>alert(1)</script>"],
+            "reproduction_steps": [],
+        },
+    ]
+    return data
+
+
+def _data_with_many_decisions(count=15):
+    """Data with many decisions for show-more testing."""
+    data = assemble_data(_sample_collector())
+    data["decisions"] = [
+        {
+            "step": i,
+            "plugin": f"plugin_{i}",
+            "target": "test.example.com",
+            "score": 0.5 + i * 0.01,
+            "reasoning": f"reason {i}",
+            "productive": i % 3 == 0,
+            "new_entities": i,
+            "duration": 1.0 + i * 0.1,
+        }
+        for i in range(1, count + 1)
+    ]
+    return data
+
+
+class TestSortReproRows:
+    """Fix 0: sort JS keeps repro-rows grouped with parent."""
+
+    def test_sort_js_handles_repro_rows(self):
+        data = _data_with_vulns_and_repro()
+        result = render_html(data)
+        assert "repro-row" in result
+        # JS must check for repro-row class during sort
+        assert "classList.contains('repro-row')" in result
+
+    def test_sort_js_uses_group_approach(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        # Should use group-based sort, not flat row sort
+        assert "groups.sort" in result or "groups.push" in result
+        assert "groups.forEach" in result
+
+
+class TestPrintStylesheet:
+    """Fix 1: print stylesheet hides controls and enables readability."""
+
+    def test_print_hides_interactive_controls(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert "@media print" in result
+        assert ".filter-bar" in result
+        assert ".search-box" in result
+        assert ".export-json-btn" in result
+        assert ".decisions-show-more" in result
+        # Verify they are hidden in print
+        assert "display: none !important" in result
+
+    def test_print_page_break_avoid(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert "page-break-inside: avoid" in result
+
+    def test_print_evidence_no_max_height(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert "max-height: none !important" in result
+        assert "overflow: visible !important" in result
+
+
+class TestFocusVisible:
+    """Fix 2: global :focus-visible style."""
+
+    def test_focus_visible_css(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert "*:focus-visible" in result
+        assert "outline: 2px solid var(--neon-green)" in result
+
+
+class TestMainLandmark:
+    """Fix 3: semantic <main> element."""
+
+    def test_main_landmark_element(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert '<main class="main">' in result
+        assert "</main>" in result
+
+    def test_no_div_main(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert '<div class="main">' not in result
+
+
+class TestSkipLink:
+    """Fix 4: skip-to-content link."""
+
+    def test_skip_link_present(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert 'class="skip-link"' in result
+        assert 'href="#command-center"' in result
+        assert "Skip to content" in result
+
+    def test_skip_link_css(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert ".skip-link" in result
+        assert ".skip-link:focus" in result
+
+
+class TestSeverityBarTooltip:
+    """Fix 5: severity bar segment tooltips."""
+
+    def test_severity_bar_segment_tooltip(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        # Should have title attributes on severity bar segments
+        assert 'class="seg" title="' in result
+
+
+class TestProgressBarAria:
+    """Fix 6: progress bar ARIA attributes."""
+
+    def test_progress_bar_role(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert 'role="progressbar"' in result
+
+    def test_progress_bar_aria_values(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert 'aria-valuenow="10"' in result
+        assert 'aria-valuemax="50"' in result
+
+
+class TestFilterChipAriaPressed:
+    """Fix 7: filter chip aria-pressed attribute."""
+
+    def test_filter_chip_aria_pressed(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert 'aria-pressed="true"' in result
+
+    def test_toggle_filter_sets_aria_pressed(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert "setAttribute('aria-pressed'" in result
+
+
+class TestExportJsonButton:
+    """Fix 8: export JSON button in footer."""
+
+    def test_export_json_button_present(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert 'class="export-json-btn"' in result
+        assert "Export JSON" in result
+
+    def test_download_json_js(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert "function downloadJson()" in result
+        assert "basilisk-report.json" in result
+        assert "JSON.stringify(DATA" in result
+
+
+class TestDecisionsShowMore:
+    """Fix 9: decisions timeline show-more pagination."""
+
+    def test_decisions_show_more_absent_when_few(self):
+        data = assemble_data(_sample_collector())
+        # Default sample has only 2 decisions
+        result = render_html(data)
+        assert '<button class="decisions-show-more"' not in result
+        assert 'id="decisions-overflow"' not in result
+
+    def test_decisions_show_more_present_when_many(self):
+        data = _data_with_many_decisions(15)
+        result = render_html(data)
+        assert 'id="decisions-overflow"' in result
+        assert '<button class="decisions-show-more"' in result
+        assert "Show 5 more decisions" in result
+
+    def test_decisions_toggle_js(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert "function toggleDecisions(btn)" in result
+
+
+# ===== UX Batch 3 tests =====
+
+
+class TestTableRowStriping:
+    """Fix 1: table row striping CSS for scanability."""
+
+    def test_table_row_striping_css(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert ".perf-table tbody tr:nth-child(even) td" in result
+        assert ".training-table tbody tr:nth-child(even) td" in result
+        assert ".nm-compact-table tbody tr:nth-child(even) td" in result
+        assert "rgba(0,255,106,0.015)" in result
+
+
+class TestSearchAriaLabel:
+    """Fix 2: search inputs have aria-label."""
+
+    def test_findings_search_aria_label(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert 'aria-label="Search findings"' in result
+
+    def test_network_map_search_aria_label(self):
+        data = assemble_data(_collector_with_topology())
+        result = render_html(data)
+        assert 'aria-label="Filter hosts"' in result
+
+
+class TestTableCaptionAndScope:
+    """Fix 3: tables have <caption> and th scope=col."""
+
+    def test_vuln_table_caption_and_scope(self):
+        data = assemble_data(_sample_collector())
+        # Ensure vulns table exists
+        data["vulnerabilities"] = [
+            {
+                "vulnerability_id": "v1",
+                "vuln_type": "sqli",
+                "severity": "HIGH",
+                "affected_surfaces": ["/login"],
+                "scenarios": ["sqli_basic"],
+                "confidence_aggregate": 0.9,
+                "proofs": ["payload"],
+                "reproduction_steps": [],
+            }
+        ]
+        result = render_html(data)
+        assert "<caption>Deduplicated vulnerabilities</caption>" in result
+        assert 'scope="col"' in result
+
+    def test_plugin_table_caption_and_scope(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert "<caption>Plugin execution performance</caption>" in result
+        # Check scope on plugin table headers
+        assert 'scope="col">Plugin</th>' in result
+
+
+class TestSidebarNavAriaLabel:
+    """Fix 4: sidebar nav has aria-label."""
+
+    def test_sidebar_nav_aria_label(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert 'aria-label="Report sections"' in result
+
+
+class TestDeepLinkableFindings:
+    """Fix 5: finding cards have id for deep linking."""
+
+    def test_finding_card_has_id(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert 'id="finding-0"' in result
+
+    def test_finding_ids_sequential(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        # Sample collector has 2 findings
+        assert 'id="finding-0"' in result
+        assert 'id="finding-1"' in result
+
+
+class TestGrowthBarTitle:
+    """Fix 6: KG growth bars have title attribute for screen readers."""
+
+    def test_growth_bar_has_title(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert 'class="growth-bar"' in result
+        # Check that growth bar has title attribute
+        assert 'title="Step 1: +10 entities"' in result
+
+
+class TestSurfaceBarFillTitle:
+    """Fix 7: surface bar fills have title attribute."""
+
+    def test_surface_bar_fill_has_title(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert "surface-bar-fill" in result
+        # Check that at least one surface-bar-fill has a title
+        import re
+        assert re.search(r'class="surface-bar-fill"[^>]*title="', result)
+
+
+class TestObserverAriaCurrent:
+    """Fix 8: IntersectionObserver sets aria-current on active sidebar link."""
+
+    def test_observer_sets_aria_current(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert "setAttribute('aria-current'" in result
+
+    def test_observer_removes_aria_current(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert "removeAttribute('aria-current')" in result
+
+
+class TestEvidenceOverflowGradient:
+    """Fix 9: evidence overflow gradient CSS cue."""
+
+    def test_evidence_overflow_gradient_css(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert ".evidence-block.overflows:not(.expanded)::after" in result
+        assert "linear-gradient(transparent, var(--bg))" in result
+
+
+class TestTrainingTableCaptionAndScope:
+    """Fix 3 cont: training table has caption and scope."""
+
+    def test_training_table_caption(self):
+        c = _sample_collector()
+        c.training = {
+            "profile_name": "test_app",
+            "coverage": 0.85,
+            "verification_rate": 0.7,
+            "passed": True,
+            "expected_findings": [
+                {"title": "SQLi", "severity": "high",
+                 "discovered": True, "verified": True, "discovery_step": 3},
+            ],
+        }
+        data = assemble_data(c)
+        result = render_html(data)
+        assert "<caption>Expected findings validation</caption>" in result
+        assert 'scope="col">Expected Finding</th>' in result
+
+
+class TestCompactTableCaptionAndScope:
+    """Fix 3 cont: compact network map table has caption and scope."""
+
+    def test_compact_table_caption(self):
+        data = assemble_data(_collector_with_topology())
+        result = render_html(data)
+        assert "<caption>Network hosts (compact view)</caption>" in result
+        assert 'scope="col">Host</th>' in result
