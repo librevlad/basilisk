@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from collections import defaultdict
 from datetime import UTC, datetime
 from typing import Any
@@ -196,7 +197,6 @@ class KnowledgeGraph:
 
     def record_execution(self, fingerprint: str) -> None:
         """Record that a capability was executed (for dedup)."""
-        import time
         self._execution_log[fingerprint] = time.monotonic()
 
     def was_executed(self, fingerprint: str) -> bool:

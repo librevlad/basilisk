@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from enum import IntEnum
 from typing import Any, Literal
 
@@ -49,7 +50,6 @@ class Finding(BaseModel):
     def _warn_missing_evidence(self) -> Finding:
         """Log warning for HIGH/CRITICAL findings without evidence."""
         if self.severity >= Severity.MEDIUM and not self.evidence:
-            import logging
             logging.getLogger("basilisk.quality").warning(
                 "Finding '%s' (severity=%s) has no evidence",
                 self.title, self.severity.label,

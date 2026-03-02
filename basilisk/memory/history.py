@@ -92,7 +92,12 @@ class History:
         history = cls()
         if not path.exists():
             return history
-        raw = json.loads(path.read_text(encoding="utf-8"))
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, ValueError):
+            return history
+        if not isinstance(raw, list):
+            return history
         for item in raw:
             decision = Decision.model_validate(item)
             history.record(decision)

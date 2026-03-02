@@ -179,6 +179,8 @@ class WhoisPlugin(BasePlugin):
                     return {}
                 text = await resp.text(encoding="utf-8", errors="replace")
                 data = json.loads(text)
+                if not isinstance(data, dict):
+                    return {}
                 return self._parse_rdap(data)
         except Exception:
             return {}
@@ -512,6 +514,8 @@ class WhoisPlugin(BasePlugin):
                 if resp.status == 200:
                     text = await resp.text(encoding="utf-8", errors="replace")
                     data = json.loads(text)
+                    if not isinstance(data, dict):
+                        return {}
                     return {
                         "asn": data.get("as", ""),
                         "org": data.get("org", ""),

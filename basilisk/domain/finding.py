@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from typing import Any
 
@@ -51,7 +52,6 @@ class Finding(BaseModel, frozen=True):
     def _validate_proof_for_high(self) -> Finding:
         """HIGH/CRITICAL findings must have proof with description."""
         if self.severity >= Severity.HIGH and (not self.proof or not self.proof.description):
-            import logging
             logging.getLogger("basilisk.quality").warning(
                 "Finding '%s' (severity=%s) has no proof description",
                 self.title, self.severity.label,

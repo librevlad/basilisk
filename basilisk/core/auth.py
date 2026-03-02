@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import re
@@ -427,7 +428,6 @@ class BasicAuthStrategy(LoginStrategy):
         return bool(self.username)
 
     async def login(self, host: str, ctx: Any) -> AuthSession:
-        import base64
         creds = base64.b64encode(
             f"{self.username}:{self.password}".encode()
         ).decode()
@@ -545,6 +545,8 @@ class AuthManager:
             return
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                return
             for host, info in data.items():
                 self._sessions[host] = AuthSession(
                     host=host,

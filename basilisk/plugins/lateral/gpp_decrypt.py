@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import logging
+import re
 from typing import ClassVar
 
 from basilisk.core.plugin import BasePlugin, PluginCategory, PluginMeta
@@ -167,8 +168,6 @@ class GppDecryptPlugin(BasePlugin):
         self, content: str, path: str, findings: list, data: dict,
     ) -> None:
         """Extract and decrypt cpassword from GPP XML."""
-        import re
-
         # Find cpassword attribute
         matches = re.findall(r'cpassword="([^"]+)"', content, re.IGNORECASE)
         username_matches = re.findall(

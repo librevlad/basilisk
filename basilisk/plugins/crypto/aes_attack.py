@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import logging
 from typing import ClassVar
 
@@ -41,7 +42,6 @@ class AesAttackPlugin(BasePlugin):
         try:
             ciphertext = bytes.fromhex(ciphertext_hex)
         except ValueError:
-            import base64
             try:
                 ciphertext = base64.b64decode(ciphertext_hex)
             except Exception:

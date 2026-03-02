@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import ClassVar
 
 from basilisk.core.plugin import BasePlugin, PluginCategory, PluginMeta
@@ -424,11 +425,9 @@ class CloudBucketEnumPlugin(BasePlugin):
     @staticmethod
     def _parse_s3_listing(body: str) -> list[str]:
         """Parse S3 XML listing for object keys."""
-        import re
         return re.findall(r'<Key>([^<]+)</Key>', body)[:10]
 
     @staticmethod
     def _parse_azure_listing(body: str) -> list[str]:
         """Parse Azure Blob XML listing for blob names."""
-        import re
         return re.findall(r'<Name>([^<]+)</Name>', body)[:10]

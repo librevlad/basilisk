@@ -97,6 +97,11 @@ class ShodanLookupPlugin(BasePlugin):
                 self.meta.name, target.host, error=f"Shodan query failed: {e}"
             )
 
+        if not isinstance(data, dict):
+            return PluginResult.fail(
+                self.meta.name, target.host, error="Unexpected Shodan response format"
+            )
+
         findings: list[Finding] = []
         shodan_ports: list[int] = data.get("ports", [])
         org = data.get("org", "")

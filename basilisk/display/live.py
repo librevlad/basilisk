@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING
 
 from rich.console import Console, Group
@@ -121,8 +122,6 @@ class LiveDisplay:
         self.state.gap_count = event.data.get("count", 0)
 
     def _on_plugin_started(self, event: Event) -> None:
-        import time
-
         plugin = event.data.get("plugin", "")
         target = event.data.get("target", "")
         self.state.active_plugins.append(

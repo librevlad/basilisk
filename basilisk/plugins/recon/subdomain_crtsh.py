@@ -142,7 +142,7 @@ class SubdomainCrtshPlugin(BasePlugin):
                 if not text:
                     break
                 entries = json.loads(text)
-                if not entries:
+                if not isinstance(entries, list) or not entries:
                     break
                 all_entries.extend(entries)
                 # If we got fewer than expected, no more pages
@@ -164,6 +164,8 @@ class SubdomainCrtshPlugin(BasePlugin):
             if not text:
                 return []
             entries = json.loads(text)
+            if not isinstance(entries, list):
+                return []
             # Filter to only entries matching our domain
             return [
                 e for e in entries
@@ -197,6 +199,8 @@ class SubdomainCrtshPlugin(BasePlugin):
                     text = await ctx.http.fetch_text(url, timeout=10.0)
                 if text:
                     entries = json.loads(text)
+                    if not isinstance(entries, list):
+                        continue
                     for entry in entries[:200]:
                         for name in entry.get("name_value", "").split("\n"):
                             name = name.strip().lower()

@@ -108,6 +108,8 @@ class RegistryLookupPlugin(BasePlugin):
                     return []
                 body = await resp.text(encoding="utf-8", errors="replace")
                 data = json.loads(body)
+                if not isinstance(data, dict):
+                    return []
                 repos = data.get("repositories", [])
 
                 if repos:

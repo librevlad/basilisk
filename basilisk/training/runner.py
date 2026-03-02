@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import re
+import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -177,17 +180,13 @@ class TrainingRunner:
             # Training auth: run setup URL + form login if configured
             auth_cfg = self.profile.auth
             if (auth_cfg.username or auth_cfg.login_url) and ctx.http:
-                import re as _re
-
                 for target in scope:
                     host_key = target.host
                     scheme = http_scheme.get(host_key, "http") or "http"
                     base = f"{scheme}://{host_key}"
 
                     # Generate unique run_id for {uuid} placeholder replacement
-                    import uuid as _uuid_mod
-
-                    run_id = _uuid_mod.uuid4().hex[:8]
+                    run_id = uuid.uuid4().hex[:8]
 
                     # Setup step (e.g. DVWA database reset, VamPi /createdb)
                     if auth_cfg.setup_url:
@@ -208,28 +207,28 @@ class TrainingRunner:
                                     for k, v in auth_cfg.setup_data.items()
                                 }
                                 # Generic CSRF token extraction from hidden inputs
-                                for m in _re.finditer(
+                                for m in re.finditer(
                                     r'<input[^>]+type=["\']hidden["\'][^>]*'
                                     r'name=["\']([^"\']*(?:csrf|token)[^"\']*)["\']'
                                     r'[^>]*value=["\']([^"\']*)["\']',
                                     setup_html,
-                                    _re.IGNORECASE,
+                                    re.IGNORECASE,
                                 ):
                                     setup_data[m.group(1)] = m.group(2)
-                                for m in _re.finditer(
+                                for m in re.finditer(
                                     r'<input[^>]+type=["\']hidden["\'][^>]*'
                                     r'value=["\']([^"\']*)["\']'
                                     r'[^>]*name=["\']([^"\']*(?:csrf|token)[^"\']*)["\']',
                                     setup_html,
-                                    _re.IGNORECASE,
+                                    re.IGNORECASE,
                                 ):
                                     setup_data[m.group(2)] = m.group(1)
                                 # Also extract from meta tags (Spring Security)
-                                csrf_meta = _re.search(
+                                csrf_meta = re.search(
                                     r'<meta\s+name=["\']_csrf["\']'
                                     r'\s+content=["\']([^"\']+)["\']',
                                     setup_html,
-                                    _re.IGNORECASE,
+                                    re.IGNORECASE,
                                 )
                                 if csrf_meta:
                                     setup_data["_csrf"] = csrf_meta.group(1)
@@ -255,20 +254,20 @@ class TrainingRunner:
                                 login_page = await ctx.http.get(login_url)
                                 login_html = await login_page.text()
                                 csrf_tokens: dict[str, str] = {}
-                                for m in _re.finditer(
+                                for m in re.finditer(
                                     r'<input[^>]+type=["\']hidden["\'][^>]*'
                                     r'name=["\']([^"\']*(?:csrf|token)[^"\']*)["\']'
                                     r'[^>]*value=["\']([^"\']*)["\']',
                                     login_html,
-                                    _re.IGNORECASE,
+                                    re.IGNORECASE,
                                 ):
                                     csrf_tokens[m.group(1)] = m.group(2)
-                                for m in _re.finditer(
+                                for m in re.finditer(
                                     r'<input[^>]+type=["\']hidden["\'][^>]*'
                                     r'value=["\']([^"\']*)["\']'
                                     r'[^>]*name=["\']([^"\']*(?:csrf|token)[^"\']*)["\']',
                                     login_html,
-                                    _re.IGNORECASE,
+                                    re.IGNORECASE,
                                 ):
                                     csrf_tokens[m.group(2)] = m.group(1)
                                 if auth_cfg.login_fields:
@@ -429,11 +428,8 @@ class TrainingRunner:
         host_key: str,
     ) -> None:
         """JSON API auth: optional register, then login, extract JWT token."""
-        import json as _json
-        import uuid as _uuid
-
         # Generate a unique run_id for {uuid} placeholder replacement
-        run_id = _uuid.uuid4().hex[:8]
+        run_id = uuid.uuid4().hex[:8]
 
         # Registration (optional)
         if auth_cfg.register_url:
@@ -479,12 +475,12 @@ class TrainingRunner:
             token = ""
             if auth_cfg.token_path:
                 try:
-                    data = _json.loads(body)
+                    data = json.loads(body)
                     # Support dotted paths like "data.token"
                     for part in auth_cfg.token_path.split("."):
                         data = data[part]
                     token = str(data)
-                except (KeyError, TypeError, _json.JSONDecodeError):
+                except (KeyError, TypeError, json.JSONDecodeError):
                     logger.warning(
                         "Could not extract token at path '%s' from response",
                         auth_cfg.token_path,

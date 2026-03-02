@@ -11,6 +11,7 @@ subscriptions via subscribe() which accepts any bus-like object.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 from dataclasses import dataclass, field
 from typing import Any
@@ -127,8 +128,6 @@ class KnowledgeSnapshotStore:
             service_name = data.get("service", "")
             # Try to extract from key_data if not in direct fields
             if not port and key_data:
-                import contextlib
-
                 for part in key_data.split():
                     if part.startswith("port="):
                         with contextlib.suppress(ValueError, IndexError):

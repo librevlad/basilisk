@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import logging
 import time
 from collections.abc import Callable
@@ -104,8 +105,6 @@ class PluginContext:
         _deadline and _partial_result to avoid race conditions
         when running plugins concurrently via asyncio.gather.
         """
-        import copy
-
         scoped_ctx = copy.copy(self)
         scoped_ctx._deadline = time.monotonic() + timeout
         scoped_ctx._partial_result = None

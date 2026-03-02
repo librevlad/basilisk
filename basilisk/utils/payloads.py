@@ -9,6 +9,7 @@ hardcoded lists.
 from __future__ import annotations
 
 import functools
+import re
 from dataclasses import dataclass, field
 from enum import StrEnum
 from urllib.parse import quote
@@ -229,7 +230,6 @@ class MutationEngine:
     @staticmethod
     def between_bypass(payload: str) -> str:
         """Replace '>' with 'NOT BETWEEN 0 AND' (sqlmap tamper: between)."""
-        import re
         result = payload
         result = re.sub(r"(\d+)\s*>\s*(\d+)", r"\1 NOT BETWEEN 0 AND \2", result)
         result = re.sub(r"(\d+)\s*=\s*(\d+)", r"\1 BETWEEN \2 AND \2", result)
@@ -243,7 +243,6 @@ class MutationEngine:
     @staticmethod
     def concat_bypass(payload: str) -> str:
         """Break string literals using CONCAT (sqlmap tamper: unmagicquotes)."""
-        import re
         def _replace(m: re.Match) -> str:
             s = m.group(1)
             if len(s) < 2:

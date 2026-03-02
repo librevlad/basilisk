@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 from typing import ClassVar
@@ -138,7 +139,6 @@ class GithubDorkingPlugin(BasePlugin):
         ctx, query: str, token: str,
     ) -> list[dict]:
         """Search GitHub Code API."""
-        import asyncio
         from urllib.parse import quote
 
         url = f"https://api.github.com/search/code?q={quote(query)}&per_page=5"
@@ -159,6 +159,8 @@ class GithubDorkingPlugin(BasePlugin):
 
                 body = await resp.text(encoding="utf-8", errors="replace")
                 data = json.loads(body)
+                if not isinstance(data, dict):
+                    return []
                 return data.get("items", [])
         except Exception:
             return []
@@ -166,5 +168,4 @@ class GithubDorkingPlugin(BasePlugin):
     @staticmethod
     async def _sleep_rate_limit() -> None:
         """Sleep to respect GitHub code search rate limit (10/min)."""
-        import asyncio
         await asyncio.sleep(6)

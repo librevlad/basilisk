@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import ssl
 from datetime import UTC, datetime
 from typing import Any, ClassVar
@@ -135,8 +136,6 @@ class SslScenario(Scenario):
 
 async def _get_cert_info(host: str, port: int = 443) -> dict[str, Any]:
     """Connect to host via SSL and extract certificate information."""
-    import asyncio
-
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE

@@ -7,6 +7,7 @@ OCSP stapling, Certificate Transparency (SCT), HSTS, HPKP, and Expect-CT.
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 import ssl
 from typing import Any, ClassVar
@@ -446,8 +447,6 @@ class SslCompliancePlugin(BasePlugin):
     async def _check_ct_log_presence(self, host: str, ctx: Any) -> list[Finding]:
         findings: list[Finding] = []
         try:
-            import json
-
             url = f"https://crt.sh/?q={host}&output=json"
             async with ctx.rate:
                 resp = await ctx.http.get(url, timeout=8.0)
@@ -595,8 +594,6 @@ class SslCompliancePlugin(BasePlugin):
     async def _check_hsts_preload(self, host: str, ctx: Any) -> list[Finding]:
         findings: list[Finding] = []
         try:
-            import json
-
             async with ctx.rate:
                 resp = await ctx.http.get(
                     f"https://hstspreload.org/api/v2/status?domain={host}",
@@ -604,6 +601,8 @@ class SslCompliancePlugin(BasePlugin):
                 )
                 if resp.status == 200:
                     data = json.loads(await resp.text())
+                    if not isinstance(data, dict):
+                        return findings
                     status = data.get("status", "unknown")
                     if status == "preloaded":
                         findings.append(Finding.info(

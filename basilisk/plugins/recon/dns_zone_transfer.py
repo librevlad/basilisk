@@ -5,6 +5,10 @@ from __future__ import annotations
 import asyncio
 from typing import ClassVar
 
+import dns.asyncquery
+import dns.query
+import dns.zone
+
 from basilisk.core.plugin import BasePlugin, PluginCategory, PluginMeta
 from basilisk.models.result import Finding, PluginResult
 from basilisk.models.target import Target
@@ -84,9 +88,6 @@ class DnsZoneTransferPlugin(BasePlugin):
 
     async def _try_axfr(self, domain: str, nameserver: str) -> list[str]:
         """Attempt AXFR zone transfer. Returns list of record strings."""
-        import dns.asyncquery
-        import dns.query
-        import dns.zone
 
         try:
             zone = await asyncio.to_thread(

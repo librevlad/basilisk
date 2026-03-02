@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+import secrets
 from typing import ClassVar
 
 from basilisk.core.plugin import BasePlugin, PluginCategory, PluginMeta
@@ -852,7 +853,6 @@ class DnsEnumPlugin(BasePlugin):
 
     async def _detect_wildcard(self, ctx, domain: str) -> str | None:
         """Detect wildcard DNS by resolving a random subdomain."""
-        import secrets
         random_sub = f"bsk-{secrets.token_hex(8)}.{domain}"
         records = await ctx.dns.resolve(random_sub, "A")
         if records:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -220,8 +221,6 @@ class RunLogger:
             record["step"] = step
         record.update(data)
         # Schedule async write from sync handler
-        import asyncio
-
         try:
             loop = asyncio.get_running_loop()
             loop.create_task(self._jsonl.write(record))
@@ -239,8 +238,6 @@ class RunLogger:
         ts = _ts()
         step_str = f" [STEP {step}]" if step is not None else ""
         line = f"[{ts}]{step_str} [{tag}] {message}"
-        import asyncio
-
         try:
             loop = asyncio.get_running_loop()
             loop.create_task(self._text.write(line))
