@@ -200,6 +200,46 @@ class TestNormalizeProof:
         assert "xyz789" not in normalized
 
 
+class TestReproductionSteps:
+    """Test reproduction_steps synthesis."""
+
+    def test_steps_from_surface_and_evidence(self):
+        findings = [
+            {
+                "title": "SQL Injection in /login",
+                "severity": "high",
+                "host": "example.com",
+                "evidence": "1' OR '1'='1 returned 200",
+                "tags": ["sqli"],
+                "confidence": 0.8,
+            },
+        ]
+        result = VulnerabilityAggregator.aggregate(findings, "example.com")
+        assert len(result) == 1
+        steps = result[0].reproduction_steps
+        assert len(steps) == 2
+        assert "Navigate to" in steps[0]
+        assert "Observe:" in steps[1]
+        assert "1' OR '1'='1" in steps[1]
+
+    def test_steps_fallback_to_description(self):
+        findings = [
+            {
+                "title": "Open Redirect",
+                "severity": "medium",
+                "host": "example.com",
+                "evidence": "",
+                "description": "The redirect parameter is unvalidated",
+                "tags": ["open_redirect"],
+                "confidence": 0.6,
+            },
+        ]
+        result = VulnerabilityAggregator.aggregate(findings, "example.com")
+        assert len(result) == 1
+        steps = result[0].reproduction_steps
+        assert any("unvalidated" in s for s in steps)
+
+
 class TestIdentityHash:
     """Test deterministic identity hashing."""
 

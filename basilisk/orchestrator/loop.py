@@ -257,6 +257,34 @@ class AutonomousLoop:
                         event_data["title"] = obs.entity_data.get("title", "")
                         event_data["severity"] = obs.entity_data.get("severity", "")
                         event_data["host"] = obs.key_fields.get("host", "")
+                        event_data["description"] = obs.entity_data.get("description", "")
+                        event_data["evidence"] = obs.entity_data.get("evidence", "")
+                        event_data["tags"] = obs.entity_data.get("tags", [])
+                        event_data["confidence"] = obs.confidence
+                        event_data["verified"] = obs.entity_data.get("verified", False)
+                        event_data["false_positive_risk"] = obs.entity_data.get(
+                            "false_positive_risk", "low",
+                        )
+                        event_data["remediation"] = obs.entity_data.get(
+                            "remediation", "",
+                        )
+                    # Enrich topology events for network map
+                    elif obs.entity_type == EntityType.SERVICE:
+                        event_data["host"] = obs.key_fields.get("host", "")
+                        event_data["port"] = obs.entity_data.get("port", 0)
+                        event_data["protocol"] = obs.key_fields.get("protocol", "tcp")
+                        event_data["service"] = obs.entity_data.get("service", "")
+                    elif obs.entity_type == EntityType.ENDPOINT:
+                        event_data["host"] = obs.key_fields.get("host", "")
+                        event_data["path"] = obs.entity_data.get("path", "")
+                    elif obs.entity_type == EntityType.HOST:
+                        event_data["host"] = obs.key_fields.get("host", "")
+                        event_data["host_type"] = obs.entity_data.get("type", "primary")
+                        event_data["parent"] = obs.entity_data.get("parent", "")
+                    elif obs.entity_type == EntityType.TECHNOLOGY:
+                        event_data["host"] = obs.key_fields.get("host", "")
+                        event_data["tech_name"] = obs.entity_data.get("name", "")
+                        event_data["tech_version"] = obs.entity_data.get("version", "")
                     self.bus.emit(Event(
                         EventType.ENTITY_UPDATED if not outcome.was_new
                         else EventType.ENTITY_CREATED,

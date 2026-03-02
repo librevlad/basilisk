@@ -99,6 +99,11 @@ class VulnerabilityAggregator:
 
             vuln_type = VulnerabilityAggregator._extract_vuln_type(group[0])
 
+            # Synthesize reproduction steps from group findings
+            repro_steps = VulnerabilityAggregator._build_reproduction_steps(
+                surfaces, proofs, group,
+            )
+
             result.append(VulnerabilityInstance(
                 vulnerability_id=vid,
                 vuln_type=vuln_type,
@@ -107,6 +112,7 @@ class VulnerabilityAggregator:
                 scenarios=scenarios,
                 confidence_aggregate=round(confidence, 4),
                 proofs=proofs,
+                reproduction_steps=repro_steps,
             ))
 
         return result
@@ -144,6 +150,33 @@ class VulnerabilityAggregator:
             if match:
                 return f"{host}{match.group(1)}"
         return host
+
+    @staticmethod
+    def _build_reproduction_steps(
+        surfaces: list[str],
+        proofs: list[str],
+        group: list[dict[str, Any]],
+    ) -> list[str]:
+        """Synthesize reproduction steps from finding group data."""
+        steps: list[str] = []
+
+        # Step 1: Navigate to surface
+        if surfaces:
+            steps.append(f"Navigate to {surfaces[0]}")
+
+        # Step 2: Observe evidence (best proof) or fallback to description
+        best_evidence = next((p for p in proofs if p), "")
+        if best_evidence:
+            steps.append(f"Observe: {best_evidence[:200]}")
+        else:
+            # Fallback to description from first finding with one
+            for f in group:
+                desc = f.get("description", "")
+                if desc:
+                    steps.append(f"Observe: {desc[:200]}")
+                    break
+
+        return steps
 
     @staticmethod
     def _normalize_proof(evidence: str) -> str:

@@ -89,6 +89,8 @@ class ReportBuilder:
         # Handle legacy training dict from collector
         training = cls._build_training_from_collector(collector)
 
+        topology = cls._topology_as_dict(collector)
+
         now = datetime.now(UTC)
         return ReportModel(
             scan_id=scan_id,
@@ -107,6 +109,7 @@ class ReportBuilder:
             plugins_raw=plugins_raw,
             step_history=step_history,
             reasoning=reasoning,
+            topology=topology,
         )
 
     @staticmethod
@@ -164,6 +167,8 @@ class ReportBuilder:
                 "tags": f.tags,
                 "confidence": f.confidence,
                 "verified": f.verified,
+                "false_positive_risk": f.false_positive_risk,
+                "remediation": f.remediation,
                 "step": f.step,
             }
             for f in collector.findings
@@ -240,6 +245,20 @@ class ReportBuilder:
             verification_rate=round(t.get("verification_rate", 0.0) * 100, 1),
             passed=t.get("passed", False),
         )
+
+    @staticmethod
+    def _topology_as_dict(collector: ReportCollector) -> dict[str, Any]:
+        """Serialize per-host topology for the report model."""
+        result: dict[str, Any] = {}
+        for host, topo in collector.topology.items():
+            result[host] = {
+                "services": sorted(topo.services, key=lambda s: s.get("port", 0)),
+                "endpoints": sorted(topo.endpoints),
+                "technologies": topo.technologies,
+                "is_subdomain": topo.is_subdomain,
+                "parent": topo.parent,
+            }
+        return result
 
     @staticmethod
     def _reasoning_as_dict(collector: ReportCollector) -> dict[str, Any]:

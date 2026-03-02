@@ -82,6 +82,27 @@ class TestReportCollectorEvents:
         assert c.findings[0].evidence == "1=1 returned data"
         assert c.findings[0].confidence == 0.9
 
+    def test_entity_created_finding_full_fields(self):
+        bus, c = self._make()
+        bus.emit(Event(EventType.ENTITY_CREATED, {
+            "entity_id": "f2", "entity_type": "finding",
+            "title": "XSS in /search", "severity": "medium",
+            "host": "10.0.0.1", "evidence": "<script>alert(1)</script>",
+            "description": "Reflected XSS via q parameter",
+            "tags": ["xss", "pentesting"], "confidence": 0.85,
+            "verified": True, "false_positive_risk": "medium",
+            "remediation": "Encode output", "step": 3,
+        }))
+        assert len(c.findings) == 1
+        f = c.findings[0]
+        assert f.description == "Reflected XSS via q parameter"
+        assert f.tags == ["xss", "pentesting"]
+        assert f.confidence == 0.85
+        assert f.verified is True
+        assert f.false_positive_risk == "medium"
+        assert f.remediation == "Encode output"
+        assert f.step == 3
+
     def test_entity_created_service(self):
         bus, c = self._make()
         bus.emit(Event(EventType.ENTITY_CREATED, {
@@ -163,6 +184,78 @@ class TestReportCollectorEvents:
             "hypothesis_id": "h1", "statement": "test",
         }))
         assert c.hypotheses_active == 0
+
+
+class TestReportCollectorTopology:
+    """Test per-host topology tracking from ENTITY_CREATED events."""
+
+    def _make(self) -> tuple[EventBus, ReportCollector]:
+        bus = EventBus()
+        collector = ReportCollector(target="test.com")
+        collector.subscribe(bus)
+        return bus, collector
+
+    def test_service_entity_tracked_in_topology(self):
+        bus, c = self._make()
+        bus.emit(Event(EventType.ENTITY_CREATED, {
+            "entity_id": "s1", "entity_type": "service",
+            "host": "10.0.0.1", "port": 443, "protocol": "tcp", "service": "https",
+        }))
+        assert "10.0.0.1" in c.topology
+        topo = c.topology["10.0.0.1"]
+        assert len(topo.services) == 1
+        assert topo.services[0] == {"port": 443, "protocol": "tcp", "service": "https"}
+
+    def test_endpoint_entity_tracked_in_topology(self):
+        bus, c = self._make()
+        bus.emit(Event(EventType.ENTITY_CREATED, {
+            "entity_id": "e1", "entity_type": "endpoint",
+            "host": "10.0.0.1", "path": "/admin",
+        }))
+        assert "10.0.0.1" in c.topology
+        assert "/admin" in c.topology["10.0.0.1"].endpoints
+
+    def test_subdomain_tracked_in_topology(self):
+        bus, c = self._make()
+        bus.emit(Event(EventType.ENTITY_CREATED, {
+            "entity_id": "h1", "entity_type": "host",
+            "host": "api.test.com", "host_type": "subdomain", "parent": "test.com",
+        }))
+        assert "api.test.com" in c.topology
+        topo = c.topology["api.test.com"]
+        assert topo.is_subdomain is True
+        assert topo.parent == "test.com"
+
+    def test_technology_tracked_in_topology(self):
+        bus, c = self._make()
+        bus.emit(Event(EventType.ENTITY_CREATED, {
+            "entity_id": "t1", "entity_type": "technology",
+            "host": "10.0.0.1", "tech_name": "nginx", "tech_version": "1.21",
+        }))
+        assert "10.0.0.1" in c.topology
+        techs = c.topology["10.0.0.1"].technologies
+        assert len(techs) == 1
+        assert techs[0] == {"name": "nginx", "version": "1.21"}
+
+    def test_duplicate_service_not_added(self):
+        bus, c = self._make()
+        evt = Event(EventType.ENTITY_CREATED, {
+            "entity_id": "s1", "entity_type": "service",
+            "host": "10.0.0.1", "port": 80, "protocol": "tcp", "service": "http",
+        })
+        bus.emit(evt)
+        bus.emit(evt)
+        assert len(c.topology["10.0.0.1"].services) == 1
+
+    def test_duplicate_endpoint_not_added(self):
+        bus, c = self._make()
+        evt = Event(EventType.ENTITY_CREATED, {
+            "entity_id": "e1", "entity_type": "endpoint",
+            "host": "10.0.0.1", "path": "/api",
+        })
+        bus.emit(evt)
+        bus.emit(evt)
+        assert len(c.topology["10.0.0.1"].endpoints) == 1
 
 
 class TestReportCollectorProperties:

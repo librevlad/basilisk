@@ -331,3 +331,27 @@ class TestAdapterFindingVerification:
         assert len(finding_obs) == 1
         assert finding_obs[0].entity_data["finding_confidence"] == 1.0
         assert finding_obs[0].confidence == 1.0
+
+    def test_finding_tags_in_entity_data(self):
+        """Finding observation includes tags list in entity_data."""
+        finding = Finding.high("XSS", evidence="<script>", tags=["xss", "pentesting"])
+        result = PluginResult.success("test", "example.com", findings=[finding])
+        obs = adapt_result(result)
+        finding_obs = [o for o in obs if o.entity_type == EntityType.FINDING]
+        assert finding_obs[0].entity_data["tags"] == ["xss", "pentesting"]
+
+    def test_finding_remediation_in_entity_data(self):
+        """Finding observation includes remediation in entity_data."""
+        finding = Finding.high("SQLi", evidence="1=1", remediation="Use parameterized queries")
+        result = PluginResult.success("test", "example.com", findings=[finding])
+        obs = adapt_result(result)
+        finding_obs = [o for o in obs if o.entity_type == EntityType.FINDING]
+        assert finding_obs[0].entity_data["remediation"] == "Use parameterized queries"
+
+    def test_finding_empty_remediation(self):
+        """Default remediation is empty string."""
+        finding = Finding.info("Info finding")
+        result = PluginResult.success("test", "example.com", findings=[finding])
+        obs = adapt_result(result)
+        finding_obs = [o for o in obs if o.entity_type == EntityType.FINDING]
+        assert finding_obs[0].entity_data["remediation"] == ""

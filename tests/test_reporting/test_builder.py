@@ -11,6 +11,7 @@ from basilisk.reporting.builder import (
     _compute_risk_score_from_findings,
 )
 from basilisk.reporting.collector import (
+    HostTopology,
     ReportCollector,
     ReportDecision,
     ReportFinding,
@@ -130,6 +131,8 @@ class TestReportBuilder:
         assert model.findings_raw[0]["title"] == "SQL Injection in /login"
         assert model.findings_raw[0]["severity"] == "HIGH"
         assert model.findings_raw[0]["verified"] is True
+        assert "remediation" in model.findings_raw[0]
+        assert "false_positive_risk" in model.findings_raw[0]
 
     def test_decisions(self):
         c = _sample_collector()
@@ -178,6 +181,33 @@ class TestReportBuilder:
         c = _sample_collector()
         model = ReportBuilder.from_collector(c, scan_id="custom123")
         assert model.scan_id == "custom123"
+
+    def test_topology_serialized(self):
+        c = _sample_collector()
+        c.topology["test.example.com"] = HostTopology(
+            services=[
+                {"port": 443, "protocol": "tcp", "service": "https"},
+                {"port": 80, "protocol": "tcp", "service": "http"},
+            ],
+            endpoints=["/login", "/admin", "/api"],
+            technologies=[{"name": "nginx", "version": "1.21"}],
+        )
+        c.topology["api.test.example.com"] = HostTopology(
+            is_subdomain=True, parent="test.example.com",
+        )
+        model = ReportBuilder.from_collector(c)
+        assert "test.example.com" in model.topology
+        topo = model.topology["test.example.com"]
+        # Services sorted by port
+        assert topo["services"][0]["port"] == 80
+        assert topo["services"][1]["port"] == 443
+        # Endpoints sorted
+        assert topo["endpoints"] == ["/admin", "/api", "/login"]
+        assert topo["technologies"][0]["name"] == "nginx"
+        # Subdomain
+        sub = model.topology["api.test.example.com"]
+        assert sub["is_subdomain"] is True
+        assert sub["parent"] == "test.example.com"
 
     def test_model_is_frozen(self):
         c = _sample_collector()

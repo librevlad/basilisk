@@ -24,6 +24,8 @@ class ReportFinding:
     tags: list[str] = field(default_factory=list)
     confidence: float = 0.0
     verified: bool = False
+    false_positive_risk: str = "low"
+    remediation: str = ""
     step: int = 0
 
 
@@ -73,6 +75,17 @@ class ReasoningEvent:
 
 
 @dataclass
+class HostTopology:
+    """Per-host topology: ports, paths, technologies, subdomains."""
+
+    services: list[dict[str, Any]] = field(default_factory=list)
+    endpoints: list[str] = field(default_factory=list)
+    technologies: list[dict[str, str]] = field(default_factory=list)
+    is_subdomain: bool = False
+    parent: str = ""
+
+
+@dataclass
 class ReportCollector:
     """Accumulates event data for HTML/JSON report generation.
 
@@ -97,6 +110,9 @@ class ReportCollector:
     })
     total_entities: int = 0
     total_relations: int = 0
+
+    # Per-host topology for network map
+    topology: dict[str, HostTopology] = field(default_factory=dict)
 
     # Gap count
     gap_count: int = 0
@@ -267,6 +283,37 @@ class ReportCollector:
         if entity_type and entity_type in self.entity_counts:
             self.entity_counts[entity_type] += 1
 
+        # Track per-host topology for network map
+        host = event.data.get("host", "")
+        if host and entity_type in ("service", "endpoint", "host", "technology"):
+            if host not in self.topology:
+                self.topology[host] = HostTopology()
+            topo = self.topology[host]
+
+            if entity_type == "service":
+                port = event.data.get("port", 0)
+                protocol = event.data.get("protocol", "tcp")
+                service = event.data.get("service", "")
+                entry = {"port": port, "protocol": protocol, "service": service}
+                if entry not in topo.services:
+                    topo.services.append(entry)
+            elif entity_type == "endpoint":
+                path = event.data.get("path", "")
+                if path and path not in topo.endpoints:
+                    topo.endpoints.append(path)
+            elif entity_type == "host":
+                host_type = event.data.get("host_type", "primary")
+                parent = event.data.get("parent", "")
+                if host_type == "subdomain" and parent:
+                    topo.is_subdomain = True
+                    topo.parent = parent
+            elif entity_type == "technology":
+                name = event.data.get("tech_name", "")
+                version = event.data.get("tech_version", "")
+                entry_t = {"name": name, "version": version}
+                if name and entry_t not in topo.technologies:
+                    topo.technologies.append(entry_t)
+
         # If this is a finding, store full detail
         title = event.data.get("title", "")
         if entity_type == "finding" and title:
@@ -278,6 +325,9 @@ class ReportCollector:
                 description=event.data.get("description", ""),
                 tags=event.data.get("tags", []),
                 confidence=event.data.get("confidence", 0.0),
+                verified=event.data.get("verified", False),
+                false_positive_risk=event.data.get("false_positive_risk", "low"),
+                remediation=event.data.get("remediation", ""),
                 step=event.data.get("step", self.step),
             ))
             self.timeline_events.append({

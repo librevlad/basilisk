@@ -738,6 +738,8 @@ def _finding_observation(host: str, finding: Any, plugin: str) -> Observation:
             "finding_confidence": finding_confidence,
             "verified": verified,
             "false_positive_risk": false_positive_risk,
+            "tags": tags,
+            "remediation": getattr(finding, "remediation", ""),
         },
         key_fields={"host": host, "title": title},
         relation=Relation(

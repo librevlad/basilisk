@@ -179,7 +179,7 @@ class TestReportModel:
             "started_at", "finished_at", "termination_reason",
             "statistics", "vulnerabilities", "execution_timeline",
             "training", "findings_raw", "decisions", "plugins_raw",
-            "step_history", "reasoning",
+            "step_history", "reasoning", "topology",
         ])
         actual_fields = sorted(ReportModel.model_fields.keys())
         assert actual_fields == expected_fields, (

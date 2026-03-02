@@ -96,3 +96,4 @@ class ReportModel(BaseModel, frozen=True):
     plugins_raw: list[dict[str, Any]] = Field(default_factory=list)
     step_history: list[dict[str, Any]] = Field(default_factory=list)
     reasoning: dict[str, Any] = Field(default_factory=dict)
+    topology: dict[str, Any] = Field(default_factory=dict)
