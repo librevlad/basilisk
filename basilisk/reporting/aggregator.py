@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import re
 from collections import defaultdict
 from typing import Any
@@ -127,12 +126,9 @@ class VulnerabilityAggregator:
         target: str, surface: str, vuln_type: str, proof_key: str,
     ) -> str:
         """SHA256[:16] deterministic hash with input normalization."""
-        norm_target = target.lower().rstrip("/")
-        if "://" in norm_target:
-            norm_target = norm_target.split("://", 1)[1]
-        norm_surface = surface.lower().split("?")[0].rstrip("/")
-        raw = f"{norm_target}|{norm_surface}|{vuln_type}|{proof_key}"
-        return hashlib.sha256(raw.encode()).hexdigest()[:16]
+        from basilisk.knowledge.identity import vulnerability_id
+
+        return vulnerability_id(target, surface, vuln_type, proof_key)
 
     @staticmethod
     def _extract_vuln_type(finding: dict[str, Any]) -> str:

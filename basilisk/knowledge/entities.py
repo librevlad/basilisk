@@ -9,6 +9,13 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from basilisk.knowledge.normalize import (
+    normalize_host,
+    normalize_path,
+    normalize_port,
+    normalize_tech_name,
+)
+
 
 class EntityType(StrEnum):
     HOST = "host"
@@ -65,6 +72,7 @@ class Entity(BaseModel):
     @classmethod
     def host(cls, hostname: str, **extra_data: Any) -> Entity:
         """Create a Host entity."""
+        hostname = normalize_host(hostname)
         now = datetime.now(UTC)
         data = {"host": hostname, **extra_data}
         return cls(
@@ -80,6 +88,8 @@ class Entity(BaseModel):
         cls, host: str, port: int, protocol: str = "tcp", **extra_data: Any,
     ) -> Entity:
         """Create a Service entity."""
+        host = normalize_host(host)
+        port = normalize_port(port)
         now = datetime.now(UTC)
         data = {"host": host, "port": port, "protocol": protocol, **extra_data}
         return cls(
@@ -93,6 +103,8 @@ class Entity(BaseModel):
     @classmethod
     def endpoint(cls, host: str, path: str, **extra_data: Any) -> Entity:
         """Create an Endpoint entity."""
+        host = normalize_host(host)
+        path = normalize_path(path)
         now = datetime.now(UTC)
         data = {"host": host, "path": path, **extra_data}
         return cls(
@@ -108,6 +120,8 @@ class Entity(BaseModel):
         cls, host: str, name: str, version: str = "", **extra_data: Any,
     ) -> Entity:
         """Create a Technology entity."""
+        host = normalize_host(host)
+        name = normalize_tech_name(name)
         now = datetime.now(UTC)
         data = {"host": host, "name": name, "version": version, **extra_data}
         return cls(
@@ -123,6 +137,7 @@ class Entity(BaseModel):
         cls, host: str, username: str, password: str = "", **extra_data: Any,
     ) -> Entity:
         """Create a Credential entity."""
+        host = normalize_host(host)
         now = datetime.now(UTC)
         data = {"host": host, "username": username, "password": password, **extra_data}
         return cls(
@@ -136,6 +151,7 @@ class Entity(BaseModel):
     @classmethod
     def finding(cls, host: str, title: str, severity: str = "info", **extra_data: Any) -> Entity:
         """Create a Finding entity."""
+        host = normalize_host(host)
         now = datetime.now(UTC)
         data = {"host": host, "title": title, "severity": severity, **extra_data}
         return cls(
@@ -151,6 +167,7 @@ class Entity(BaseModel):
         cls, host: str, name: str, severity: str = "medium", **extra_data: Any,
     ) -> Entity:
         """Create a Vulnerability entity."""
+        host = normalize_host(host)
         now = datetime.now(UTC)
         data = {"host": host, "name": name, "severity": severity, **extra_data}
         return cls(
@@ -166,6 +183,7 @@ class Entity(BaseModel):
         cls, host: str, container_id: str, **extra_data: Any,
     ) -> Entity:
         """Create a Container entity."""
+        host = normalize_host(host)
         now = datetime.now(UTC)
         data = {"host": host, "container_id": container_id, **extra_data}
         return cls(
@@ -181,6 +199,7 @@ class Entity(BaseModel):
         cls, host: str, image_name: str, image_tag: str = "latest", **extra_data: Any,
     ) -> Entity:
         """Create an Image entity."""
+        host = normalize_host(host)
         now = datetime.now(UTC)
         data = {
             "host": host, "image_name": image_name, "image_tag": image_tag, **extra_data,

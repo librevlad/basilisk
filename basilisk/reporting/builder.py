@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 from basilisk.reporting.aggregator import VulnerabilityAggregator
 from basilisk.reporting.model import (
+    ReasoningSection,
     ReportModel,
     ReportStatistics,
     TimelineEvent,
@@ -219,7 +220,34 @@ class ReportBuilder:
 
     @staticmethod
     def _decisions_from_session(session: ScanSession) -> list[dict[str, Any]]:
-        """Convert session decisions to serializable dicts."""
+        """Serialize full Decision objects when available, else summary."""
+        if session.full_decisions:
+            result = []
+            for d in session.full_decisions:
+                entry: dict[str, Any] = {
+                    "id": d.id,
+                    "step": d.step,
+                    "goal": d.goal,
+                    "goal_description": d.goal_description,
+                    "goal_priority": round(d.goal_priority, 3),
+                    "chosen_plugin": d.chosen_plugin,
+                    "chosen_target": d.chosen_target,
+                    "chosen_score": round(d.chosen_score, 3),
+                    "reasoning_trace": d.reasoning_trace,
+                    "action_type": d.action_type,
+                    "context": d.context.model_dump(),
+                    "evaluated_options": [
+                        opt.model_dump() for opt in d.evaluated_options
+                    ],
+                    "outcome_observations": d.outcome_observations,
+                    "outcome_new_entities": d.outcome_new_entities,
+                    "outcome_confidence_delta": round(d.outcome_confidence_delta, 4),
+                    "outcome_duration": round(d.outcome_duration, 2),
+                    "was_productive": d.was_productive,
+                }
+                result.append(entry)
+            return result
+        # Fallback: summary decisions from events
         return [
             {
                 "step": d.step,
@@ -263,22 +291,22 @@ class ReportBuilder:
         ]
 
     @staticmethod
-    def _reasoning_from_session(session: ScanSession) -> dict[str, Any]:
-        """Build reasoning summary dict."""
-        return {
-            "hypotheses_confirmed": session.hypotheses_confirmed,
-            "hypotheses_rejected": session.hypotheses_rejected,
-            "beliefs_strengthened": session.beliefs_strengthened,
-            "beliefs_weakened": session.beliefs_weakened,
-            "events": [
-                {
-                    "type": r.event_type,
-                    "data": r.data,
-                    "step": r.step,
-                }
+    def _reasoning_from_session(session: ScanSession) -> ReasoningSection:
+        """Build structured ReasoningSection from session."""
+        from basilisk.reporting.model import ReportReasoningEvent
+
+        return ReasoningSection(
+            hypotheses_confirmed=session.hypotheses_confirmed,
+            hypotheses_rejected=session.hypotheses_rejected,
+            beliefs_strengthened=session.beliefs_strengthened,
+            beliefs_weakened=session.beliefs_weakened,
+            events=[
+                ReportReasoningEvent(
+                    event_type=r.event_type, step=r.step, data=r.data,
+                )
                 for r in session.reasoning_events
             ],
-        }
+        )
 
     @staticmethod
     def _timeline_from_session(session: ScanSession) -> list[TimelineEvent]:

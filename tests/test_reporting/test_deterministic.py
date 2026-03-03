@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
-from basilisk.core.session import ScanSession
+from basilisk.core.session import (
+    ReasoningEvent,
+    ScanSession,
+    SessionDecision,
+    SessionPlugin,
+    StepSnapshot,
+)
 from basilisk.knowledge.entities import Entity
 from basilisk.knowledge.relations import Relation, RelationType
 from basilisk.reporting.builder import ReportBuilder
@@ -52,6 +58,39 @@ def _build_session() -> ScanSession:
         "test.example.com", "XSS in /search", severity="medium",
         evidence="<script>alert(1)</script>", tags=["xss"],
     ))
+
+    # Execution metadata
+    s.step = 10
+    s.gap_count = 3
+    s.decisions = [
+        SessionDecision(
+            step=5, plugin="sqli_basic", target="test.example.com",
+            score=0.87, reasoning="high priority gap",
+            productive=True, new_entities=3,
+        ),
+        SessionDecision(
+            step=1, plugin="port_scan", target="test.example.com",
+            score=0.95, reasoning="initial recon",
+        ),
+    ]
+    s.plugins = [
+        SessionPlugin(name="port_scan", target="test.example.com",
+                       duration=1.5, findings_count=0, step=1),
+        SessionPlugin(name="sqli_basic", target="test.example.com",
+                       duration=3.2, findings_count=1, step=5),
+    ]
+    s.step_history = [
+        StepSnapshot(step=1, entities=10, relations=5, gaps=8, entities_gained=10),
+        StepSnapshot(step=5, entities=42, relations=20, gaps=3, entities_gained=5),
+    ]
+    s.hypotheses_confirmed = 2
+    s.hypotheses_rejected = 1
+    s.beliefs_strengthened = 5
+    s.beliefs_weakened = 1
+    s.reasoning_events = [
+        ReasoningEvent(event_type="hypothesis_confirmed", step=3, data={"id": "h1"}),
+        ReasoningEvent(event_type="belief_strengthened", step=4, data={"entity": "x"}),
+    ]
 
     return s
 
@@ -110,6 +149,13 @@ class TestDeterministicOutput:
         model = ReportBuilder.from_session(s)
         assert model.schema_version == REPORT_SCHEMA_VERSION
 
+    def test_decisions_sorted_by_step(self):
+        """Decisions are sorted by step even if inserted out of order."""
+        s = _build_session()
+        model = ReportBuilder.from_session(s)
+        steps = [d["step"] for d in model.decisions]
+        assert steps == sorted(steps)
+
     def test_json_sort_keys(self):
         s = _build_session()
         model = ReportBuilder.from_session(s)
@@ -121,3 +167,6 @@ class TestDeterministicOutput:
         parsed = json.loads(json_str)
         keys = list(parsed.keys())
         assert keys == sorted(keys)
+
+    def test_schema_version_is_4_1(self):
+        assert REPORT_SCHEMA_VERSION == "4.1"

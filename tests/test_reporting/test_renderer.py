@@ -521,7 +521,7 @@ class TestNetworkMap:
         result = render_html(data)
         assert "nm-tech-chip" in result
         assert "nginx" in result
-        assert "React" in result
+        assert "react" in result
 
     def test_sidebar_has_network_map_link(self):
         data = _data_from_session(_session_with_topology())

@@ -189,6 +189,7 @@ class AutonomousLoop:
                     "step": step,
                     "score": sc.score,
                     "reasoning": decision.reasoning_trace,
+                    "full_decision": decision,
                 }))
 
                 self.graph.record_execution(fingerprint)

@@ -179,11 +179,14 @@ class TestReportBuilder:
         assert model.step_history[0]["entities_gained"] == 10
 
     def test_reasoning(self):
+        from basilisk.reporting.model import ReasoningSection
+
         s = _sample_session()
         model = ReportBuilder.from_session(s)
         r = model.reasoning
-        assert r["hypotheses_confirmed"] == 2
-        assert r["beliefs_strengthened"] == 5
+        assert isinstance(r, ReasoningSection)
+        assert r.hypotheses_confirmed == 2
+        assert r.beliefs_strengthened == 5
 
     def test_training_none_by_default(self):
         s = _sample_session()
@@ -313,3 +316,70 @@ class TestComputeKillChain:
         assert result["Recon"] == 1
         assert result["Exploit"] == 1
         assert result["Verify"] == 1
+
+
+class TestFullDecisionSerialization:
+    """Test ReportBuilder with full Decision objects."""
+
+    def test_full_decisions_serialized(self):
+        from datetime import UTC, datetime
+
+        from basilisk.decisions.decision import (
+            ContextSnapshot,
+            Decision,
+            EvaluatedOption,
+        )
+
+        s = ScanSession("test.com")
+        s.graph.add_entity(Entity.host("test.com"))
+
+        d = Decision(
+            id="dec001",
+            step=1,
+            goal="services",
+            goal_description="Discover services",
+            goal_priority=10.0,
+            chosen_plugin="port_scan",
+            chosen_target="test.com",
+            chosen_score=0.95,
+            reasoning_trace="initial recon",
+            action_type="DISCOVER",
+            context=ContextSnapshot(entity_count=1, step=1),
+            evaluated_options=[
+                EvaluatedOption(
+                    capability_name="port_scan",
+                    plugin_name="port_scan",
+                    target_entity_id="abc",
+                    target_host="test.com",
+                    score=0.95,
+                    was_chosen=True,
+                ),
+            ],
+            outcome_observations=5,
+            outcome_new_entities=3,
+            outcome_confidence_delta=0.1,
+            outcome_duration=2.5,
+            was_productive=True,
+            timestamp=datetime.now(UTC),
+        )
+        s.full_decisions.append(d)
+
+        model = ReportBuilder.from_session(s)
+        assert len(model.decisions) == 1
+        dec = model.decisions[0]
+        assert dec["id"] == "dec001"
+        assert dec["goal"] == "services"
+        assert dec["chosen_plugin"] == "port_scan"
+        assert dec["was_productive"] is True
+        assert "context" in dec
+        assert "evaluated_options" in dec
+        assert len(dec["evaluated_options"]) == 1
+
+    def test_fallback_to_summary_decisions(self):
+        """When no full_decisions, uses SessionDecision summary."""
+        s = _sample_session()
+        # _sample_session sets session.decisions (SessionDecision) not full_decisions
+        assert len(s.full_decisions) == 0
+        model = ReportBuilder.from_session(s)
+        assert len(model.decisions) == 2
+        assert model.decisions[0]["plugin"] == "port_scan"

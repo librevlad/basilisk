@@ -6,7 +6,9 @@ from datetime import UTC, datetime
 
 from basilisk.reporting.model import (
     REPORT_SCHEMA_VERSION,
+    ReasoningSection,
     ReportModel,
+    ReportReasoningEvent,
     ReportStatistics,
     TimelineEvent,
     TrainingSection,
@@ -188,6 +190,48 @@ class TestReportModel:
         )
         assert model.training is not None
         assert model.training.profile_name == "dvwa"
+
+    def test_reasoning_section_default(self):
+        model = ReportModel(target="example.com")
+        assert isinstance(model.reasoning, ReasoningSection)
+        assert model.reasoning.hypotheses_confirmed == 0
+        assert model.reasoning.events == []
+
+    def test_reasoning_section_with_data(self):
+        model = ReportModel(
+            target="example.com",
+            reasoning=ReasoningSection(
+                hypotheses_confirmed=3,
+                hypotheses_rejected=1,
+                beliefs_strengthened=5,
+                beliefs_weakened=2,
+                events=[
+                    ReportReasoningEvent(
+                        event_type="hypothesis_confirmed",
+                        step=3,
+                        data={"hypothesis": "SQL injection likely"},
+                    ),
+                ],
+            ),
+        )
+        assert model.reasoning.hypotheses_confirmed == 3
+        assert len(model.reasoning.events) == 1
+        assert model.reasoning.events[0].event_type == "hypothesis_confirmed"
+
+    def test_reasoning_section_roundtrip(self):
+        model = ReportModel(
+            target="example.com",
+            reasoning=ReasoningSection(
+                hypotheses_confirmed=2,
+                events=[
+                    ReportReasoningEvent(event_type="belief_strengthened", step=1),
+                ],
+            ),
+        )
+        data = model.model_dump(mode="json")
+        restored = ReportModel.model_validate(data)
+        assert restored.reasoning.hypotheses_confirmed == 2
+        assert len(restored.reasoning.events) == 1
 
     def test_schema_regression(self):
         """Field set must match expected, or REPORT_SCHEMA_VERSION must bump."""

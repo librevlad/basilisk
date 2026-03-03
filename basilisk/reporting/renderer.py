@@ -98,7 +98,7 @@ def model_to_data(model: ReportModel) -> dict[str, Any]:
         "decisions": list(model.decisions),
         "plugins": list(model.plugins_raw),
         "step_history": list(model.step_history),
-        "reasoning": dict(model.reasoning),
+        "reasoning": model.reasoning.model_dump(),
         "topology": dict(model.topology),
         "training": training_data,
     }
@@ -3746,7 +3746,7 @@ def _reasoning_html(data: dict) -> str:
     if events:
         event_parts: list[str] = []
         for ev in events:
-            etype = _e(ev.get("type", ""))
+            etype = _e(ev.get("event_type", "") or ev.get("type", ""))
             estep = ev.get("step", 0)
             edata = ev.get("data", {})
 
@@ -3814,7 +3814,7 @@ def _reasoning_html(data: dict) -> str:
         ]
         cat_groups: dict[str, list[tuple[str, str]]] = {}  # cat -> [(stmt, status)]
         for ev in events:
-            etype = ev.get("type", "")
+            etype = ev.get("event_type", "") or ev.get("type", "")
             edata = ev.get("data", {})
             stmt = str(
                 edata.get("hypothesis", "") or edata.get("statement", "")

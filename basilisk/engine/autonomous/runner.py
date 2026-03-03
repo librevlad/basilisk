@@ -65,8 +65,6 @@ class AutonomousRunner:
 
         from pathlib import Path
 
-        import aiosqlite
-
         from basilisk.capabilities.mapping import build_capabilities_from_scenarios
         from basilisk.core.session import ScanSession
         from basilisk.engine.scenario_registry import ScenarioRegistry
@@ -258,14 +256,9 @@ class AutonomousRunner:
 
             # Persist knowledge graph to SQLite
             try:
-                from basilisk.knowledge.store import KnowledgeStore
-
                 kg_path = Path(settings.storage.db_path).parent / "knowledge.db"
                 kg_path.parent.mkdir(parents=True, exist_ok=True)
-                async with aiosqlite.connect(str(kg_path)) as kg_db:
-                    kg_store = KnowledgeStore(kg_db)
-                    await kg_store.init_schema()
-                    await kg_store.save(result.graph)
+                await session.persist_graph(kg_path)
             except Exception:
                 logger.warning("KG persistence failed", exc_info=True)
 

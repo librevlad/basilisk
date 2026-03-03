@@ -26,10 +26,10 @@ class VulnerabilityInstance(BaseModel, frozen=True):
 
     @staticmethod
     def make_id(target: str, surface: str, vuln_type: str, proof_key: str) -> str:
-        """Deterministic SHA256[:16] identity hash (delegates to aggregator)."""
-        from basilisk.reporting.aggregator import VulnerabilityAggregator
+        """Deterministic SHA256[:16] identity hash."""
+        from basilisk.knowledge.identity import vulnerability_id
 
-        return VulnerabilityAggregator._identity_hash(target, surface, vuln_type, proof_key)
+        return vulnerability_id(target, surface, vuln_type, proof_key)
 
 
 class TimelineEvent(BaseModel, frozen=True):
@@ -73,6 +73,24 @@ class TrainingSection(BaseModel, frozen=True):
     passed: bool = False
 
 
+class ReportReasoningEvent(BaseModel, frozen=True):
+    """A single reasoning event (hypothesis/belief change)."""
+
+    event_type: str
+    step: int = 0
+    data: dict[str, Any] = Field(default_factory=dict)
+
+
+class ReasoningSection(BaseModel, frozen=True):
+    """Structured reasoning trace for the report."""
+
+    hypotheses_confirmed: int = 0
+    hypotheses_rejected: int = 0
+    beliefs_strengthened: int = 0
+    beliefs_weakened: int = 0
+    events: list[ReportReasoningEvent] = Field(default_factory=list)
+
+
 class ReportModel(BaseModel, frozen=True):
     """Canonical frozen report — single source of truth for ALL renderers.
 
@@ -96,5 +114,5 @@ class ReportModel(BaseModel, frozen=True):
     decisions: list[dict[str, Any]] = Field(default_factory=list)
     plugins_raw: list[dict[str, Any]] = Field(default_factory=list)
     step_history: list[dict[str, Any]] = Field(default_factory=list)
-    reasoning: dict[str, Any] = Field(default_factory=dict)
+    reasoning: ReasoningSection = Field(default_factory=ReasoningSection)
     topology: dict[str, Any] = Field(default_factory=dict)

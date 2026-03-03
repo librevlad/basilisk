@@ -12,9 +12,11 @@ import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from basilisk.decisions.decision import Decision
     from basilisk.events.bus import Event, EventBus
     from basilisk.knowledge.graph import KnowledgeGraph
     from basilisk.training.validator import FindingTracker, ValidationReport
@@ -128,6 +130,7 @@ class ScanSession:
         # Execution metadata (NOT entity data — that lives in the graph)
         self.timeline_events: list[SessionTimelineEvent] = []
         self.decisions: list[SessionDecision] = []
+        self.full_decisions: list[Decision] = []
         self.plugins: list[SessionPlugin] = []
         self.step_history: list[StepSnapshot] = []
         self.reasoning_events: list[ReasoningEvent] = []
@@ -193,6 +196,17 @@ class ScanSession:
             "passed": report.passed,
             "expected_findings": expected,
         }
+
+    async def persist_graph(self, db_path: str | Path) -> None:
+        """Save KG to SQLite via KnowledgeStore."""
+        import aiosqlite
+
+        from basilisk.knowledge.store import KnowledgeStore
+
+        async with aiosqlite.connect(str(db_path)) as db:
+            store = KnowledgeStore(db)
+            await store.init_schema()
+            await store.save(self.graph)
 
     @staticmethod
     def _make_scan_id(target: str, started_at: float) -> str:
@@ -317,6 +331,11 @@ class ScanSession:
             score=event.data.get("score", 0.0),
             reasoning=event.data.get("reasoning", ""),
         ))
+
+        # Store full Decision object when available
+        full = event.data.get("full_decision")
+        if full is not None:
+            self.full_decisions.append(full)
 
         self.timeline_events.append(SessionTimelineEvent(
             timestamp=datetime.now(UTC),

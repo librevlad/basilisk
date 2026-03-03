@@ -243,3 +243,88 @@ class TestScanSessionEvents:
         assert not hasattr(s, "findings") or getattr(s, "findings", None) is None
         assert len(s.graph.findings()) == 1
         assert len(s.graph.hosts()) == 1
+
+    def test_full_decision_captured(self):
+        """Full Decision objects are stored when present in event data."""
+        from datetime import UTC, datetime
+
+        from basilisk.decisions.decision import Decision
+
+        s = self._make()
+        d = Decision(
+            id="abc123",
+            step=1,
+            chosen_plugin="port_scan",
+            chosen_target="test.com",
+            chosen_score=0.95,
+            reasoning_trace="initial recon",
+            timestamp=datetime.now(UTC),
+        )
+        s.bus.emit(Event(type=EventType.DECISION_MADE, data={
+            "step": 1, "plugin": "port_scan", "target": "test.com",
+            "score": 0.95, "reasoning": "initial recon",
+            "full_decision": d,
+        }))
+        assert len(s.full_decisions) == 1
+        assert s.full_decisions[0].id == "abc123"
+        # Summary decision also stored
+        assert len(s.decisions) == 1
+
+    def test_full_decision_not_stored_when_absent(self):
+        """Without full_decision in event, full_decisions list stays empty."""
+        s = self._make()
+        s.bus.emit(Event(type=EventType.DECISION_MADE, data={
+            "step": 1, "plugin": "port_scan", "target": "test.com", "score": 0.9,
+        }))
+        assert len(s.full_decisions) == 0
+        assert len(s.decisions) == 1
+
+
+class TestScanSessionConvenience:
+    """Test persist_graph() and build_report() convenience methods."""
+
+    async def test_persist_graph(self, tmp_path):
+        from basilisk.knowledge.entities import Entity
+
+        s = ScanSession("test.com")
+        s.graph.add_entity(Entity.host("test.com"))
+        db_path = tmp_path / "test_kg.db"
+        await s.persist_graph(db_path)
+        assert db_path.exists()
+
+    async def test_persist_graph_loads_back(self, tmp_path):
+        import aiosqlite
+
+        from basilisk.knowledge.entities import Entity
+        from basilisk.knowledge.store import KnowledgeStore
+
+        s = ScanSession("test.com")
+        host = Entity.host("test.com")
+        s.graph.add_entity(host)
+        db_path = tmp_path / "test_kg.db"
+        await s.persist_graph(db_path)
+
+        async with aiosqlite.connect(str(db_path)) as db:
+            store = KnowledgeStore(db)
+            loaded = await store.load()
+            assert loaded.entity_count >= 1
+
+    def test_build_report_via_builder(self):
+        from basilisk.reporting.builder import ReportBuilder
+        from basilisk.reporting.model import ReportModel
+
+        s = ScanSession("test.com")
+        report = ReportBuilder.from_session(s)
+        assert isinstance(report, ReportModel)
+        assert report.target == "test.com"
+
+    def test_build_report_has_findings(self):
+        from basilisk.knowledge.entities import Entity
+        from basilisk.reporting.builder import ReportBuilder
+
+        s = ScanSession("test.com")
+        s.graph.add_entity(Entity.host("test.com"))
+        s.graph.add_entity(Entity.finding("test.com", "XSS", severity="high"))
+        report = ReportBuilder.from_session(s)
+        assert len(report.findings_raw) == 1
+        assert report.findings_raw[0]["severity"] == "HIGH"
