@@ -60,3 +60,5 @@ expected_findings:
   - { title: "Unauthenticated Access", severity: "high", category: "auth", plugin_hints: ["auth_bypass"] }
   - { title: "Clickjacking", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
   - { title: "CORS", severity: "medium", category: "config", plugin_hints: ["cors_scan"] }
+  - { title: "Container runs as root", severity: "medium", category: "container", plugin_hints: ["container_config_audit"] }
+  - { title: "Secret in env var", severity: "high", category: "container", plugin_hints: ["container_config_audit"] }

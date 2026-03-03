@@ -46,3 +46,4 @@ expected_findings:
   - { title: "Missing security header", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
   - { title: "robots.txt", severity: "low", category: "config", plugin_hints: ["robots_parser"] }
   - { title: "User Enumeration", severity: "medium", category: "auth", plugin_hints: ["auth_bypass"] }
+  - { title: "Container runs as root", severity: "medium", category: "container", plugin_hints: ["container_config_audit"] }

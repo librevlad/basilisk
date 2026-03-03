@@ -62,3 +62,4 @@ expected_findings:
   - { title: "CSRF", severity: "high", category: "csrf", plugin_hints: ["csrf_check"] }
   - { title: "SSTI", severity: "high", category: "injection", plugin_hints: ["ssti_check"] }
   - { title: "Open Redirect", severity: "medium", category: "injection", plugin_hints: ["open_redirect"] }
+  - { title: "Container runs as root", severity: "medium", category: "container", plugin_hints: ["container_config_audit"] }

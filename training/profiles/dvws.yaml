@@ -34,3 +34,4 @@ expected_findings:
   - { title: "Sensitive Data Exposure", severity: "high", category: "config", plugin_hints: ["http_headers", "js_secret_scan"] }
   - { title: "Missing Rate Limiting", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
   - { title: "CORS Misconfiguration", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
+  - { title: "Container runs as root", severity: "medium", category: "container", plugin_hints: ["container_config_audit"] }

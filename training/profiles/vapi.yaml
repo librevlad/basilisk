@@ -51,3 +51,5 @@ expected_findings:
   - { title: "Rate Limiting Missing", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
   - { title: "Security Misconfiguration", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
   - { title: "Insufficient Logging", severity: "low", category: "config", plugin_hints: ["dir_brute"] }
+  - { title: "Container runs as root", severity: "medium", category: "container", plugin_hints: ["container_config_audit"] }
+  - { title: "Secret in env var", severity: "high", category: "container", plugin_hints: ["container_config_audit"] }

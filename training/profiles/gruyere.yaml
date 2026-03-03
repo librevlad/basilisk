@@ -35,3 +35,4 @@ expected_findings:
   - { title: "Information Disclosure Config", severity: "medium", category: "config", plugin_hints: ["dir_brute"] }
   - { title: "Information Disclosure Source", severity: "medium", category: "config", plugin_hints: ["dir_brute"] }
   - { title: "Database Dump Exposure", severity: "high", category: "config", plugin_hints: ["dir_brute"] }
+  - { title: "Container runs as root", severity: "medium", category: "container", plugin_hints: ["container_config_audit"] }

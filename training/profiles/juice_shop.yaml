@@ -159,3 +159,7 @@ expected_findings:
     severity: "low"
     category: "config"
     plugin_hints: ["dir_brute"]
+  - title: "Container runs as root"
+    severity: "medium"
+    category: "container"
+    plugin_hints: ["container_config_audit"]

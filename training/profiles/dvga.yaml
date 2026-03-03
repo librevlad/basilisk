@@ -23,3 +23,4 @@ expected_findings:
   - { title: "HTML Injection", severity: "medium", category: "xss", plugin_hints: ["xss_basic"] }
   - { title: "Field Suggestions", severity: "low", category: "config", plugin_hints: ["graphql_detect"] }
   - { title: "Default credentials", severity: "medium", category: "auth", plugin_hints: ["service_brute"] }
+  - { title: "Container runs as root", severity: "medium", category: "container", plugin_hints: ["container_config_audit"] }

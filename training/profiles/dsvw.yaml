@@ -46,3 +46,4 @@ expected_findings:
   - { title: "HTTP Header Injection", severity: "medium", category: "injection", plugin_hints: ["http_smuggling"] }
   - { title: "Source Code Disclosure", severity: "medium", category: "config", plugin_hints: ["dir_brute"] }
   - { title: "Full Path Disclosure", severity: "low", category: "config", plugin_hints: ["http_headers"] }
+  - { title: "Container runs as root", severity: "medium", category: "container", plugin_hints: ["container_config_audit"] }

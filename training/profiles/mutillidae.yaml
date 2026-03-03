@@ -61,3 +61,5 @@ expected_findings:
   - { title: "phpinfo Disclosure", severity: "medium", category: "config", plugin_hints: ["dir_brute"] }
   - { title: "Verbose Error Messages", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
   - { title: "Open Redirect", severity: "medium", category: "config", plugin_hints: ["open_redirect"] }
+  - { title: "Container runs as root", severity: "medium", category: "container", plugin_hints: ["container_config_audit"] }
+  - { title: "Secret in env var", severity: "high", category: "container", plugin_hints: ["container_config_audit"] }

@@ -47,3 +47,4 @@ expected_findings:
   - { title: "IDOR", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
   - { title: "Information Disclosure", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
   - { title: "Referrer Header Bypass", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
+  - { title: "Container runs as root", severity: "medium", category: "container", plugin_hints: ["container_config_audit"] }

@@ -99,3 +99,7 @@ expected_findings:
     severity: "medium"
     category: "open-redirect"
     plugin_hints: ["open_redirect"]
+  - title: "Container runs as root"
+    severity: "medium"
+    category: "container"
+    plugin_hints: ["container_config_audit"]

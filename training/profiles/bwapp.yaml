@@ -100,3 +100,4 @@ expected_findings:
   - { title: "Unvalidated Redirect", severity: "medium", category: "config", plugin_hints: ["open_redirect"] }
   - { title: "HTTP Parameter Pollution", severity: "medium", category: "injection", plugin_hints: ["param_tampering"] }
   - { title: "Information Disclosure Robots", severity: "low", category: "config", plugin_hints: ["robots_parser"] }
+  - { title: "Container runs as root", severity: "medium", category: "container", plugin_hints: ["container_config_audit"] }

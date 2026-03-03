@@ -46,3 +46,4 @@ expected_findings:
   - { title: "BOLA", severity: "high", category: "auth", plugin_hints: ["idor_check"] }
   - { title: "Sensitive path", severity: "high", category: "config", plugin_hints: ["dir_brute"] }
   - { title: "User Enumeration", severity: "medium", category: "auth", plugin_hints: ["default_creds"] }
+  - { title: "Container runs as root", severity: "medium", category: "container", plugin_hints: ["container_config_audit"] }

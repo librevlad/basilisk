@@ -44,3 +44,4 @@ expected_findings:
   - { title: "JWT", severity: "high", category: "auth", plugin_hints: ["jwt_attack"] }
   - { title: "Clickjacking", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
   - { title: "Missing security header", severity: "medium", category: "config", plugin_hints: ["http_headers"] }
+  - { title: "Container runs as root", severity: "medium", category: "container", plugin_hints: ["container_config_audit"] }
