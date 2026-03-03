@@ -210,13 +210,13 @@ ALLOWED_DEPENDENCIES: dict[str, set[str]] = {
     },
 
     "logging": {"events"},
-    "reporting": {"events"},
+    "reporting": {"events", "knowledge"},
     "display": {"events", "knowledge"},
 
     # -- v3 legacy leaf nodes --
     "utils": {"data", "models"},
     "plugins": {"core", "data", "models", "utils"},
-    "core": {"models"},
+    "core": {"models", "events", "knowledge"},
     "data": set(),
 
     # -- config is a single file (basilisk/config.py) --

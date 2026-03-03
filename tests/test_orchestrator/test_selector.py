@@ -360,44 +360,44 @@ class TestWafSubtype:
 
 class TestIsIpOrLocalWithPort:
     def test_localhost_with_port(self):
-        from basilisk.orchestrator.selector import _is_ip_or_local
+        from basilisk.orchestrator.selector import is_ip_or_local
 
-        assert _is_ip_or_local("localhost:4280") is True
+        assert is_ip_or_local("localhost:4280") is True
 
     def test_localhost_plain(self):
-        from basilisk.orchestrator.selector import _is_ip_or_local
+        from basilisk.orchestrator.selector import is_ip_or_local
 
-        assert _is_ip_or_local("localhost") is True
+        assert is_ip_or_local("localhost") is True
 
     def test_ip_with_port(self):
-        from basilisk.orchestrator.selector import _is_ip_or_local
+        from basilisk.orchestrator.selector import is_ip_or_local
 
-        assert _is_ip_or_local("127.0.0.1:8080") is True
+        assert is_ip_or_local("127.0.0.1:8080") is True
 
     def test_ip_plain(self):
-        from basilisk.orchestrator.selector import _is_ip_or_local
+        from basilisk.orchestrator.selector import is_ip_or_local
 
-        assert _is_ip_or_local("192.168.1.1") is True
+        assert is_ip_or_local("192.168.1.1") is True
 
     def test_domain_not_local(self):
-        from basilisk.orchestrator.selector import _is_ip_or_local
+        from basilisk.orchestrator.selector import is_ip_or_local
 
-        assert _is_ip_or_local("example.com") is False
+        assert is_ip_or_local("example.com") is False
 
     def test_domain_with_port_not_local(self):
-        from basilisk.orchestrator.selector import _is_ip_or_local
+        from basilisk.orchestrator.selector import is_ip_or_local
 
-        assert _is_ip_or_local("example.com:8080") is False
+        assert is_ip_or_local("example.com:8080") is False
 
     def test_ipv6_brackets(self):
-        from basilisk.orchestrator.selector import _is_ip_or_local
+        from basilisk.orchestrator.selector import is_ip_or_local
 
-        assert _is_ip_or_local("[::1]") is True
+        assert is_ip_or_local("[::1]") is True
 
     def test_ipv6_brackets_with_port(self):
-        from basilisk.orchestrator.selector import _is_ip_or_local
+        from basilisk.orchestrator.selector import is_ip_or_local
 
-        assert _is_ip_or_local("[::1]:8080") is True
+        assert is_ip_or_local("[::1]:8080") is True
 
 
 class TestMatchesServiceType:

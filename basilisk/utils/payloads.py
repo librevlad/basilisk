@@ -127,8 +127,6 @@ def _get_payload_db() -> dict[PayloadCategory, list[Payload]]:
     return db
 
 
-# Backward-compatible module-level alias used by export script and tests
-_PAYLOAD_DB = _get_payload_db
 
 
 # ---------------------------------------------------------------------------

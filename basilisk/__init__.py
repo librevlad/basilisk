@@ -30,12 +30,16 @@ class Basilisk:
     """
 
     def __init__(
-        self, *targets: str, max_steps: int = 100, config: Any = None, bus: Any = None,
+        self,
+        *targets: str,
+        max_steps: int = 100,
+        config: Any = None,
+        session: Any = None,
     ):
         self._targets = list(targets)
         self._max_steps = max_steps
         self._config = config
-        self._bus = bus
+        self._session = session
         self._campaign_enabled = False
         self._plugin_filter: list[str] = []
         self._exclude_patterns: list[str] = []
@@ -77,8 +81,8 @@ class Basilisk:
         targets = TargetLoader.load(self._targets, settings)
         actor = CompositeActor.build(settings)
         kwargs: dict[str, Any] = {}
-        if self._bus is not None:
-            kwargs["bus"] = self._bus
+        if self._session is not None:
+            kwargs["session"] = self._session
         runner = AutonomousRunner(
             settings=settings,
             actor=actor,

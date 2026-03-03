@@ -7,7 +7,8 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from basilisk.events.bus import Event, EventBus, EventType
+from basilisk.core.session import ScanSession
+from basilisk.events.bus import Event, EventType
 from basilisk.reporting.writer import ReportWriter, _safe_dirname
 
 
@@ -35,38 +36,38 @@ class TestReportWriterInit:
     """Test writer initialization."""
 
     def test_default_report_dir(self):
-        bus = EventBus()
-        writer = ReportWriter(bus, target="test.com", max_steps=50)
+        session = ScanSession("test.com", max_steps=50)
+        writer = ReportWriter(session)
         assert "test.com" in str(writer.report_dir)
         assert writer.report_dir.parent == Path("reports")
 
     def test_custom_report_dir(self):
-        bus = EventBus()
+        session = ScanSession("test.com")
         custom = Path("/tmp/my_report")
-        writer = ReportWriter(bus, target="test.com", report_dir=custom)
+        writer = ReportWriter(session, report_dir=custom)
         assert writer.report_dir == custom
 
-    def test_collector_configured(self):
-        bus = EventBus()
-        writer = ReportWriter(bus, target="test.com", max_steps=50, mode="train")
-        assert writer.collector.target == "test.com"
-        assert writer.collector.max_steps == 50
-        assert writer.collector.mode == "train"
+    def test_session_accessible(self):
+        session = ScanSession("test.com", max_steps=50, mode="train")
+        writer = ReportWriter(session)
+        assert writer.session.target == "test.com"
+        assert writer.session.max_steps == 50
+        assert writer.session.mode == "train"
 
-    def test_events_flow_to_collector(self):
-        bus = EventBus()
-        writer = ReportWriter(bus, target="test.com")
-        bus.emit(Event(EventType.GAP_DETECTED, {"count": 5}))
-        assert writer.collector.gap_count == 5
+    def test_events_flow_to_session(self):
+        session = ScanSession("test.com")
+        _writer = ReportWriter(session)
+        session.bus.emit(Event(EventType.GAP_DETECTED, {"count": 5}))
+        assert session.gap_count == 5
 
 
 class TestReportWriterLifecycle:
     """Test start/finalize lifecycle."""
 
     async def test_start_creates_dir_and_files(self, tmp_path):
-        bus = EventBus()
+        session = ScanSession("test.com")
         report_dir = tmp_path / "report_test"
-        writer = ReportWriter(bus, target="test.com", report_dir=report_dir)
+        writer = ReportWriter(session, report_dir=report_dir)
 
         result_dir = await writer.start()
         assert result_dir == report_dir
@@ -86,9 +87,9 @@ class TestReportWriterLifecycle:
         await writer.finalize(termination_reason="test_done")
 
     async def test_finalize_removes_auto_refresh(self, tmp_path):
-        bus = EventBus()
+        session = ScanSession("test.com")
         report_dir = tmp_path / "report_final"
-        writer = ReportWriter(bus, target="test.com", report_dir=report_dir)
+        writer = ReportWriter(session, report_dir=report_dir)
 
         await writer.start()
         await writer.finalize(termination_reason="no_gaps")
@@ -101,26 +102,23 @@ class TestReportWriterLifecycle:
         assert data["termination_reason"] == "no_gaps"
 
     async def test_finalize_without_start(self, tmp_path):
-        bus = EventBus()
+        session = ScanSession("test.com")
         report_dir = tmp_path / "report_no_start"
-        writer = ReportWriter(bus, target="test.com", report_dir=report_dir)
+        writer = ReportWriter(session, report_dir=report_dir)
 
-        # Should not raise — finalize creates dir if needed
         report_dir.mkdir(parents=True)
         await writer.finalize(termination_reason="early_stop")
         assert (report_dir / "report.html").exists()
 
     async def test_periodic_writes(self, tmp_path):
-        bus = EventBus()
+        session = ScanSession("test.com")
         report_dir = tmp_path / "report_periodic"
-        writer = ReportWriter(
-            bus, target="test.com", report_dir=report_dir, interval=0.1,
-        )
+        writer = ReportWriter(session, report_dir=report_dir, interval=0.1)
 
         await writer.start()
 
         # Emit some events
-        bus.emit(Event(EventType.STEP_COMPLETED, {
+        session.bus.emit(Event(EventType.STEP_COMPLETED, {
             "step": 1, "entities": 10, "relations": 5,
         }))
 
@@ -129,16 +127,13 @@ class TestReportWriterLifecycle:
 
         data = json.loads((report_dir / "report.json").read_text(encoding="utf-8"))
         assert data["summary"]["steps"] == 1
-        assert data["summary"]["total_entities"] == 10
 
         await writer.finalize(termination_reason="done")
 
     async def test_finalize_training(self, tmp_path):
-        bus = EventBus()
+        session = ScanSession("train.app", mode="train")
         report_dir = tmp_path / "report_train"
-        writer = ReportWriter(
-            bus, target="train.app", report_dir=report_dir, mode="train",
-        )
+        writer = ReportWriter(session, report_dir=report_dir)
         await writer.start()
 
         report = MagicMock()
@@ -170,16 +165,17 @@ class TestReportWriterLifecycle:
         assert "PASSED" in html
 
     async def test_write_exception_does_not_crash(self, tmp_path):
-        bus = EventBus()
+        session = ScanSession("test.com")
         report_dir = tmp_path / "report_err"
-        writer = ReportWriter(bus, target="test.com", report_dir=report_dir)
+        writer = ReportWriter(session, report_dir=report_dir)
 
         await writer.start()
 
         # Patch _write_file to raise
         with patch.object(writer, "_write_file", side_effect=OSError("disk full")):
-            # Trigger a write via event + sleep
-            bus.emit(Event(EventType.STEP_COMPLETED, {"step": 1, "entities": 5, "relations": 2}))
+            session.bus.emit(
+                Event(EventType.STEP_COMPLETED, {"step": 1, "entities": 5, "relations": 2}),
+            )
             await asyncio.sleep(0.15)
 
         # Should still finalize gracefully (unpatch)
@@ -191,9 +187,9 @@ class TestAtomicWrite:
     """Test atomic write mechanics."""
 
     async def test_no_tmp_files_left(self, tmp_path):
-        bus = EventBus()
+        session = ScanSession("test.com")
         report_dir = tmp_path / "report_atomic"
-        writer = ReportWriter(bus, target="test.com", report_dir=report_dir)
+        writer = ReportWriter(session, report_dir=report_dir)
 
         await writer.start()
         await writer.finalize(termination_reason="done")

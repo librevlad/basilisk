@@ -11,12 +11,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from basilisk.reporting.builder import ReportBuilder, TrainingReportBuilder
-from basilisk.reporting.collector import ReportCollector
+from basilisk.reporting.builder import ReportBuilder
 from basilisk.reporting.renderer import model_to_data, render_html, render_json
 
 if TYPE_CHECKING:
-    from basilisk.events.bus import EventBus
+    from basilisk.core.session import ScanSession
     from basilisk.training.validator import FindingTracker, ValidationReport
 
 logger = logging.getLogger(__name__)
@@ -30,23 +29,18 @@ def _safe_dirname(target: str) -> str:
 class ReportWriter:
     """Manages periodic HTML+JSON report generation during an audit.
 
-    Creates a directory under ``reports/`` and writes ``report.html`` +
-    ``report.json`` every *interval* seconds via a background asyncio task.
-    Final write removes auto-refresh meta tag.
+    Accepts a ScanSession and builds reports from the session's
+    KnowledgeGraph (entity data) and execution metadata.
     """
 
     def __init__(
         self,
-        bus: EventBus,
+        session: ScanSession,
         *,
-        target: str,
-        max_steps: int = 100,
-        mode: str = "auto",
         report_dir: Path | None = None,
         interval: float = 3.0,
     ) -> None:
-        self._collector = ReportCollector(target=target, mode=mode, max_steps=max_steps)
-        self._collector.subscribe(bus)
+        self._session = session
         self._interval = interval
         self._task: asyncio.Task[None] | None = None
 
@@ -54,13 +48,13 @@ class ReportWriter:
             self._report_dir = report_dir
         else:
             ts = datetime.now(tz=UTC).strftime("%Y%m%d_%H%M%S")
-            dirname = f"{_safe_dirname(target)}_{ts}"
+            dirname = f"{_safe_dirname(session.target)}_{ts}"
             self._report_dir = Path("reports") / dirname
 
     @property
-    def collector(self) -> ReportCollector:
-        """Access the underlying collector (for testing)."""
-        return self._collector
+    def session(self) -> ScanSession:
+        """Access the underlying session."""
+        return self._session
 
     @property
     def report_dir(self) -> Path:
@@ -83,7 +77,8 @@ class ReportWriter:
         Returns the report directory path.
         """
         await self._cancel_task()
-        self._collector.finalize(termination_reason)
+        if termination_reason:
+            self._session.finalize(termination_reason)
         await self._write(auto_refresh=False)
         return self._report_dir
 
@@ -95,9 +90,8 @@ class ReportWriter:
         Returns the report directory path.
         """
         await self._cancel_task()
-        self._collector.finalize("training_complete")
-        self._collector.mode = "train"
-        await self._write_training(report, tracker)
+        self._session.finalize_training(report, tracker)
+        await self._write(auto_refresh=False)
         return self._report_dir
 
     # ------------------------------------------------------------------
@@ -124,7 +118,7 @@ class ReportWriter:
     async def _write(self, *, auto_refresh: bool = True) -> None:
         """Write report.html and report.json atomically."""
         try:
-            model = ReportBuilder.from_collector(self._collector)
+            model = ReportBuilder.from_session(self._session)
             data = model_to_data(model)
             html_content = render_html(data, auto_refresh=auto_refresh)
             json_content = render_json(data)
@@ -134,24 +128,6 @@ class ReportWriter:
             await loop.run_in_executor(None, self._write_file, "report.json", json_content)
         except Exception:
             logger.debug("Report write failed", exc_info=True)
-
-    async def _write_training(
-        self, report: ValidationReport, tracker: FindingTracker,
-    ) -> None:
-        """Write training report.html and report.json atomically."""
-        try:
-            model = TrainingReportBuilder.from_training(
-                self._collector, report, tracker,
-            )
-            data = model_to_data(model)
-            html_content = render_html(data, auto_refresh=False)
-            json_content = render_json(data)
-
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(None, self._write_file, "report.html", html_content)
-            await loop.run_in_executor(None, self._write_file, "report.json", json_content)
-        except Exception:
-            logger.debug("Training report write failed", exc_info=True)
 
     def _write_file(self, filename: str, content: str) -> None:
         """Atomic write: tmp file then os.replace."""

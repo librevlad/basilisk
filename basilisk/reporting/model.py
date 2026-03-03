@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import hashlib
 from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
 
-REPORT_SCHEMA_VERSION = "4.0"
+REPORT_SCHEMA_VERSION = "4.1"
 
 
 class VulnerabilityInstance(BaseModel, frozen=True):
@@ -27,9 +26,10 @@ class VulnerabilityInstance(BaseModel, frozen=True):
 
     @staticmethod
     def make_id(target: str, surface: str, vuln_type: str, proof_key: str) -> str:
-        """Deterministic SHA256[:16] identity hash."""
-        raw = f"{target}|{surface}|{vuln_type}|{proof_key}"
-        return hashlib.sha256(raw.encode()).hexdigest()[:16]
+        """Deterministic SHA256[:16] identity hash (delegates to aggregator)."""
+        from basilisk.reporting.aggregator import VulnerabilityAggregator
+
+        return VulnerabilityAggregator._identity_hash(target, surface, vuln_type, proof_key)
 
 
 class TimelineEvent(BaseModel, frozen=True):
@@ -37,8 +37,9 @@ class TimelineEvent(BaseModel, frozen=True):
 
     timestamp: datetime
     scenario: str
-    action: str  # "started"|"completed"|"failed"|"finding_created"|"verification_passed"
+    action: str  # SessionEventType values
     result: dict[str, Any] = Field(default_factory=dict)
+    step: int = 0
 
 
 class ReportStatistics(BaseModel, frozen=True):
@@ -60,7 +61,7 @@ class ReportStatistics(BaseModel, frozen=True):
 
 
 class TrainingSection(BaseModel, frozen=True):
-    """Training validation results — computed by TrainingReportBuilder."""
+    """Training validation results."""
 
     profile_name: str = ""
     expected_total: int = 0

@@ -1,4 +1,8 @@
-"""ReportBuilder — constructs canonical ReportModel from collector state."""
+"""ReportBuilder — constructs canonical ReportModel from ScanSession.
+
+Entity data (findings, topology, counts) comes from the KnowledgeGraph.
+Execution metadata (decisions, plugins, steps, reasoning) comes from the session.
+"""
 
 from __future__ import annotations
 
@@ -15,10 +19,10 @@ from basilisk.reporting.model import (
 )
 
 if TYPE_CHECKING:
-    from basilisk.reporting.collector import ReportCollector
-    from basilisk.training.validator import FindingTracker, ValidationReport
+    from basilisk.core.session import ScanSession
+    from basilisk.knowledge.graph import KnowledgeGraph
 
-# Kill chain phases — single source of truth (moved from renderer)
+# Kill chain phases — single source of truth
 KILL_CHAIN_PHASES: list[tuple[str, list[str]]] = [
     ("Recon", [
         "dns_enum", "subdomain_enum", "whois_lookup", "port_scan",
@@ -60,46 +64,69 @@ _SEVERITY_WEIGHTS: dict[str, float] = {
     "INFO": 0.0,
 }
 
+# Deterministic severity sort order
+_SEVERITY_ORDER: dict[str, int] = {
+    "CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "INFO": 4,
+}
+
 
 class ReportBuilder:
-    """Build frozen ReportModel from mutable collector state.
+    """Build frozen ReportModel from ScanSession.
 
-    All business logic lives here. Renderers receive a fully-computed model.
+    Entity data from KnowledgeGraph (source of truth).
+    Execution metadata from ScanSession.
+    All collections sorted for deterministic output.
     """
 
     @classmethod
-    def from_collector(
-        cls, collector: ReportCollector, *, scan_id: str = "",
+    def from_session(
+        cls, session: ScanSession, *, scan_id: str = "",
     ) -> ReportModel:
-        """Build frozen ReportModel from mutable collector state."""
-        if not scan_id:
-            scan_id = cls._make_scan_id(collector.target, collector.started_at)
+        """Build frozen ReportModel from ScanSession."""
+        scan_id = scan_id or session.scan_id
 
-        statistics = cls._compute_statistics(collector)
-        vulnerabilities = VulnerabilityAggregator.aggregate(
-            cls._findings_as_dicts(collector), collector.target,
+        # KG-derived data
+        findings_raw = cls._findings_from_graph(session.graph)
+        topology = cls._topology_from_graph(session.graph)
+        entity_counts = cls._entity_counts_from_graph(session.graph)
+
+        # Session-derived data
+        decisions = cls._decisions_from_session(session)
+        plugins_raw = cls._plugins_from_session(session)
+        step_history = cls._steps_from_session(session)
+        reasoning = cls._reasoning_from_session(session)
+        timeline = cls._timeline_from_session(session)
+        training = cls._training_from_session(session)
+
+        # Aggregation
+        vulnerabilities = VulnerabilityAggregator.aggregate(findings_raw, session.target)
+
+        # Statistics
+        statistics = cls._compute_statistics(
+            session, entity_counts, findings_raw, plugins_raw,
         )
-        timeline = cls._build_timeline(collector)
-        findings_raw = cls._findings_as_dicts(collector)
-        decisions = cls._decisions_as_dicts(collector)
-        plugins_raw = cls._plugins_as_dicts(collector)
-        step_history = cls._step_history_as_dicts(collector)
-        reasoning = cls._reasoning_as_dict(collector)
 
-        # Handle legacy training dict from collector
-        training = cls._build_training_from_collector(collector)
-
-        topology = cls._topology_as_dict(collector)
+        # Deterministic sorting
+        vulnerabilities = sorted(vulnerabilities, key=lambda v: v.vulnerability_id)
+        findings_raw = sorted(findings_raw, key=lambda f: (
+            _SEVERITY_ORDER.get(f.get("severity", "INFO"), 99),
+            f.get("title", ""),
+            f.get("host", ""),
+        ))
+        topology = dict(sorted(topology.items()))
+        decisions = sorted(decisions, key=lambda d: (d.get("step", 0), d.get("plugin", "")))
+        plugins_raw = sorted(plugins_raw, key=lambda p: (p.get("step", 0), p.get("name", "")))
+        timeline = sorted(timeline, key=lambda t: t.timestamp)
 
         now = datetime.now(UTC)
         return ReportModel(
             scan_id=scan_id,
-            target=collector.target,
-            mode=collector.mode,
-            status=collector.status,
-            started_at=now,
-            finished_at=now if collector.status == "completed" else None,
-            termination_reason=collector.termination_reason,
+            target=session.target,
+            mode=session.mode,
+            status=session.status,
+            started_at=session.started_at,
+            finished_at=now if session.status == "completed" else None,
+            termination_reason=session.termination_reason,
             statistics=statistics,
             vulnerabilities=vulnerabilities,
             execution_timeline=timeline,
@@ -112,71 +139,87 @@ class ReportBuilder:
             topology=topology,
         )
 
-    @staticmethod
-    def _make_scan_id(target: str, started_at: float) -> str:
-        """Deterministic scan ID from target + start time."""
-        raw = f"{target}:{started_at}"
-        return hashlib.sha256(raw.encode()).hexdigest()[:16]
+    # ------------------------------------------------------------------
+    # KG-derived helpers
+    # ------------------------------------------------------------------
 
     @staticmethod
-    def _compute_statistics(collector: ReportCollector) -> ReportStatistics:
-        """All stats computed ONCE here. Renderers never recompute."""
-        severity_counts = collector.severity_counts
-        risk_score = _compute_risk_score_from_findings(collector.findings)
-        kill_chain = _compute_kill_chain({p.name for p in collector.plugins})
-
-        return ReportStatistics(
-            scenarios_executed=len(collector.plugins),
-            requests_sent=0,
-            findings_total=len(collector.findings),
-            steps_completed=collector.step,
-            max_steps=collector.max_steps,
-            duration_seconds=round(collector.elapsed, 1),
-            severity_counts=severity_counts,
-            risk_score=round(risk_score, 1),
-            total_entities=collector.total_entities,
-            total_relations=collector.total_relations,
-            total_gaps=collector.gap_count,
-            entity_counts=dict(collector.entity_counts),
-            kill_chain_coverage=kill_chain,
-        )
-
-    @staticmethod
-    def _build_timeline(collector: ReportCollector) -> list[TimelineEvent]:
-        """Build timeline from collector's accumulated events."""
-        events: list[TimelineEvent] = []
-        for te in collector.timeline_events:
-            events.append(TimelineEvent(
-                timestamp=datetime.fromisoformat(te["timestamp"]),
-                scenario=te.get("scenario", ""),
-                action=te.get("action", ""),
-                result=te.get("result", {}),
-            ))
-        return events
-
-    @staticmethod
-    def _findings_as_dicts(collector: ReportCollector) -> list[dict[str, Any]]:
-        """Convert findings to dicts for aggregator and raw output."""
+    def _findings_from_graph(graph: KnowledgeGraph) -> list[dict[str, Any]]:
+        """Extract findings from KG entities. Uses entity.confidence (merged)."""
         return [
             {
-                "title": f.title,
-                "severity": f.severity.upper(),
-                "host": f.host,
-                "evidence": f.evidence,
-                "description": f.description,
-                "tags": f.tags,
-                "confidence": f.confidence,
-                "verified": f.verified,
-                "false_positive_risk": f.false_positive_risk,
-                "remediation": f.remediation,
-                "step": f.step,
+                "title": e.data.get("title", ""),
+                "severity": e.data.get("severity", "info").upper(),
+                "host": e.data.get("host", ""),
+                "evidence": (
+                    e.data.get("evidence", "")
+                    or (e.evidence[0] if e.evidence else "")
+                ),
+                "description": e.data.get("description", ""),
+                "tags": e.data.get("tags", []),
+                "confidence": e.confidence,
+                "verified": e.data.get("verified", False),
+                "false_positive_risk": e.data.get("false_positive_risk", "low"),
+                "remediation": e.data.get("remediation", ""),
+                "step": e.data.get("step", 0),
             }
-            for f in collector.findings
+            for e in graph.findings()
         ]
 
     @staticmethod
-    def _decisions_as_dicts(collector: ReportCollector) -> list[dict[str, Any]]:
-        """Convert decisions to serializable dicts."""
+    def _topology_from_graph(graph: KnowledgeGraph) -> dict[str, Any]:
+        """Traverse KG relations to build per-host topology."""
+        from basilisk.knowledge.relations import RelationType
+
+        result: dict[str, Any] = {}
+        for host_entity in graph.hosts():
+            host = host_entity.data.get("host", host_entity.id)
+            services: list[dict[str, Any]] = []
+            endpoints: list[str] = []
+            technologies: list[dict[str, str]] = []
+
+            for svc in graph.neighbors(host_entity.id, RelationType.EXPOSES):
+                services.append({
+                    "port": svc.data.get("port", 0),
+                    "protocol": svc.data.get("protocol", "tcp"),
+                    "service": svc.data.get("service", ""),
+                })
+                for ep in graph.neighbors(svc.id, RelationType.HAS_ENDPOINT):
+                    path = ep.data.get("path", "")
+                    if path and path not in endpoints:
+                        endpoints.append(path)
+                for tech in graph.neighbors(svc.id, RelationType.RUNS):
+                    technologies.append({
+                        "name": tech.data.get("name", ""),
+                        "version": tech.data.get("version", ""),
+                    })
+
+            result[host] = {
+                "services": sorted(services, key=lambda s: s.get("port", 0)),
+                "endpoints": sorted(endpoints),
+                "technologies": technologies,
+                "is_subdomain": host_entity.data.get("type") == "subdomain",
+                "parent": host_entity.data.get("parent", ""),
+            }
+        return result
+
+    @staticmethod
+    def _entity_counts_from_graph(graph: KnowledgeGraph) -> dict[str, int]:
+        """Count entities by type from the graph."""
+        from basilisk.knowledge.entities import EntityType
+
+        return {
+            etype.value: len(graph.query(etype))
+            for etype in EntityType
+        }
+
+    # ------------------------------------------------------------------
+    # Session-derived helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _decisions_from_session(session: ScanSession) -> list[dict[str, Any]]:
+        """Convert session decisions to serializable dicts."""
         return [
             {
                 "step": d.step,
@@ -188,11 +231,25 @@ class ReportBuilder:
                 "duration": round(d.duration, 2),
                 "new_entities": d.new_entities,
             }
-            for d in collector.decisions
+            for d in session.decisions
         ]
 
     @staticmethod
-    def _step_history_as_dicts(collector: ReportCollector) -> list[dict[str, Any]]:
+    def _plugins_from_session(session: ScanSession) -> list[dict[str, Any]]:
+        """Convert session plugin records to serializable dicts."""
+        return [
+            {
+                "name": p.name,
+                "target": p.target,
+                "duration": round(p.duration, 2),
+                "findings_count": p.findings_count,
+                "step": p.step,
+            }
+            for p in session.plugins
+        ]
+
+    @staticmethod
+    def _steps_from_session(session: ScanSession) -> list[dict[str, Any]]:
         """Convert step history to serializable dicts."""
         return [
             {
@@ -202,37 +259,52 @@ class ReportBuilder:
                 "gaps": s.gaps,
                 "entities_gained": s.entities_gained,
             }
-            for s in collector.step_history
+            for s in session.step_history
         ]
 
     @staticmethod
-    def _plugins_as_dicts(collector: ReportCollector) -> list[dict[str, Any]]:
-        """Convert plugins to serializable dicts."""
+    def _reasoning_from_session(session: ScanSession) -> dict[str, Any]:
+        """Build reasoning summary dict."""
+        return {
+            "hypotheses_confirmed": session.hypotheses_confirmed,
+            "hypotheses_rejected": session.hypotheses_rejected,
+            "beliefs_strengthened": session.beliefs_strengthened,
+            "beliefs_weakened": session.beliefs_weakened,
+            "events": [
+                {
+                    "type": r.event_type,
+                    "data": r.data,
+                    "step": r.step,
+                }
+                for r in session.reasoning_events
+            ],
+        }
+
+    @staticmethod
+    def _timeline_from_session(session: ScanSession) -> list[TimelineEvent]:
+        """Convert session timeline events to TimelineEvent models."""
         return [
-            {
-                "name": p.name,
-                "target": p.target,
-                "duration": round(p.duration, 2),
-                "findings_count": p.findings_count,
-                "step": p.step,
-            }
-            for p in collector.plugins
+            TimelineEvent(
+                timestamp=te.timestamp,
+                scenario=te.scenario,
+                action=te.event_type.value,
+                result=dict(te.data),
+                step=te.step,
+            )
+            for te in session.timeline_events
         ]
 
     @staticmethod
-    def _build_training_from_collector(
-        collector: ReportCollector,
-    ) -> TrainingSection | None:
-        """Build training section from collector's legacy training dict."""
-        if collector.training is None:
+    def _training_from_session(session: ScanSession) -> TrainingSection | None:
+        """Build training section from session's training data."""
+        if session.training_data is None:
             return None
-        t = collector.training
+        t = session.training_data
         expected = t.get("expected_findings", [])
         missed = [
             {"title": ef["title"], "severity": ef["severity"]}
             for ef in expected if not ef.get("discovered", False)
         ]
-        # Preserve full expected_findings for renderer reconstruction
         all_expected = [dict(ef) for ef in expected]
         detected = sum(1 for ef in expected if ef.get("discovered", False))
         return TrainingSection(
@@ -240,96 +312,55 @@ class ReportBuilder:
             expected_total=len(expected),
             detected=detected,
             missed=missed,
-            false_positives=all_expected,  # Reuse for full detail pass-through
+            false_positives=all_expected,
             coverage_percent=round(t.get("coverage", 0.0) * 100, 1),
             verification_rate=round(t.get("verification_rate", 0.0) * 100, 1),
             passed=t.get("passed", False),
         )
 
     @staticmethod
-    def _topology_as_dict(collector: ReportCollector) -> dict[str, Any]:
-        """Serialize per-host topology for the report model."""
-        result: dict[str, Any] = {}
-        for host, topo in collector.topology.items():
-            result[host] = {
-                "services": sorted(topo.services, key=lambda s: s.get("port", 0)),
-                "endpoints": sorted(topo.endpoints),
-                "technologies": topo.technologies,
-                "is_subdomain": topo.is_subdomain,
-                "parent": topo.parent,
-            }
-        return result
+    def _compute_statistics(
+        session: ScanSession,
+        entity_counts: dict[str, int],
+        findings_raw: list[dict[str, Any]],
+        plugins_raw: list[dict[str, Any]],
+    ) -> ReportStatistics:
+        """Compute all statistics once. Renderers never recompute."""
+        severity_counts: dict[str, int] = {}
+        for f in findings_raw:
+            sev = f.get("severity", "INFO")
+            severity_counts[sev] = severity_counts.get(sev, 0) + 1
 
-    @staticmethod
-    def _reasoning_as_dict(collector: ReportCollector) -> dict[str, Any]:
-        """Build reasoning summary dict."""
-        return {
-            "hypotheses_confirmed": collector.hypotheses_confirmed,
-            "hypotheses_rejected": collector.hypotheses_rejected,
-            "beliefs_strengthened": collector.beliefs_strengthened,
-            "beliefs_weakened": collector.beliefs_weakened,
-            "events": [
-                {
-                    "type": r.event_type,
-                    "data": r.data,
-                    "step": r.step,
-                }
-                for r in collector.reasoning_events
-            ],
-        }
+        risk_score = _compute_risk_score(findings_raw)
+        kill_chain = _compute_kill_chain({p.get("name", "") for p in plugins_raw})
 
-
-class TrainingReportBuilder(ReportBuilder):
-    """Build ReportModel with training section."""
-
-    @classmethod
-    def from_training(
-        cls,
-        collector: ReportCollector,
-        report: ValidationReport,
-        tracker: FindingTracker,
-        *,
-        scan_id: str = "",
-    ) -> ReportModel:
-        """Build ReportModel with training section.
-
-        Training comparison happens HERE, not in renderer.
-        """
-        base = cls.from_collector(collector, scan_id=scan_id)
-
-        missed = [
-            {"title": t.expected.title, "severity": t.expected.severity}
-            for t in tracker.tracked if not t.discovered
-        ]
-        # Build full expected_findings for renderer reconstruction
-        all_expected: list[dict[str, Any]] = []
-        for t in tracker.tracked:
-            all_expected.append({
-                "title": t.expected.title,
-                "severity": t.expected.severity,
-                "discovered": t.discovered,
-                "verified": getattr(t, "verified", False),
-                "discovery_step": getattr(t, "discovery_step", None),
-            })
-
-        training_section = TrainingSection(
-            profile_name=report.profile_name,
-            expected_total=len(tracker.tracked),
-            detected=sum(1 for t in tracker.tracked if t.discovered),
-            missed=missed,
-            false_positives=all_expected,
-            coverage_percent=round(report.coverage * 100, 1),
-            verification_rate=round(report.verification_rate * 100, 1),
-            passed=report.passed,
+        return ReportStatistics(
+            scenarios_executed=len(plugins_raw),
+            requests_sent=0,
+            findings_total=len(findings_raw),
+            steps_completed=session.step,
+            max_steps=session.max_steps,
+            duration_seconds=round(session.elapsed, 1),
+            severity_counts=severity_counts,
+            risk_score=round(risk_score, 1),
+            total_entities=session.graph.entity_count,
+            total_relations=session.graph.relation_count,
+            total_gaps=session.gap_count,
+            entity_counts=entity_counts,
+            kill_chain_coverage=kill_chain,
         )
 
-        return base.model_copy(update={"training": training_section})
+    @staticmethod
+    def _make_scan_id(target: str, started_at: float) -> str:
+        """Deterministic scan ID from target + start time."""
+        raw = f"{target}:{started_at}"
+        return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 
-def _compute_risk_score_from_findings(findings: list) -> float:
+def _compute_risk_score(findings: list[dict[str, Any]]) -> float:
     """Weighted severity sum, capped at 10."""
     total = sum(
-        _SEVERITY_WEIGHTS.get(f.severity.upper(), 0.0)
+        _SEVERITY_WEIGHTS.get(f.get("severity", "INFO"), 0.0)
         for f in findings
     )
     return min(total, 10.0)

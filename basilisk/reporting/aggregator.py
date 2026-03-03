@@ -99,6 +99,11 @@ class VulnerabilityAggregator:
 
             vuln_type = VulnerabilityAggregator._extract_vuln_type(group[0])
 
+            # Sort internal lists for deterministic output
+            surfaces = sorted(surfaces)
+            scenarios = sorted(scenarios)
+            proofs = sorted(proofs)
+
             # Synthesize reproduction steps from group findings
             repro_steps = VulnerabilityAggregator._build_reproduction_steps(
                 surfaces, proofs, group,
@@ -121,8 +126,12 @@ class VulnerabilityAggregator:
     def _identity_hash(
         target: str, surface: str, vuln_type: str, proof_key: str,
     ) -> str:
-        """SHA256[:16] deterministic hash."""
-        raw = f"{target}|{surface}|{vuln_type}|{proof_key}"
+        """SHA256[:16] deterministic hash with input normalization."""
+        norm_target = target.lower().rstrip("/")
+        if "://" in norm_target:
+            norm_target = norm_target.split("://", 1)[1]
+        norm_surface = surface.lower().split("?")[0].rstrip("/")
+        raw = f"{norm_target}|{norm_surface}|{vuln_type}|{proof_key}"
         return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
     @staticmethod

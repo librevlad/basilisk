@@ -68,9 +68,9 @@ class AutonomousRunner:
         import aiosqlite
 
         from basilisk.capabilities.mapping import build_capabilities_from_scenarios
+        from basilisk.core.session import ScanSession
         from basilisk.engine.scenario_registry import ScenarioRegistry
-        from basilisk.events.bus import EventBus, EventType
-        from basilisk.knowledge.graph import KnowledgeGraph
+        from basilisk.events.bus import EventType
         from basilisk.memory.history import History
         from basilisk.orchestrator.goals import DEFAULT_GOAL_PROGRESSION, GoalEngine
         from basilisk.orchestrator.loop import AutonomousLoop
@@ -82,11 +82,21 @@ class AutonomousRunner:
         from basilisk.reasoning.hypothesis import HypothesisEngine
         from basilisk.scoring.scorer import Scorer
 
+        # Get or create ScanSession
+        session: ScanSession = self._kwargs.get("session")
+        if session is None:
+            session = ScanSession(
+                target=targets[0].host if targets else "unknown",
+                max_steps=self._max_steps,
+            )
+
+        graph = session.graph
+        bus = session.bus
+
         # Build v4 infrastructure
         scenario_registry = ScenarioRegistry()
         scenario_registry.discover()
 
-        graph = KnowledgeGraph()
         planner = Planner()
         capabilities = build_capabilities_from_scenarios(scenario_registry)
 
@@ -166,7 +176,6 @@ class AutonomousRunner:
             tools=self._kwargs.get("tools", {}),
             state=self._kwargs.get("state", {}),
         )
-        bus = self._kwargs.get("bus") or EventBus()
 
         # Persistent structured logging
         run_logger = None
@@ -232,6 +241,7 @@ class AutonomousRunner:
 
         try:
             result = await loop.run(v3_targets)
+            session.finalize(result.termination_reason)
 
             # Write run summary and close logger
             if run_logger is not None:

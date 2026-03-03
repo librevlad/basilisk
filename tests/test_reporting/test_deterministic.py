@@ -1,0 +1,123 @@
+"""Deterministic report regression tests — same input → identical JSON."""
+
+from __future__ import annotations
+
+from basilisk.core.session import ScanSession
+from basilisk.knowledge.entities import Entity
+from basilisk.knowledge.relations import Relation, RelationType
+from basilisk.reporting.builder import ReportBuilder
+from basilisk.reporting.model import REPORT_SCHEMA_VERSION
+from basilisk.reporting.renderer import model_to_data, render_json
+
+
+def _build_session() -> ScanSession:
+    """Build a session with representative data for deterministic tests."""
+    s = ScanSession("test.example.com", max_steps=50)
+    g = s.graph
+
+    # Add entities in deliberate non-sorted order
+    host = Entity.host("test.example.com")
+    g.add_entity(host)
+    api_host = Entity.host("api.test.example.com", type="subdomain", parent="test.example.com")
+    g.add_entity(api_host)
+
+    svc443 = Entity.service("test.example.com", 443, "tcp", service="https")
+    svc80 = Entity.service("test.example.com", 80, "tcp", service="http")
+    g.add_entity(svc443)
+    g.add_entity(svc80)
+    g.add_relation(Relation(source_id=host.id, target_id=svc443.id, type=RelationType.EXPOSES))
+    g.add_relation(Relation(source_id=host.id, target_id=svc80.id, type=RelationType.EXPOSES))
+
+    ep1 = Entity.endpoint("test.example.com", "/login")
+    ep2 = Entity.endpoint("test.example.com", "/admin")
+    g.add_entity(ep1)
+    g.add_entity(ep2)
+    g.add_relation(
+        Relation(source_id=svc443.id, target_id=ep1.id, type=RelationType.HAS_ENDPOINT),
+    )
+    g.add_relation(
+        Relation(source_id=svc443.id, target_id=ep2.id, type=RelationType.HAS_ENDPOINT),
+    )
+
+    # Findings in non-severity order
+    g.add_entity(Entity.finding(
+        "test.example.com", "Missing HSTS Header", severity="info",
+        evidence="", tags=["missing_header"],
+    ))
+    g.add_entity(Entity.finding(
+        "test.example.com", "SQL Injection in /login", severity="high",
+        evidence="1' OR '1'='1 returned 200", tags=["sqli"],
+    ))
+    g.add_entity(Entity.finding(
+        "test.example.com", "XSS in /search", severity="medium",
+        evidence="<script>alert(1)</script>", tags=["xss"],
+    ))
+
+    return s
+
+
+class TestDeterministicOutput:
+    """Verify that report output is identical for the same session state."""
+
+    def test_json_identical_for_same_session(self):
+        s = _build_session()
+        model1 = ReportBuilder.from_session(s)
+        model2 = ReportBuilder.from_session(s)
+        data1 = model_to_data(model1)
+        data2 = model_to_data(model2)
+        json1 = render_json(data1)
+        json2 = render_json(data2)
+        assert json1 == json2
+
+    def test_vulnerability_order_stable(self):
+        s = _build_session()
+        model = ReportBuilder.from_session(s)
+        ids = [v.vulnerability_id for v in model.vulnerabilities]
+        assert ids == sorted(ids)
+
+    def test_findings_sorted_by_severity_then_title(self):
+        s = _build_session()
+        model = ReportBuilder.from_session(s)
+        findings = model.findings_raw
+        severities = [f["severity"] for f in findings]
+        order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "INFO": 4}
+        severity_indices = [order.get(s, 99) for s in severities]
+        assert severity_indices == sorted(severity_indices)
+
+    def test_topology_hosts_sorted(self):
+        s = _build_session()
+        model = ReportBuilder.from_session(s)
+        hosts = list(model.topology.keys())
+        assert hosts == sorted(hosts)
+
+    def test_topology_endpoints_sorted(self):
+        s = _build_session()
+        model = ReportBuilder.from_session(s)
+        for topo in model.topology.values():
+            endpoints = topo.get("endpoints", [])
+            assert endpoints == sorted(endpoints)
+
+    def test_topology_services_sorted_by_port(self):
+        s = _build_session()
+        model = ReportBuilder.from_session(s)
+        topo = model.topology.get("test.example.com", {})
+        services = topo.get("services", [])
+        ports = [s["port"] for s in services]
+        assert ports == sorted(ports)
+
+    def test_schema_version_present(self):
+        s = _build_session()
+        model = ReportBuilder.from_session(s)
+        assert model.schema_version == REPORT_SCHEMA_VERSION
+
+    def test_json_sort_keys(self):
+        s = _build_session()
+        model = ReportBuilder.from_session(s)
+        data = model_to_data(model)
+        json_str = render_json(data)
+        # sort_keys=True means top-level keys are alphabetical
+        import json
+
+        parsed = json.loads(json_str)
+        keys = list(parsed.keys())
+        assert keys == sorted(keys)

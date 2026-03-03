@@ -14,14 +14,16 @@ from pathlib import Path
 
 import pytest
 
-from basilisk.reporting.collector import (
-    ReportCollector,
-    ReportDecision,
-    ReportFinding,
-    ReportPlugin,
+from basilisk.core.session import (
+    ScanSession,
+    SessionDecision,
+    SessionPlugin,
     StepSnapshot,
 )
-from basilisk.reporting.renderer import assemble_data, render_html
+from basilisk.knowledge.entities import Entity
+from basilisk.knowledge.relations import Relation, RelationType
+from basilisk.reporting.builder import ReportBuilder
+from basilisk.reporting.renderer import model_to_data, render_html
 from basilisk.training.profile import TrainingProfile
 
 PROFILES_DIR = Path(__file__).resolve().parents[2] / "training" / "profiles"
@@ -278,13 +280,13 @@ class TestProfileCounts:
 # ---------------------------------------------------------------------------
 
 
-def _simulate_training_collector(
+def _simulate_training_session(
     tp: TrainingProfile,
     *,
     coverage: float = 0.7,
     seed: int = 42,
-) -> ReportCollector:
-    """Build a ReportCollector simulating a training run for a profile.
+) -> ScanSession:
+    """Build a ScanSession simulating a training run for a profile.
 
     Deterministic: same profile + seed always produces same output.
     """
@@ -292,15 +294,47 @@ def _simulate_training_collector(
     target = tp.target.split(":")[0]
     max_steps = min(tp.max_steps, 30)  # cap for test speed
 
-    c = ReportCollector(target=target, mode="auto", max_steps=tp.max_steps)
-    c.step = max_steps
-    c.total_entities = rng.randint(30, 200)
-    c.total_relations = rng.randint(15, 100)
-    c.gap_count = rng.randint(1, 15)
-    c.entity_counts["host"] = rng.randint(1, 5)
-    c.entity_counts["service"] = rng.randint(2, 10)
-    c.entity_counts["endpoint"] = rng.randint(5, 50)
-    c.entity_counts["technology"] = rng.randint(1, 10)
+    s = ScanSession(target, max_steps=tp.max_steps)
+    s.step = max_steps
+    s.gap_count = rng.randint(1, 15)
+    g = s.graph
+
+    # Populate KG with topology entities
+    host = Entity.host(target)
+    g.add_entity(host)
+
+    n_hosts = rng.randint(1, 5)
+    for h in range(n_hosts - 1):
+        sub = Entity.host(f"sub{h}.{target}", type="subdomain", parent=target)
+        g.add_entity(sub)
+        g.add_relation(Relation(
+            source_id=host.id, target_id=sub.id, type=RelationType.PARENT_OF,
+        ))
+
+    n_services = rng.randint(2, 10)
+    for p in range(n_services):
+        svc = Entity.service(target, 80 + p, "tcp", service="http")
+        g.add_entity(svc)
+        g.add_relation(Relation(
+            source_id=host.id, target_id=svc.id, type=RelationType.EXPOSES,
+        ))
+
+    n_endpoints = rng.randint(5, 50)
+    svc_http = Entity.service(target, 80, "tcp")
+    for ep_i in range(n_endpoints):
+        ep = Entity.endpoint(target, f"/path{ep_i}")
+        g.add_entity(ep)
+        g.add_relation(Relation(
+            source_id=svc_http.id, target_id=ep.id, type=RelationType.HAS_ENDPOINT,
+        ))
+
+    n_tech = rng.randint(1, 10)
+    for t_i in range(n_tech):
+        tech = Entity.technology(target, f"tech{t_i}", f"{t_i}.0")
+        g.add_entity(tech)
+        g.add_relation(Relation(
+            source_id=svc_http.id, target_id=tech.id, type=RelationType.RUNS,
+        ))
 
     # Generate findings from expected_findings
     n_discovered = max(1, int(len(tp.expected_findings) * coverage))
@@ -309,61 +343,61 @@ def _simulate_training_collector(
         min(n_discovered, len(tp.expected_findings)),
     ))
 
-    findings: list[ReportFinding] = []
     for i in discovered_indices:
         ef = tp.expected_findings[i]
         step = rng.randint(1, max_steps)
-        findings.append(ReportFinding(
-            title=ef.title,
-            severity=ef.severity,
-            host=target,
-            step=step,
-            confidence=rng.uniform(0.5, 0.99),
-            verified=rng.random() > 0.4,
-            evidence="test evidence" if ef.severity in ("high", "critical") else "",
-        ))
-    c.findings = findings
+        conf = rng.uniform(0.5, 0.99)
+        verified = rng.random() > 0.4
+        evidence = "test evidence" if ef.severity in ("high", "critical") else ""
+        finding = Entity.finding(
+            target, ef.title, severity=ef.severity,
+            step=step, evidence=evidence, verified=verified,
+        )
+        finding.confidence = conf
+        g.add_entity(finding)
 
     # Generate decisions
-    c.decisions = [
-        ReportDecision(
-            step=s, plugin="container_config_audit" if s % 3 == 0 else "sqli_basic",
+    s.decisions = [
+        SessionDecision(
+            step=st, plugin="container_config_audit" if st % 3 == 0 else "sqli_basic",
             target=target, score=rng.uniform(0.5, 1.0),
             reasoning="training gap fill", productive=rng.random() > 0.3,
             new_entities=rng.randint(0, 5), duration=rng.uniform(0.5, 5.0),
         )
-        for s in range(1, min(max_steps + 1, 11))
+        for st in range(1, min(max_steps + 1, 11))
     ]
 
     # Generate plugins
-    c.plugins = [
-        ReportPlugin(
+    s.plugins = [
+        SessionPlugin(
             name=d.plugin, target=target,
             duration=d.duration or 1.0,
             findings_count=rng.randint(0, 2), step=d.step,
         )
-        for d in c.decisions[:5]
+        for d in s.decisions[:5]
     ]
 
     # Step history
-    c.step_history = [
+    total_entities = g.entity_count
+    total_relations = g.relation_count
+    s.step_history = [
         StepSnapshot(
-            step=s,
-            entities=int(c.total_entities * s / max_steps),
-            relations=int(c.total_relations * s / max_steps),
-            gaps=max(1, 20 - s),
+            step=st,
+            entities=int(total_entities * st / max_steps),
+            relations=int(total_relations * st / max_steps),
+            gaps=max(1, 20 - st),
             entities_gained=max(1, rng.randint(1, 20)),
         )
-        for s in range(1, min(max_steps + 1, 11))
+        for st in range(1, min(max_steps + 1, 11))
     ]
 
-    c.hypotheses_confirmed = rng.randint(0, 5)
-    c.hypotheses_rejected = rng.randint(0, 2)
-    c.beliefs_strengthened = rng.randint(0, 8)
-    c.beliefs_weakened = rng.randint(0, 2)
+    s.hypotheses_confirmed = rng.randint(0, 5)
+    s.hypotheses_rejected = rng.randint(0, 2)
+    s.beliefs_strengthened = rng.randint(0, 8)
+    s.beliefs_weakened = rng.randint(0, 2)
 
     # Training data
-    expected_findings = []
+    expected_findings: list[dict] = []
     for i, ef in enumerate(tp.expected_findings):
         disc = i in discovered_indices
         step_val = rng.randint(1, max_steps) if disc else None
@@ -380,7 +414,7 @@ def _simulate_training_collector(
     actual_coverage = disc_count / len(expected_findings) if expected_findings else 0
     verif_rate = verif_count / disc_count if disc_count else 0
 
-    c.training = {
+    s.training_data = {
         "profile_name": tp.name,
         "coverage": actual_coverage,
         "verification_rate": verif_rate,
@@ -388,68 +422,74 @@ def _simulate_training_collector(
         "expected_findings": expected_findings,
     }
 
-    return c
+    return s
+
+
+def _session_to_data(session: ScanSession) -> dict:
+    """Build renderer-compatible data dict from a ScanSession."""
+    model = ReportBuilder.from_session(session)
+    return model_to_data(model)
 
 
 class TestReportGeneration:
     """Verify all 20 profiles generate valid HTML reports."""
 
     def test_report_renders_without_error(self, profile: TrainingProfile):
-        c = _simulate_training_collector(profile)
-        data = assemble_data(c)
+        s = _simulate_training_session(profile)
+        data = _session_to_data(s)
         result = render_html(data)
         assert "<!DOCTYPE html>" in result
         assert "</html>" in result
 
     def test_report_has_training_section(self, profile: TrainingProfile):
-        c = _simulate_training_collector(profile)
-        data = assemble_data(c)
+        s = _simulate_training_session(profile)
+        data = _session_to_data(s)
         result = render_html(data)
         assert 'id="training"' in result
         assert profile.name in result
 
     def test_report_has_training_rows(self, profile: TrainingProfile):
-        c = _simulate_training_collector(profile)
-        data = assemble_data(c)
+        s = _simulate_training_session(profile)
+        data = _session_to_data(s)
         result = render_html(data)
         assert "training-row-yes" in result or "training-row-no" in result
 
     def test_report_has_pass_badge(self, profile: TrainingProfile):
-        c = _simulate_training_collector(profile)
-        data = assemble_data(c)
+        s = _simulate_training_session(profile)
+        data = _session_to_data(s)
         result = render_html(data)
         assert "PASSED" in result or "FAILED" in result
 
     def test_report_has_footer(self, profile: TrainingProfile):
-        c = _simulate_training_collector(profile)
-        data = assemble_data(c)
+        s = _simulate_training_session(profile)
+        data = _session_to_data(s)
         result = render_html(data)
         assert "footer-stats" in result
         assert "Findings:" in result
 
     def test_report_has_findings(self, profile: TrainingProfile):
-        c = _simulate_training_collector(profile)
-        data = assemble_data(c)
+        s = _simulate_training_session(profile)
+        data = _session_to_data(s)
         result = render_html(data)
         assert 'id="findings"' in result
 
     def test_report_has_command_center(self, profile: TrainingProfile):
-        c = _simulate_training_collector(profile)
-        data = assemble_data(c)
+        s = _simulate_training_session(profile)
+        data = _session_to_data(s)
         result = render_html(data)
         assert 'id="command-center"' in result
 
     def test_report_container_finding_in_training(self, profile: TrainingProfile):
         """Container finding should appear in training table."""
-        c = _simulate_training_collector(profile)
-        data = assemble_data(c)
+        s = _simulate_training_session(profile)
+        data = _session_to_data(s)
         result = render_html(data)
         assert "Container runs as root" in result
 
     def test_report_step_badge_for_discovered(self, profile: TrainingProfile):
         """Discovered findings should have step badges."""
-        c = _simulate_training_collector(profile, coverage=0.9)
-        data = assemble_data(c)
+        s = _simulate_training_session(profile, coverage=0.9)
+        data = _session_to_data(s)
         result = render_html(data)
         assert "step-badge" in result
 
@@ -457,8 +497,8 @@ class TestReportGeneration:
         """Embedded JSON data should be parseable."""
         import json
 
-        c = _simulate_training_collector(profile)
-        data = assemble_data(c)
+        s = _simulate_training_session(profile)
+        data = _session_to_data(s)
         # The data dict should be JSON serializable
         json_str = json.dumps(data, default=str)
         parsed = json.loads(json_str)
@@ -470,24 +510,24 @@ class TestReportGenerationEdgeCases:
 
     def test_zero_coverage_report(self, profile: TrainingProfile):
         """Profile with 0% coverage should still render."""
-        c = _simulate_training_collector(profile, coverage=0.0)
-        data = assemble_data(c)
+        s = _simulate_training_session(profile, coverage=0.0)
+        data = _session_to_data(s)
         result = render_html(data)
         assert 'id="training"' in result
         assert "FAILED" in result
 
     def test_full_coverage_report(self, profile: TrainingProfile):
         """Profile with 100% coverage should render PASSED."""
-        c = _simulate_training_collector(profile, coverage=1.0)
-        c.training["passed"] = True
-        data = assemble_data(c)
+        s = _simulate_training_session(profile, coverage=1.0)
+        s.training_data["passed"] = True
+        data = _session_to_data(s)
         result = render_html(data)
         assert "PASSED" in result
 
     def test_report_size_reasonable(self, profile: TrainingProfile):
         """Report should not be empty or absurdly small."""
-        c = _simulate_training_collector(profile)
-        data = assemble_data(c)
+        s = _simulate_training_session(profile)
+        data = _session_to_data(s)
         result = render_html(data)
         # A real report should be at least 10KB
         assert len(result) > 10_000, (

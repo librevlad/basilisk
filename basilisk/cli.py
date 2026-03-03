@@ -50,6 +50,7 @@ def auto(
 
     from basilisk import Basilisk
     from basilisk.config import Settings
+    from basilisk.core.session import ScanSession
     from basilisk.display import LiveDisplay, print_auto_report
     from basilisk.events.bus import EventBus
 
@@ -58,15 +59,16 @@ def auto(
         settings.logging.log_dir = Path(log_dir)
 
     bus = EventBus()
+    session = ScanSession(target=target, max_steps=max_steps, bus=bus)
     display = LiveDisplay(bus, max_steps=max_steps, verbose=verbose, console=console)
 
-    b = Basilisk(target, max_steps=max_steps, config=settings, bus=bus)
+    b = Basilisk(target, max_steps=max_steps, config=settings, session=session)
     if campaign:
         b = b.campaign()
 
     from basilisk.reporting import ReportWriter
 
-    writer = ReportWriter(bus, target=target, max_steps=max_steps, mode="auto")
+    writer = ReportWriter(session)
 
     async def _run_with_display() -> tuple:
         display.start()
@@ -254,16 +256,20 @@ def train(
         bus, tracker, max_steps=tp.max_steps, verbose=verbose, console=console,
     )
 
+    from basilisk.core.session import ScanSession
     from basilisk.reporting import ReportWriter
 
     train_target = target or tp.target
-    writer = ReportWriter(bus, target=train_target, max_steps=tp.max_steps, mode="train")
+    session = ScanSession(target=train_target, mode="train", max_steps=tp.max_steps, bus=bus)
+    writer = ReportWriter(session)
 
     async def _run_with_display() -> tuple:
         display.start()
         report_dir = await writer.start()
         try:
-            result = await runner.run(config=settings, bus=bus, tracker=tracker)
+            result = await runner.run(
+                config=settings, bus=bus, tracker=tracker, graph=session.graph,
+            )
         finally:
             display.stop()
         await writer.finalize_training(result, tracker)

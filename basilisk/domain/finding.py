@@ -8,7 +8,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
-# Re-export Severity from existing models for backward compat
+# Severity lives in models.result; re-exported here for domain-layer access
 from basilisk.models.result import Severity
 
 

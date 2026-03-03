@@ -42,6 +42,7 @@ class TrainingRunner:
         config: Settings | None = None,
         bus: Any | None = None,
         tracker: FindingTracker | None = None,
+        graph: Any | None = None,
     ) -> ValidationReport:
         """Execute training run and return validation report."""
         docker_cfg = self.profile.docker
@@ -59,7 +60,7 @@ class TrainingRunner:
                 docker_mgr = None
 
         try:
-            return await self._run_engine(config, bus=bus, tracker=tracker)
+            return await self._run_engine(config, bus=bus, tracker=tracker, graph=graph)
         finally:
             if docker_mgr:
                 await docker_mgr.down(docker_cfg.compose_file, self.project_root)
@@ -69,6 +70,7 @@ class TrainingRunner:
         config: Settings | None = None,
         bus: Any | None = None,
         tracker: FindingTracker | None = None,
+        graph: Any | None = None,
     ) -> ValidationReport:
         """Core engine execution (separated for Docker lifecycle wrapping)."""
         from basilisk.capabilities.mapping import build_capabilities
@@ -130,7 +132,7 @@ class TrainingRunner:
         else:
             scope.add(Target.domain(target_str))
 
-        graph = KnowledgeGraph()
+        graph = graph or KnowledgeGraph()
         tracker = tracker or FindingTracker(self.profile)
         planner = Planner()
         capabilities = build_capabilities(registry)

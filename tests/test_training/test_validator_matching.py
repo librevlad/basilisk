@@ -75,6 +75,7 @@ ALTORO_MUTUAL = [
     "No framing protection (clickjacking) on localhost:4380",
     "Session cookie 'JSESSIONID' lacks SameSite attribute (Cookie issue)",
     "Directory listing enabled: /bank/",
+    "Container runs as root: localhost user=root",
 ]
 
 BADSTORE = [
@@ -94,6 +95,7 @@ BADSTORE = [
     "Missing security header: HSTS on localhost:4480",
     "Sensitive paths in robots.txt",
     "User Enumeration via /cgi-bin/badstore.cgi?action=register",
+    "Container runs as root: localhost user=root",
 ]
 
 BWAPP = [
@@ -136,6 +138,7 @@ BWAPP = [
     "Unvalidated Redirect in /open_redirect.php?url=",
     "HTTP Parameter Pollution in /hpp-1.php",
     "Sensitive paths in robots.txt (Information Disclosure Robots)",
+    "Container runs as root: localhost user=root",
 ]
 
 CRAPI = [
@@ -149,6 +152,8 @@ CRAPI = [
     "Unauthenticated Access to /api/v2/mechanic/receive_report",
     "No framing protection (clickjacking) on localhost:8888",
     "Wildcard CORS on localhost:8888",
+    "Container runs as root: localhost user=root",
+    "Secret in env var: DB_PASSWORD exposed in container environment",
 ]
 
 DSVW = [
@@ -173,6 +178,7 @@ DSVW = [
     "HTTP Header Injection via /?charset=",
     "Source Code Disclosure via /?path=dsvw.py",
     "Full Path Disclosure in error response",
+    "Container runs as root: localhost user=root",
 ]
 
 DVWS = [
@@ -186,6 +192,7 @@ DVWS = [
     "Sensitive Data Exposure in WebSocket handshake",
     "Missing Rate Limiting on WebSocket connections",
     "CORS Misconfiguration: wildcard on localhost:4580",
+    "Container runs as root: localhost user=root",
 ]
 
 DVGA = [
@@ -202,6 +209,7 @@ DVGA = [
     "HTML Injection in GraphQL paste content",
     "Field Suggestions enabled in GraphQL errors",
     "Default credentials found for admin user",
+    "Container runs as root: localhost user=root",
 ]
 
 DVWA = [
@@ -220,6 +228,7 @@ DVWA = [
     "CSP Bypass: allows unsafe-inline on localhost:4280",
     "JavaScript Attacks: client-side validation bypass",
     "Open HTTP Redirect via /vulnerabilities/redirect/",
+    "Container runs as root: localhost user=root",
 ]
 
 GRUYERE = [
@@ -234,6 +243,7 @@ GRUYERE = [
     "Information Disclosure Config at /gruyere/dump",
     "Information Disclosure Source at /gruyere/..%2fstart.py",
     "Database Dump Exposure at /gruyere/dump.gtl",
+    "Container runs as root: localhost user=root",
 ]
 
 HACKAZON = [
@@ -249,6 +259,7 @@ HACKAZON = [
     "Potential IDOR: /account/orders/1",
     "Information Disclosure: Server header on localhost:4680",
     "Referrer Header Bypass in /account/",
+    "Container runs as root: localhost user=root",
 ]
 
 JUICE_SHOP = [
@@ -279,6 +290,7 @@ JUICE_SHOP = [
     "Allowlist Bypass Redirect via /redirect",
     "CAPTCHA Bypass via direct API call",
     "Score Board Discovery at /#/score-board",
+    "Container runs as root: localhost user=root",
 ]
 
 MUTILLIDAE = [
@@ -312,6 +324,8 @@ MUTILLIDAE = [
     "phpinfo Disclosure at /index.php?page=phpinfo.php",
     "Verbose Error Messages exposing stack traces",
     "Open Redirect: /index.php?page=redirectandlog.php",
+    "Container runs as root: localhost user=root",
+    "Secret in env var: MYSQL_ROOT_PASSWORD exposed in container environment",
 ]
 
 NODEGOAT = [
@@ -323,6 +337,7 @@ NODEGOAT = [
     "Security Misconfiguration: missing security headers",
     "Log Injection in /contributions",
     "NoSQL Injection in /contributions?user=",
+    "Container runs as root: localhost user=root",
 ]
 
 PIXI = [
@@ -331,6 +346,7 @@ PIXI = [
     "JWT algorithm none bypass: /api/user/",
     "No framing protection (clickjacking) on localhost:8000",
     "Missing security header: HSTS on localhost:8000",
+    "Container runs as root: localhost user=root",
 ]
 
 RAILSGOAT = [
@@ -342,6 +358,7 @@ RAILSGOAT = [
     "Session cookie missing HttpOnly flag (Missing HTTPOnly Flag)",
     "Security Misconfiguration: verbose errors in production",
     "Unvalidated Redirect via /login?url=",
+    "Container runs as root: localhost user=root",
 ]
 
 VAMPI = [
@@ -352,6 +369,7 @@ VAMPI = [
     "BOLA: Broken Object Level Authorization in /users/v1/",
     "Sensitive path /users/v1/_debug exposed",
     "User Enumeration via /users/v1/login response",
+    "Container runs as root: localhost user=root",
 ]
 
 VAPI = [
@@ -363,6 +381,8 @@ VAPI = [
     "Rate Limiting Missing on /vapi/api4/login",
     "Security Misconfiguration: verbose errors enabled",
     "Insufficient Logging on API endpoints",
+    "Container runs as root: localhost user=root",
+    "Secret in env var: API_SECRET exposed in container environment",
 ]
 
 WACKOPICKO = [
@@ -381,6 +401,7 @@ WACKOPICKO = [
     "Default Credentials found: admin/admin",
     "Forceful Browsing: /admin/ accessible without auth",
     "Cookie Manipulation: role flag in session cookie",
+    "Container runs as root: localhost user=root",
 ]
 
 WEBGOAT = [
@@ -393,6 +414,7 @@ WEBGOAT = [
     "Server-Side Request Forgery in /WebGoat/SSRF/task1",
     "Mass Assignment via /WebGoat/auth-bypass/verify-account",
     "No framing protection (clickjacking) on localhost:8080",
+    "Container runs as root: localhost user=root",
 ]
 
 XVWA = [
@@ -415,6 +437,7 @@ XVWA = [
     "CSRF: 4/6 POST form(s) without CSRF token",
     "Server-Side Template Injection: SSTI in /xvwa/vulnerabilities/ssti/",
     "Open Redirect: /xvwa/vulnerabilities/redirect/?url=",
+    "Container runs as root: localhost user=root",
 ]
 
 

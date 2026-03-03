@@ -64,7 +64,7 @@ class OrchestratorExecutor:
             logger.exception("Failed to execute %s on %s", capability.plugin_name, target.host)
             return []
 
-        # Store in pipeline context for backward compatibility
+        # Store in pipeline context (used by downstream plugins)
         key = f"{result.plugin}:{result.target}"
         self.ctx.pipeline[key] = result
 

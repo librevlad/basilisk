@@ -16,25 +16,10 @@ from typing import TYPE_CHECKING, Any
 from basilisk.reporting.builder import KILL_CHAIN_PHASES
 
 if TYPE_CHECKING:
-    from basilisk.reporting.collector import ReportCollector
     from basilisk.reporting.model import ReportModel
 
 _VERSION = "4.0.0"
 
-# Re-export for backward compat (now canonical source is builder)
-_KILL_CHAIN_PHASES = KILL_CHAIN_PHASES
-
-
-def assemble_data(collector: ReportCollector) -> dict[str, Any]:
-    """Convert collector state to a JSON-serializable dict via ReportBuilder.
-
-    Delegates all computation to the builder, then converts to the
-    renderer-compatible dict format.
-    """
-    from basilisk.reporting.builder import ReportBuilder
-
-    model = ReportBuilder.from_collector(collector)
-    return model_to_data(model)
 
 
 def model_to_data(model: ReportModel) -> dict[str, Any]:
@@ -106,6 +91,7 @@ def model_to_data(model: ReportModel) -> dict[str, Any]:
                 "scenario": ev.scenario,
                 "action": ev.action,
                 "result": ev.result,
+                "step": ev.step,
             }
             for ev in model.execution_timeline
         ],
@@ -119,8 +105,8 @@ def model_to_data(model: ReportModel) -> dict[str, Any]:
 
 
 def render_json(data: dict[str, Any]) -> str:
-    """Render report data as formatted JSON string."""
-    return json.dumps(data, indent=2, ensure_ascii=False, default=str)
+    """Render report data as formatted JSON string with sorted keys."""
+    return json.dumps(data, indent=2, ensure_ascii=False, default=str, sort_keys=True)
 
 
 def render_html(
@@ -1958,9 +1944,9 @@ def _kill_chain_html(data: dict) -> str:
     plugin_names = {p["name"] for p in plugins}
 
     covered_phases = 0
-    total_phases = len(_KILL_CHAIN_PHASES)
+    total_phases = len(KILL_CHAIN_PHASES)
     phases_parts: list[str] = []
-    for i, (name, members) in enumerate(_KILL_CHAIN_PHASES):
+    for i, (name, members) in enumerate(KILL_CHAIN_PHASES):
         total_members = len(members)
         count = sum(1 for m in members if m in plugin_names)
         if count > 0:
@@ -1968,7 +1954,7 @@ def _kill_chain_html(data: dict) -> str:
         active = " active" if count > 0 else ""
         arrow = (
             '<span class="kc-arrow">&#x25B6;</span>'
-            if i < len(_KILL_CHAIN_PHASES) - 1
+            if i < len(KILL_CHAIN_PHASES) - 1
             else ""
         )
         pct = _fmt(count / total_members * 100, ".0f") if total_members > 0 else "0"

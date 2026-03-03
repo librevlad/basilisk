@@ -1,4 +1,4 @@
-"""HTTP reachability utilities — re-export from utils.http for backward compat."""
+"""HTTP reachability utilities — re-export from utils.http."""
 
 from basilisk.utils.http import resolve_base_url
 

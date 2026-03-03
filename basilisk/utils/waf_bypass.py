@@ -57,7 +57,7 @@ from basilisk.utils.waf_profiles import WAF_PROFILES, WafProfile
 
 logger = logging.getLogger(__name__)
 
-# Re-exports for backward compatibility
+# Public re-exports
 __all__ = [
     "WafBypassEngine",
     "WafProfile",

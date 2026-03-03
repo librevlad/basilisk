@@ -68,6 +68,23 @@ class TestTimelineEvent:
         )
         assert te.result == {}
 
+    def test_step_field(self):
+        te = TimelineEvent(
+            timestamp=datetime.now(UTC),
+            scenario="port_scan",
+            action="started",
+            step=5,
+        )
+        assert te.step == 5
+
+    def test_step_default_zero(self):
+        te = TimelineEvent(
+            timestamp=datetime.now(UTC),
+            scenario="port_scan",
+            action="started",
+        )
+        assert te.step == 0
+
 
 class TestReportStatistics:
     """Test ReportStatistics model."""

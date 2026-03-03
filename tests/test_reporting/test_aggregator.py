@@ -256,3 +256,34 @@ class TestIdentityHash:
     def test_length(self):
         h = VulnerabilityAggregator._identity_hash("a", "b", "c", "d")
         assert len(h) == 16
+
+    def test_protocol_stripped(self):
+        """http:// and https:// should normalize to the same hash."""
+        h1 = VulnerabilityAggregator._identity_hash("https://a.com", "/login", "sqli", "x")
+        h2 = VulnerabilityAggregator._identity_hash("http://a.com", "/login", "sqli", "x")
+        h3 = VulnerabilityAggregator._identity_hash("a.com", "/login", "sqli", "x")
+        assert h1 == h2 == h3
+
+    def test_case_insensitive(self):
+        """Target and surface should be case-insensitive."""
+        h1 = VulnerabilityAggregator._identity_hash("A.COM", "/Login", "sqli", "x")
+        h2 = VulnerabilityAggregator._identity_hash("a.com", "/login", "sqli", "x")
+        assert h1 == h2
+
+    def test_trailing_slash_stripped(self):
+        h1 = VulnerabilityAggregator._identity_hash("a.com/", "/login/", "sqli", "x")
+        h2 = VulnerabilityAggregator._identity_hash("a.com", "/login", "sqli", "x")
+        assert h1 == h2
+
+    def test_query_string_stripped_from_surface(self):
+        h1 = VulnerabilityAggregator._identity_hash("a.com", "/login?id=1", "sqli", "x")
+        h2 = VulnerabilityAggregator._identity_hash("a.com", "/login", "sqli", "x")
+        assert h1 == h2
+
+    def test_make_id_delegates(self):
+        """VulnerabilityInstance.make_id should use the same normalization."""
+        from basilisk.reporting.model import VulnerabilityInstance
+
+        h1 = VulnerabilityAggregator._identity_hash("a.com", "/login", "sqli", "x")
+        h2 = VulnerabilityInstance.make_id("a.com", "/login", "sqli", "x")
+        assert h1 == h2

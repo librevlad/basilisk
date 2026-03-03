@@ -21,8 +21,6 @@ _DOMAIN_ONLY_NAMES = frozenset({
 })
 
 
-_is_ip_or_local = is_ip_or_local  # backward-compat alias
-
 
 def _is_domain_only_plugin(name: str) -> bool:
     """Check if plugin requires a real domain name."""
@@ -74,7 +72,7 @@ class Selector:
         ip_host_ids: set[str] = set()
         for entity in graph.query(EntityType.HOST):
             host = entity.data.get("host", "")
-            if _is_ip_or_local(host):
+            if is_ip_or_local(host):
                 ip_host_ids.add(entity.id)
 
         for gap in gaps:
