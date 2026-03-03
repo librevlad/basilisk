@@ -38,6 +38,9 @@ CREATE TABLE IF NOT EXISTS kg_relations (
 );
 CREATE INDEX IF NOT EXISTS idx_kg_rel_source ON kg_relations(source_id);
 CREATE INDEX IF NOT EXISTS idx_kg_rel_target ON kg_relations(target_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_kg_rel_unique
+    ON kg_relations(source_id, target_id, type);
+CREATE INDEX IF NOT EXISTS idx_kg_entity_type ON kg_entities(type);
 
 CREATE TABLE IF NOT EXISTS kg_executions (
     fingerprint TEXT PRIMARY KEY,

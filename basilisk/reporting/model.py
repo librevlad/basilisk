@@ -7,7 +7,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-REPORT_SCHEMA_VERSION = "4.1"
+REPORT_SCHEMA_VERSION = "4.2"
 
 
 class VulnerabilityInstance(BaseModel, frozen=True):
@@ -116,3 +116,4 @@ class ReportModel(BaseModel, frozen=True):
     step_history: list[dict[str, Any]] = Field(default_factory=list)
     reasoning: ReasoningSection = Field(default_factory=ReasoningSection)
     topology: dict[str, Any] = Field(default_factory=dict)
+    viz_hints: dict[str, Any] = Field(default_factory=dict)

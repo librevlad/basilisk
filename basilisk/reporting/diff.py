@@ -20,6 +20,9 @@ class ReportDiff:
     removed_hosts: list[str] = field(default_factory=list)
     new_services: int = 0
     removed_services: int = 0
+    coverage_delta: float = 0.0
+    new_endpoints: list[str] = field(default_factory=list)
+    removed_endpoints: list[str] = field(default_factory=list)
 
 
 def compare_reports(report_a: ReportModel, report_b: ReportModel) -> ReportDiff:
@@ -74,5 +77,22 @@ def compare_reports(report_a: ReportModel, report_b: ReportModel) -> ReportDiff:
     )
     diff.new_services = max(0, services_b - services_a)
     diff.removed_services = max(0, services_a - services_b)
+
+    # --- Coverage delta (risk score change) ---
+    diff.coverage_delta = round(
+        report_b.statistics.risk_score - report_a.statistics.risk_score, 2,
+    )
+
+    # --- Endpoint diff ---
+    endpoints_a: set[str] = set()
+    endpoints_b: set[str] = set()
+    for host, topo in report_a.topology.items():
+        for ep in topo.get("endpoints", []):
+            endpoints_a.add(f"{host}{ep}")
+    for host, topo in report_b.topology.items():
+        for ep in topo.get("endpoints", []):
+            endpoints_b.add(f"{host}{ep}")
+    diff.new_endpoints = sorted(endpoints_b - endpoints_a)
+    diff.removed_endpoints = sorted(endpoints_a - endpoints_b)
 
     return diff

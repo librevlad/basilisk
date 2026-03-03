@@ -60,6 +60,9 @@ class Decision(BaseModel):
     related_hypothesis_ids: list[str] = Field(default_factory=list)
     hypothesis_resolution_gain: float = 0.0
     action_type: str = ""
+    hypothesis_text: str = ""                    # Primary hypothesis being tested
+    expected_entity_types: list[str] = Field(default_factory=list)  # From capability
+    observed_entity_types: list[str] = Field(default_factory=list)  # Filled after execution
 
     # Filled after execution
     outcome_observations: int = 0

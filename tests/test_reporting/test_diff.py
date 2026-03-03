@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from basilisk.reporting.diff import ReportDiff, compare_reports
-from basilisk.reporting.model import ReportModel, VulnerabilityInstance
+from basilisk.reporting.model import ReportModel, ReportStatistics, VulnerabilityInstance
 
 
 def _vuln(vid: str, severity: str = "HIGH", confidence: float = 0.9) -> VulnerabilityInstance:
@@ -22,12 +22,14 @@ def _vuln(vid: str, severity: str = "HIGH", confidence: float = 0.9) -> Vulnerab
 def _report(
     vulns: list[VulnerabilityInstance] | None = None,
     topology: dict | None = None,
+    risk_score: float = 0.0,
 ) -> ReportModel:
     """Helper to build a minimal ReportModel."""
     return ReportModel(
         target="example.com",
         vulnerabilities=vulns or [],
         topology=topology or {},
+        statistics=ReportStatistics(risk_score=risk_score),
     )
 
 
@@ -136,3 +138,54 @@ class TestCompareDiff:
         assert len(diff.severity_changes) == 1
         assert diff.new_hosts == ["b.com"]
         assert diff.new_services == 1
+
+    def test_coverage_delta(self):
+        a = _report(risk_score=3.5)
+        b = _report(risk_score=6.0)
+        diff = compare_reports(a, b)
+        assert diff.coverage_delta == 2.5
+
+    def test_coverage_delta_negative(self):
+        a = _report(risk_score=8.0)
+        b = _report(risk_score=5.5)
+        diff = compare_reports(a, b)
+        assert diff.coverage_delta == -2.5
+
+    def test_coverage_delta_zero(self):
+        a = _report(risk_score=4.0)
+        b = _report(risk_score=4.0)
+        diff = compare_reports(a, b)
+        assert diff.coverage_delta == 0.0
+
+    def test_new_endpoints_detected(self):
+        a = _report(topology={
+            "a.com": {"services": [], "endpoints": ["/login"]},
+        })
+        b = _report(topology={
+            "a.com": {"services": [], "endpoints": ["/login", "/admin"]},
+        })
+        diff = compare_reports(a, b)
+        assert diff.new_endpoints == ["a.com/admin"]
+        assert diff.removed_endpoints == []
+
+    def test_removed_endpoints_detected(self):
+        a = _report(topology={
+            "a.com": {"services": [], "endpoints": ["/login", "/admin"]},
+        })
+        b = _report(topology={
+            "a.com": {"services": [], "endpoints": ["/login"]},
+        })
+        diff = compare_reports(a, b)
+        assert diff.removed_endpoints == ["a.com/admin"]
+        assert diff.new_endpoints == []
+
+    def test_endpoints_across_hosts(self):
+        a = _report(topology={
+            "a.com": {"services": [], "endpoints": ["/api"]},
+        })
+        b = _report(topology={
+            "a.com": {"services": [], "endpoints": ["/api"]},
+            "b.com": {"services": [], "endpoints": ["/health"]},
+        })
+        diff = compare_reports(a, b)
+        assert diff.new_endpoints == ["b.com/health"]

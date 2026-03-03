@@ -7,6 +7,7 @@ Execution metadata (decisions, plugins, steps, reasoning) comes from the session
 from __future__ import annotations
 
 import hashlib
+import re
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -119,6 +120,11 @@ class ReportBuilder:
         plugins_raw = sorted(plugins_raw, key=lambda p: (p.get("step", 0), p.get("name", "")))
         timeline = sorted(timeline, key=lambda t: t.timestamp)
 
+        # Visualization hints — pre-computed aggregates for renderer purity
+        viz_hints = cls._compute_viz_hints(
+            findings_raw, topology, plugins_raw, decisions, step_history,
+        )
+
         now = datetime.now(UTC)
         return ReportModel(
             scan_id=scan_id,
@@ -138,6 +144,7 @@ class ReportBuilder:
             step_history=step_history,
             reasoning=reasoning,
             topology=topology,
+            viz_hints=viz_hints,
         )
 
     # ------------------------------------------------------------------
@@ -198,7 +205,9 @@ class ReportBuilder:
             result[host] = {
                 "services": sorted(services, key=lambda s: s.get("port", 0)),
                 "endpoints": sorted(endpoints),
-                "technologies": technologies,
+                "technologies": sorted(
+                    technologies, key=lambda t: (t.get("name", ""), t.get("version", "")),
+                ),
                 "is_subdomain": host_entity.data.get("type") == "subdomain",
                 "parent": host_entity.data.get("parent", ""),
             }
@@ -239,6 +248,9 @@ class ReportBuilder:
                     "evaluated_options": [
                         opt.model_dump() for opt in d.evaluated_options
                     ],
+                    "hypothesis_text": d.hypothesis_text,
+                    "expected_entity_types": d.expected_entity_types,
+                    "observed_entity_types": d.observed_entity_types,
                     "outcome_observations": d.outcome_observations,
                     "outcome_new_entities": d.outcome_new_entities,
                     "outcome_confidence_delta": round(d.outcome_confidence_delta, 4),
@@ -377,6 +389,200 @@ class ReportBuilder:
             entity_counts=entity_counts,
             kill_chain_coverage=kill_chain,
         )
+
+    @staticmethod
+    def _compute_viz_hints(
+        findings_raw: list[dict[str, Any]],
+        topology: dict[str, Any],
+        plugins_raw: list[dict[str, Any]],
+        decisions: list[dict[str, Any]],
+        step_history: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Pre-compute all aggregates that renderers need. Pure function."""
+        sev_rank = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1, "INFO": 0}
+
+        # --- findings ---
+        host_counts: dict[str, int] = {}
+        for f in findings_raw:
+            h = f.get("host", "unknown")
+            host_counts[h] = host_counts.get(h, 0) + 1
+        top_hosts = sorted(host_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+
+        step_sevs: dict[int, list[str]] = {}
+        for f in findings_raw:
+            fs = f.get("step", 0)
+            step_sevs.setdefault(fs, []).append(f.get("severity", "INFO").upper())
+        cum_count = 0
+        cumulative_by_step: list[dict[str, Any]] = []
+        for st in sorted(step_sevs.keys()):
+            sevs = step_sevs[st]
+            cum_count += len(sevs)
+            dom = max(sevs, key=lambda s: sev_rank.get(s, 0))
+            cumulative_by_step.append({"step": st, "cum_count": cum_count, "severity": dom})
+
+        # --- kg_growth ---
+        gains = [s.get("entities_gained", 0) for s in step_history]
+        peak_gain = max(gains) if gains else 0
+        peak_step = gains.index(peak_gain) if gains else 0
+        sat_step: int | None = None
+        if peak_gain > 0:
+            threshold = peak_gain * 0.05
+            for si in range(peak_step + 1, len(gains)):
+                if gains[si] < threshold:
+                    sat_step = si
+                    break
+
+        # --- attack_surface ---
+        findings_hosts = {f.get("host", "") for f in findings_raw}
+        root_count = 0
+        subdomain_count = 0
+        examined_count = 0
+        for host_name, topo in topology.items():
+            if topo.get("is_subdomain", False):
+                subdomain_count += 1
+            else:
+                root_count += 1
+            if bool(topo.get("services")) or host_name in findings_hosts:
+                examined_count += 1
+        total_hosts = root_count + subdomain_count
+        examined_pct = round(examined_count / total_hosts * 100, 1) if total_hosts > 0 else 0.0
+
+        # --- network_map ---
+        total_services = sum(len(t.get("services", [])) for t in topology.values())
+        total_endpoints = sum(len(t.get("endpoints", [])) for t in topology.values())
+        total_techs = sum(len(t.get("technologies", [])) for t in topology.values())
+
+        proto_groups_map: dict[str, int] = {}
+        _pg = {
+            "http": "HTTP", "https": "HTTPS",
+            "ssh": "SSH", "ftp": "FTP",
+            "mysql": "DB", "postgres": "DB", "postgresql": "DB", "redis": "DB",
+        }
+        for topo_entry in topology.values():
+            for svc in topo_entry.get("services", []):
+                svc_name = str(svc.get("service", "")).lower().strip()
+                group = _pg.get(svc_name, "Other")
+                proto_groups_map[group] = proto_groups_map.get(group, 0) + 1
+        protocol_groups = sorted(proto_groups_map.items(), key=lambda x: -x[1])
+
+        findings_by_host: dict[str, int] = {}
+        severity_by_host: dict[str, str] = {}
+        for f in findings_raw:
+            h = f.get("host", "")
+            if h:
+                findings_by_host[h] = findings_by_host.get(h, 0) + 1
+                cur = severity_by_host.get(h, "INFO")
+                new = f.get("severity", "INFO").upper()
+                if sev_rank.get(new, 0) > sev_rank.get(cur, 0):
+                    severity_by_host[h] = new
+
+        # --- plugin_perf ---
+        step_plugin: dict[int, str] = {}
+        for p in plugins_raw:
+            step_plugin[p.get("step", -1)] = p.get("name", "")
+        severity_by_plugin: dict[str, dict[str, int]] = {}
+        for f in findings_raw:
+            fstep = f.get("step", -1)
+            pname = step_plugin.get(fstep, "")
+            if pname:
+                if pname not in severity_by_plugin:
+                    severity_by_plugin[pname] = {}
+                fs = f.get("severity", "INFO").upper()
+                severity_by_plugin[pname][fs] = severity_by_plugin[pname].get(fs, 0) + 1
+
+        max_findings = max((p.get("findings_count", 0) for p in plugins_raw), default=0)
+        total_findings = sum(p.get("findings_count", 0) for p in plugins_raw)
+        total_duration = sum(p.get("duration", 0) for p in plugins_raw)
+
+        plugin_durations: dict[str, float] = {}
+        for p in plugins_raw:
+            pn = p.get("name", "unknown")
+            plugin_durations[pn] = plugin_durations.get(pn, 0) + p.get("duration", 0)
+        top_cost_plugins = sorted(
+            plugin_durations.items(), key=lambda x: x[1], reverse=True,
+        )[:10]
+
+        # --- decisions ---
+        prod_count = sum(1 for d in decisions if d.get("productive", False))
+        scores = [d.get("score", 0) for d in decisions]
+        avg_score = round(sum(scores) / len(scores), 3) if scores else 0.0
+        total_ent_gained = sum(d.get("new_entities", 0) for d in decisions)
+
+        plugin_prod: dict[str, int] = {}
+        for d in decisions:
+            if d.get("productive", False):
+                p = d.get("plugin", "unknown")
+                plugin_prod[p] = plugin_prod.get(p, 0) + 1
+        top_plugin = max(plugin_prod, key=plugin_prod.get) if plugin_prod else ""
+
+        gap_pattern = re.compile(r"^Gap:\s*(.+?)\.\s+Selected")
+        _gap_kw = [
+            (["no known services", "services"], "No Services"),
+            (["no dns", "dns records"], "No DNS"),
+            (["no technology", "technology"], "No Technology"),
+            (["no endpoints", "endpoints"], "No Endpoints"),
+            (["vulnerability", "vuln testing", "vuln_test"], "Vuln Testing"),
+            (["verification", "verify", "confirm"], "Verification"),
+            (["container", "docker"], "Containers"),
+            (["credential", "cred"], "Credentials"),
+            (["forms", "form detection"], "Form Detection"),
+            (["version", "fingerprint"], "Version Detection"),
+        ]
+        gap_types: dict[str, int] = {}
+        for d in decisions:
+            reason = d.get("reasoning", "")
+            m = gap_pattern.match(reason)
+            if m:
+                gap_desc = m.group(1).lower()
+                categorized = False
+                for keywords, cat_name in _gap_kw:
+                    if any(kw in gap_desc for kw in keywords):
+                        gap_types[cat_name] = gap_types.get(cat_name, 0) + 1
+                        categorized = True
+                        break
+                if not categorized:
+                    gap_types["Other"] = gap_types.get("Other", 0) + 1
+        gap_type_counts = sorted(gap_types.items(), key=lambda x: -x[1])[:8]
+
+        return {
+            "findings": {
+                "top_hosts": top_hosts,
+                "cumulative_by_step": cumulative_by_step,
+            },
+            "kg_growth": {
+                "peak_gain": peak_gain,
+                "peak_step": peak_step,
+                "saturation_step": sat_step,
+            },
+            "attack_surface": {
+                "root_count": root_count,
+                "subdomain_count": subdomain_count,
+                "examined_count": examined_count,
+                "examined_pct": examined_pct,
+            },
+            "network_map": {
+                "total_services": total_services,
+                "total_endpoints": total_endpoints,
+                "total_techs": total_techs,
+                "protocol_groups": protocol_groups,
+                "findings_by_host": findings_by_host,
+                "severity_by_host": severity_by_host,
+            },
+            "plugin_perf": {
+                "max_findings": max_findings,
+                "severity_by_plugin": severity_by_plugin,
+                "total_findings": total_findings,
+                "total_duration": total_duration,
+                "top_cost_plugins": top_cost_plugins,
+            },
+            "decisions": {
+                "productive_count": prod_count,
+                "avg_score": avg_score,
+                "total_entities_gained": total_ent_gained,
+                "top_plugin": top_plugin,
+                "gap_type_counts": gap_type_counts,
+            },
+        }
 
     @staticmethod
     def _make_scan_id(target: str, started_at: float) -> str:

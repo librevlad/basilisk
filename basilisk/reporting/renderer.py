@@ -101,6 +101,7 @@ def model_to_data(model: ReportModel) -> dict[str, Any]:
         "reasoning": model.reasoning.model_dump(),
         "topology": dict(model.topology),
         "training": training_data,
+        "viz_hints": dict(model.viz_hints),
     }
 
 
@@ -2072,15 +2073,21 @@ def _kg_growth_html(data: dict) -> str:
 
     # Imp 5: Entity gain velocity SVG with peak/saturation markers
     gains = [s.get("entities_gained", 0) for s in history]
-    peak_gain = max(gains) if gains else 0
-    peak_idx = gains.index(peak_gain) if gains else 0
-    sat_idx = len(gains) - 1
-    if peak_gain > 0:
-        threshold = peak_gain * 0.05
-        for si in range(peak_idx + 1, len(gains)):
-            if gains[si] < threshold:
-                sat_idx = si
-                break
+    kg_hints = data.get("viz_hints", {}).get("kg_growth", {})
+    peak_gain = kg_hints.get("peak_gain", max(gains) if gains else 0)
+    fallback_idx = gains.index(peak_gain) if gains and peak_gain in gains else 0
+    peak_idx = kg_hints.get("peak_step", fallback_idx)
+    sat_hint = kg_hints.get("saturation_step")
+    if sat_hint is not None:
+        sat_idx = sat_hint
+    else:
+        sat_idx = len(gains) - 1
+        if peak_gain > 0:
+            threshold = peak_gain * 0.05
+            for si in range(peak_idx + 1, len(gains)):
+                if gains[si] < threshold:
+                    sat_idx = si
+                    break
     n_gain_pts = len(gains)
     gv_w = 600
     gv_h = 40
@@ -2279,22 +2286,28 @@ def _findings_html(data: dict) -> str:
     # Imp 1: Cumulative findings curve SVG
     cum_findings_html = ""
     if findings:
-        # Group findings by step
-        step_sevs: dict[int, list[str]] = {}
-        for f in findings:
-            fs = f.get("step", 0)
-            step_sevs.setdefault(fs, []).append(
-                f.get("severity", "INFO").upper()
-            )
-        sorted_steps = sorted(step_sevs.keys())
-        cum_count = 0
-        cum_data: list[tuple[int, int, str]] = []  # (step, cumulative, dominant_sev)
-        sev_rank = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1, "INFO": 0}
-        for st in sorted_steps:
-            sevs = step_sevs[st]
-            cum_count += len(sevs)
-            dom = max(sevs, key=lambda s: sev_rank.get(s, 0))
-            cum_data.append((st, cum_count, dom))
+        hints_f = data.get("viz_hints", {}).get("findings", {})
+        cum_raw = hints_f.get("cumulative_by_step", [])
+        if cum_raw:
+            cum_data: list[tuple[int, int, str]] = [
+                (c["step"], c["cum_count"], c["severity"]) for c in cum_raw
+            ]
+        else:
+            # Backward compat: compute inline
+            step_sevs: dict[int, list[str]] = {}
+            for f in findings:
+                fs = f.get("step", 0)
+                step_sevs.setdefault(fs, []).append(
+                    f.get("severity", "INFO").upper()
+                )
+            sev_rank = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1, "INFO": 0}
+            cum_count = 0
+            cum_data = []
+            for st in sorted(step_sevs.keys()):
+                sevs = step_sevs[st]
+                cum_count += len(sevs)
+                dom = max(sevs, key=lambda s: sev_rank.get(s, 0))
+                cum_data.append((st, cum_count, dom))
 
         if cum_data:
             cf_w = 600
@@ -2380,11 +2393,16 @@ def _findings_html(data: dict) -> str:
     # Imp 4: Findings-by-host top 5
     host_bar_html = ""
     if findings:
-        host_counts: dict[str, int] = {}
-        for f in findings:
-            h = f.get("host", "unknown")
-            host_counts[h] = host_counts.get(h, 0) + 1
-        sorted_hosts = sorted(host_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+        hints_f = data.get("viz_hints", {}).get("findings", {})
+        sorted_hosts = hints_f.get("top_hosts", None)
+        if sorted_hosts is None:
+            host_counts: dict[str, int] = {}
+            for f in findings:
+                h = f.get("host", "unknown")
+                host_counts[h] = host_counts.get(h, 0) + 1
+            sorted_hosts = sorted(
+                host_counts.items(), key=lambda x: x[1], reverse=True,
+            )[:5]
         if sorted_hosts:
             host_max = sorted_hosts[0][1]
             bar_items: list[str] = []
@@ -2566,15 +2584,22 @@ def _decisions_html(data: dict) -> str:
     # Imp 2: Decision summary stats banner
     stats_banner = ""
     if decisions:
-        prod_count = sum(1 for d in decisions if d.get("productive", False))
+        dec_hints = data.get("viz_hints", {}).get("decisions", {})
+        prod_count = dec_hints.get("productive_count", sum(
+            1 for d in decisions if d.get("productive", False)
+        ))
         total_dec = len(decisions)
         prod_pct = prod_count / total_dec * 100 if total_dec > 0 else 0
         prod_color = "green" if prod_pct >= 50 else "red"
 
-        scores = [d.get("score", 0) for d in decisions]
-        avg_score = sum(scores) / len(scores) if scores else 0
+        avg_score = dec_hints.get("avg_score", 0)
+        if not dec_hints:
+            scores = [d.get("score", 0) for d in decisions]
+            avg_score = sum(scores) / len(scores) if scores else 0
 
-        total_ent_gained = sum(d.get("new_entities", 0) for d in decisions)
+        total_ent_gained = dec_hints.get("total_entities_gained", sum(
+            d.get("new_entities", 0) for d in decisions
+        ))
 
         durations = [d.get("duration", 0) or 0 for d in decisions]
         total_dur = sum(durations)
@@ -2582,12 +2607,14 @@ def _decisions_html(data: dict) -> str:
         dur_secs = int(total_dur % 60)
         dur_str = str(dur_mins) + "m " + str(dur_secs) + "s"
 
-        plugin_prod: dict[str, int] = {}
-        for d in decisions:
-            if d.get("productive", False):
-                p = d.get("plugin", "unknown")
-                plugin_prod[p] = plugin_prod.get(p, 0) + 1
-        top_plugin = max(plugin_prod, key=plugin_prod.get) if plugin_prod else "\u2014"
+        top_plugin = dec_hints.get("top_plugin", "")
+        if not top_plugin:
+            plugin_prod: dict[str, int] = {}
+            for d in decisions:
+                if d.get("productive", False):
+                    p = d.get("plugin", "unknown")
+                    plugin_prod[p] = plugin_prod.get(p, 0) + 1
+            top_plugin = max(plugin_prod, key=plugin_prod.get) if plugin_prod else "\u2014"
 
         stats_banner = (
             '  <div class="metrics-grid decision-stats">\n'
@@ -2617,36 +2644,40 @@ def _decisions_html(data: dict) -> str:
     # Imp 3: Gap type distribution bars
     gap_dist_html = ""
     if decisions:
-        gap_pattern = re.compile(r"^Gap:\s*(.+?)\.\s+Selected")
-        gap_types: dict[str, int] = {}
-        _gap_keywords = [
-            (["no known services", "services"], "No Services"),
-            (["no dns", "dns records"], "No DNS"),
-            (["no technology", "technology"], "No Technology"),
-            (["no endpoints", "endpoints"], "No Endpoints"),
-            (["vulnerability", "vuln testing", "vuln_test"], "Vuln Testing"),
-            (["verification", "verify", "confirm"], "Verification"),
-            (["container", "docker"], "Containers"),
-            (["credential", "cred"], "Credentials"),
-            (["forms", "form detection"], "Form Detection"),
-            (["version", "fingerprint"], "Version Detection"),
-        ]
-        for d in decisions:
-            reason = d.get("reasoning", "")
-            m = gap_pattern.match(reason)
-            if m:
-                gap_desc = m.group(1).lower()
-                categorized = False
-                for keywords, cat_name in _gap_keywords:
-                    if any(kw in gap_desc for kw in keywords):
-                        gap_types[cat_name] = gap_types.get(cat_name, 0) + 1
-                        categorized = True
-                        break
-                if not categorized:
-                    gap_types["Other"] = gap_types.get("Other", 0) + 1
-
-        if gap_types:
+        hint_gaps = dec_hints.get("gap_type_counts", None) if dec_hints else None
+        if hint_gaps:
+            sorted_gaps = list(hint_gaps)
+        else:
+            gap_pattern = re.compile(r"^Gap:\s*(.+?)\.\s+Selected")
+            gap_types: dict[str, int] = {}
+            _gap_keywords = [
+                (["no known services", "services"], "No Services"),
+                (["no dns", "dns records"], "No DNS"),
+                (["no technology", "technology"], "No Technology"),
+                (["no endpoints", "endpoints"], "No Endpoints"),
+                (["vulnerability", "vuln testing", "vuln_test"], "Vuln Testing"),
+                (["verification", "verify", "confirm"], "Verification"),
+                (["container", "docker"], "Containers"),
+                (["credential", "cred"], "Credentials"),
+                (["forms", "form detection"], "Form Detection"),
+                (["version", "fingerprint"], "Version Detection"),
+            ]
+            for d in decisions:
+                reason = d.get("reasoning", "")
+                m = gap_pattern.match(reason)
+                if m:
+                    gap_desc = m.group(1).lower()
+                    categorized = False
+                    for keywords, cat_name in _gap_keywords:
+                        if any(kw in gap_desc for kw in keywords):
+                            gap_types[cat_name] = gap_types.get(cat_name, 0) + 1
+                            categorized = True
+                            break
+                    if not categorized:
+                        gap_types["Other"] = gap_types.get("Other", 0) + 1
             sorted_gaps = sorted(gap_types.items(), key=lambda x: x[1], reverse=True)[:8]
+
+        if sorted_gaps:
             gap_max = sorted_gaps[0][1] if sorted_gaps else 1
             gap_bar_items: list[str] = []
             for gap_name, gap_cnt in sorted_gaps:
@@ -2808,27 +2839,24 @@ def _attack_surface_html(data: dict) -> str:
     subdomain_html = ""
     topology = data.get("topology", {})
     if topology:
-        findings_hosts = {
-            f.get("host", "") for f in data.get("findings", [])
-        }
-        root_count = 0
-        sub_count = 0
-        examined = 0
-        for host_name, topo in topology.items():
-            is_sub = topo.get("is_subdomain", False)
-            if is_sub:
-                sub_count += 1
-            else:
-                root_count += 1
-            # Examined = has services or has findings
-            has_svcs = bool(topo.get("services"))
-            if has_svcs or host_name in findings_hosts:
-                examined += 1
+        as_hints = data.get("viz_hints", {}).get("attack_surface", {})
+        root_count = as_hints.get("root_count", 0)
+        sub_count = as_hints.get("subdomain_count", 0)
+        examined = as_hints.get("examined_count", 0)
+        if not as_hints:
+            findings_hosts = {
+                f.get("host", "") for f in data.get("findings", [])
+            }
+            for host_name, topo in topology.items():
+                if topo.get("is_subdomain", False):
+                    sub_count += 1
+                else:
+                    root_count += 1
+                if bool(topo.get("services")) or host_name in findings_hosts:
+                    examined += 1
         total_hosts = root_count + sub_count
-        exam_pct = (
-            _fmt(examined / total_hosts * 100, ".0f")
-            if total_hosts > 0 else "0"
-        )
+        fallback_pct = examined / total_hosts * 100 if total_hosts > 0 else 0
+        exam_pct = _fmt(as_hints.get("examined_pct", fallback_pct), ".0f")
         subdomain_html = (
             '  <div class="subdomain-summary">\n'
             '    <span class="sub-stat">'
@@ -3072,16 +3100,17 @@ def _network_map_html(data: dict) -> str:
         return ""
 
     # Summary stats
+    nm_hints = data.get("viz_hints", {}).get("network_map", {})
     total_hosts = len(topology)
-    total_services = sum(
+    total_services = nm_hints.get("total_services", sum(
         len(t.get("services", [])) for t in topology.values()
-    )
-    total_endpoints = sum(
+    ))
+    total_endpoints = nm_hints.get("total_endpoints", sum(
         len(t.get("endpoints", [])) for t in topology.values()
-    )
-    total_techs = sum(
+    ))
+    total_techs = nm_hints.get("total_techs", sum(
         len(t.get("technologies", [])) for t in topology.values()
-    )
+    ))
 
     stats_html = (
         '<div class="nm-stats">\n'
@@ -3105,12 +3134,16 @@ def _network_map_html(data: dict) -> str:
     )
 
     # Protocol summary bar
-    proto_counts: dict[str, int] = {}
-    for topo_entry in topology.values():
-        for svc in topo_entry.get("services", []):
-            svc_name = str(svc.get("service", "")).lower().strip()
-            group = _PROTOCOL_GROUPS.get(svc_name, "Other")
-            proto_counts[group] = proto_counts.get(group, 0) + 1
+    hint_proto = nm_hints.get("protocol_groups", None)
+    if hint_proto is not None:
+        proto_counts = dict(hint_proto)
+    else:
+        proto_counts = {}
+        for topo_entry in topology.values():
+            for svc in topo_entry.get("services", []):
+                svc_name = str(svc.get("service", "")).lower().strip()
+                group = _PROTOCOL_GROUPS.get(svc_name, "Other")
+                proto_counts[group] = proto_counts.get(group, 0) + 1
 
     proto_bar_html = ""
     if proto_counts:
@@ -3139,12 +3172,20 @@ def _network_map_html(data: dict) -> str:
         )
 
     # Cross-reference findings by host (count + full list)
-    findings_count_by_host: dict[str, int] = {}
+    hint_fbh = nm_hints.get("findings_by_host", None)
+    if hint_fbh is not None:
+        findings_count_by_host = dict(hint_fbh)
+    else:
+        findings_count_by_host = {}
+        for f in data.get("findings", []):
+            h = f.get("host", "")
+            if h:
+                findings_count_by_host[h] = findings_count_by_host.get(h, 0) + 1
+    # Always build full list for detail rendering
     findings_for_host: dict[str, list[dict]] = {}
     for f in data.get("findings", []):
         h = f.get("host", "")
         if h:
-            findings_count_by_host[h] = findings_count_by_host.get(h, 0) + 1
             findings_for_host.setdefault(h, []).append(f)
 
     # Severity distribution for filter chips
@@ -3545,22 +3586,29 @@ def _plugin_perf_html(data: dict) -> str:
     plugins = data.get("plugins", [])
     findings = data.get("findings", [])
 
-    # Imp 4: Build step→plugin mapping and attribute findings to plugins
-    step_plugin: dict[int, str] = {}
-    for p in plugins:
-        step_plugin[p.get("step", -1)] = p.get("name", "")
-    plugin_sevs: dict[str, dict[str, int]] = {}
-    for f in findings:
-        fstep = f.get("step", -1)
-        pname = step_plugin.get(fstep, "")
-        if pname:
-            if pname not in plugin_sevs:
-                plugin_sevs[pname] = {}
-            fs = f.get("severity", "INFO").upper()
-            plugin_sevs[pname][fs] = plugin_sevs[pname].get(fs, 0) + 1
+    # Imp 4: Severity breakdown per plugin
+    pp_hints = data.get("viz_hints", {}).get("plugin_perf", {})
+    hint_sev = pp_hints.get("severity_by_plugin", None)
+    if hint_sev is not None:
+        plugin_sevs = dict(hint_sev)
+    else:
+        step_plugin: dict[int, str] = {}
+        for p in plugins:
+            step_plugin[p.get("step", -1)] = p.get("name", "")
+        plugin_sevs: dict[str, dict[str, int]] = {}
+        for f in findings:
+            fstep = f.get("step", -1)
+            pname = step_plugin.get(fstep, "")
+            if pname:
+                if pname not in plugin_sevs:
+                    plugin_sevs[pname] = {}
+                fs = f.get("severity", "INFO").upper()
+                plugin_sevs[pname][fs] = plugin_sevs[pname].get(fs, 0) + 1
 
     row_parts: list[str] = []
-    max_findings = max((p.get("findings_count", 0) for p in plugins), default=0)
+    max_findings = pp_hints.get(
+        "max_findings", max((p.get("findings_count", 0) for p in plugins), default=0),
+    )
     for p in plugins:
         name = _e(p.get("name", ""))
         raw_name = p.get("name", "")
@@ -3614,8 +3662,12 @@ def _plugin_perf_html(data: dict) -> str:
     # Imp 3: Summary row
     summary_row = ""
     if plugins:
-        total_findings = sum(p.get("findings_count", 0) for p in plugins)
-        total_dur = sum(p.get("duration", 0) for p in plugins)
+        total_findings = pp_hints.get(
+            "total_findings", sum(p.get("findings_count", 0) for p in plugins),
+        )
+        total_dur = pp_hints.get(
+            "total_duration", sum(p.get("duration", 0) for p in plugins),
+        )
         total_dur_str = _fmt(total_dur, ".1f")
         overall_rate = (
             _fmt(total_findings / (total_dur / 60), ".1f") if total_dur > 0 else "\u2014"
@@ -3640,13 +3692,17 @@ def _plugin_perf_html(data: dict) -> str:
     # Imp 8: Execution cost distribution stacked bar
     cost_dist_html = ""
     if plugins:
-        plugin_durations: dict[str, float] = {}
-        for p in plugins:
-            pn = p.get("name", "unknown")
-            plugin_durations[pn] = plugin_durations.get(pn, 0) + p.get("duration", 0)
-        sorted_costs = sorted(
-            plugin_durations.items(), key=lambda x: x[1], reverse=True,
-        )[:10]
+        hint_costs = pp_hints.get("top_cost_plugins", None)
+        if hint_costs is not None:
+            sorted_costs = list(hint_costs)
+        else:
+            plugin_durations: dict[str, float] = {}
+            for p in plugins:
+                pn = p.get("name", "unknown")
+                plugin_durations[pn] = plugin_durations.get(pn, 0) + p.get("duration", 0)
+            sorted_costs = sorted(
+                plugin_durations.items(), key=lambda x: x[1], reverse=True,
+            )[:10]
         total_cost = sum(d for _, d in sorted_costs)
         if total_cost > 0:
             _cost_colors = [

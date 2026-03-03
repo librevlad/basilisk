@@ -130,6 +130,10 @@ class ObservationProcessor:
 
             # Update decision outcome
             if decision:
+                decision.observed_entity_types = sorted({
+                    obs.entity_type.value for obs in obs_list
+                    if hasattr(obs, "entity_type")
+                })
                 decision.outcome_observations = obs_count
                 decision.outcome_new_entities = new_entities
                 decision.outcome_confidence_delta = total_confidence_delta

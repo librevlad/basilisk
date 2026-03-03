@@ -79,7 +79,9 @@ class KnowledgeGraph:
         return existing
 
     def add_relation(self, relation: Relation) -> None:
-        """Add a relation. Deduplicates by (source, target, type)."""
+        """Add a relation. Rejects self-loops. Deduplicates by (source, target, type)."""
+        if relation.source_id == relation.target_id:
+            return  # reject self-loops
         for existing in self._relation_index[relation.source_id]:
             if existing.target_id == relation.target_id and existing.type == relation.type:
                 return  # already exists
@@ -254,6 +256,18 @@ class KnowledgeGraph:
             if entity_id in getattr(h, "related_entity_ids", [])
             or entity_id in getattr(h, "target_entity_ids", [])
         ]
+
+    def validate(self) -> list[str]:
+        """Check graph invariants. Returns list of violations."""
+        errors = []
+        for rel in self._relations:
+            if rel.source_id == rel.target_id:
+                errors.append(f"Self-loop: {rel.source_id} via {rel.type}")
+            if rel.source_id not in self._entities:
+                errors.append(f"Dangling source: {rel.source_id}")
+            if rel.target_id not in self._entities:
+                errors.append(f"Dangling target: {rel.target_id}")
+        return errors
 
     def clear(self) -> None:
         """Reset the graph."""

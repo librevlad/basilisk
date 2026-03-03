@@ -45,6 +45,18 @@ def _build_session() -> ScanSession:
         Relation(source_id=svc443.id, target_id=ep2.id, type=RelationType.HAS_ENDPOINT),
     )
 
+    # Technologies in reverse-alpha order for sorting test
+    tech_nginx = Entity.technology("test.example.com", "nginx", version="1.25")
+    tech_apache = Entity.technology("test.example.com", "apache", version="2.4")
+    g.add_entity(tech_nginx)
+    g.add_entity(tech_apache)
+    g.add_relation(
+        Relation(source_id=svc80.id, target_id=tech_nginx.id, type=RelationType.RUNS),
+    )
+    g.add_relation(
+        Relation(source_id=svc80.id, target_id=tech_apache.id, type=RelationType.RUNS),
+    )
+
     # Findings in non-severity order
     g.add_entity(Entity.finding(
         "test.example.com", "Missing HSTS Header", severity="info",
@@ -168,5 +180,14 @@ class TestDeterministicOutput:
         keys = list(parsed.keys())
         assert keys == sorted(keys)
 
-    def test_schema_version_is_4_1(self):
-        assert REPORT_SCHEMA_VERSION == "4.1"
+    def test_topology_technologies_sorted(self):
+        """Technologies are sorted by (name, version)."""
+        s = _build_session()
+        model = ReportBuilder.from_session(s)
+        topo = model.topology.get("test.example.com", {})
+        techs = topo.get("technologies", [])
+        names = [t["name"] for t in techs]
+        assert names == sorted(names)
+
+    def test_schema_version_is_4_2(self):
+        assert REPORT_SCHEMA_VERSION == "4.2"

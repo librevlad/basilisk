@@ -377,14 +377,22 @@ class AutonomousLoop:
         related_hyp_ids: list[str] = []
         hyp_resolution_gain = 0.0
         action_type_str = ""
+        hypothesis_text = ""
         if self._hypothesis_engine is not None:
             related = self._hypothesis_engine.hypotheses_for_entity(chosen.target_entity.id)
             related_hyp_ids = [h.id for h in related[:5]]
             hyp_resolution_gain = self._hypothesis_engine.resolution_gain(
                 chosen.capability.plugin_name, chosen.target_entity.id,
             )
+            if related:
+                hypothesis_text = getattr(related[0], "text", "")
         if hasattr(chosen.capability, "action_type"):
             action_type_str = str(chosen.capability.action_type)
+
+        # Expected entity types from capability metadata
+        expected_entity_types: list[str] = []
+        if hasattr(chosen.capability, "produces_knowledge"):
+            expected_entity_types = list(chosen.capability.produces_knowledge)
 
         # Add hypothesis counts to context snapshot
         if self._hypothesis_engine is not None:
@@ -412,6 +420,8 @@ class AutonomousLoop:
             related_hypothesis_ids=related_hyp_ids,
             hypothesis_resolution_gain=hyp_resolution_gain,
             action_type=action_type_str,
+            hypothesis_text=hypothesis_text,
+            expected_entity_types=expected_entity_types,
         )
 
     def _collect_results(self) -> dict[str, Any]:
