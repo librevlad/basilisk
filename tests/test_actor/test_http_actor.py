@@ -76,3 +76,34 @@ class TestHttpActor:
         client = _mock_http_client()
         actor = HttpActor(client, deadline=0.0)
         assert actor.time_remaining == float("inf")
+
+    async def test_dns_resolve_returns_empty(self):
+        client = _mock_http_client()
+        actor = HttpActor(client)
+        assert await actor.dns_resolve("example.com") == []
+
+    async def test_tcp_connect_returns_false(self):
+        client = _mock_http_client()
+        actor = HttpActor(client)
+        assert await actor.tcp_connect("example.com", 80) is False
+
+    async def test_tcp_banner_returns_empty(self):
+        client = _mock_http_client()
+        actor = HttpActor(client)
+        assert await actor.tcp_banner("example.com", 80) == ""
+
+    async def test_get_passes_timeout(self):
+        client = _mock_http_client()
+        actor = HttpActor(client)
+        await actor.http_get("https://example.com/", timeout=5.0)
+        client.get.assert_called_once_with(
+            "https://example.com/", headers=None, timeout=5.0,
+        )
+
+    async def test_get_zero_timeout_passes_none(self):
+        client = _mock_http_client()
+        actor = HttpActor(client)
+        await actor.http_get("https://example.com/")
+        client.get.assert_called_once_with(
+            "https://example.com/", headers=None, timeout=None,
+        )

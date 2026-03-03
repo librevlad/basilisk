@@ -143,20 +143,21 @@ class GoalEngine:
         return not any(goal.matches_gap(g) for g in gaps)
 
     def prioritize_gaps(self, gaps: list[KnowledgeGap]) -> list[KnowledgeGap]:
-        """Boost priorities of gaps matching the active goal.
+        """Sort gaps by effective priority (boosted by active goal).
 
-        Non-matching gaps keep their original priority. Returns a new
-        sorted list (original gaps are mutated in-place for priority).
+        Original gap.priority values are NOT mutated; the boost is applied
+        only for sorting purposes to preserve accurate decision traces.
         """
         goal = self.active_goal
         if goal is None:
             return gaps
 
-        for gap in gaps:
+        def _effective_priority(gap: KnowledgeGap) -> float:
             if goal.matches_gap(gap):
-                gap.priority *= goal.priority
+                return gap.priority * goal.priority
+            return gap.priority
 
-        gaps.sort(key=lambda g: g.priority, reverse=True)
+        gaps.sort(key=_effective_priority, reverse=True)
         return gaps
 
     def select_for_graph(self, graph: KnowledgeGraph) -> Goal | None:

@@ -72,3 +72,19 @@ class TestXssScenario:
     def test_detect_context_attribute(self):
         html = '<input value="basiliskXSS42">'
         assert _detect_context(html, "basiliskXSS42") == "attribute"
+
+    async def test_should_stop_breaks_early(self):
+        import time
+
+        from basilisk.actor.recording import RecordingActor
+        actor = RecordingActor()
+        actor._deadline = time.monotonic() - 10.0  # already expired
+        target = LiveTarget.domain("stop.local")
+        surfaces = [SearchSurface(
+            host="stop.local", url="http://stop.local/search",
+            params={"q": "test"}, query_param="q",
+        )]
+        result = await XssScenario().run(target, actor, surfaces, {})
+        assert result.ok
+        # Should have no tests since it stopped immediately
+        assert result.data["xss_tests"] == []

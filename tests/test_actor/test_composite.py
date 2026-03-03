@@ -66,3 +66,70 @@ class TestCompositeActor:
         assert scoped.http_client is actor.http_client  # shared
         assert scoped._deadline > 0
         assert scoped.time_remaining <= 30.0
+
+
+class TestCompositeActorNullSafety:
+    async def test_http_get_no_client(self):
+        actor = CompositeActor()
+        resp = await actor.http_get("https://example.com/")
+        assert resp.status == 0
+        assert resp.url == "https://example.com/"
+
+    async def test_http_post_no_client(self):
+        actor = CompositeActor()
+        resp = await actor.http_post("https://example.com/", data={"a": "1"})
+        assert resp.status == 0
+
+    async def test_http_head_no_client(self):
+        actor = CompositeActor()
+        resp = await actor.http_head("https://example.com/")
+        assert resp.status == 0
+
+    async def test_http_request_no_client(self):
+        actor = CompositeActor()
+        resp = await actor.http_request("PUT", "https://example.com/")
+        assert resp.status == 0
+
+    async def test_dns_no_client(self):
+        actor = CompositeActor()
+        records = await actor.dns_resolve("example.com")
+        assert records == []
+
+    async def test_tcp_connect_no_client(self):
+        actor = CompositeActor()
+        assert await actor.tcp_connect("example.com", 80) is False
+
+    async def test_tcp_banner_no_client(self):
+        actor = CompositeActor()
+        assert await actor.tcp_banner("example.com", 80) == ""
+
+
+class TestCompositeActorTimeoutPropagation:
+    async def test_http_get_passes_timeout(self):
+        actor = _mock_composite()
+        await actor.http_get("https://example.com/", timeout=5.0)
+        actor.http_client.get.assert_called_once_with(
+            "https://example.com/", headers=None, timeout=5.0,
+        )
+
+    async def test_http_get_zero_timeout_passes_none(self):
+        actor = _mock_composite()
+        await actor.http_get("https://example.com/")
+        actor.http_client.get.assert_called_once_with(
+            "https://example.com/", headers=None, timeout=None,
+        )
+
+    async def test_http_post_passes_timeout(self):
+        actor = _mock_composite()
+        await actor.http_post("https://example.com/", data={"a": "1"}, timeout=8.0)
+        actor.http_client.post.assert_called_once_with(
+            "https://example.com/", data={"a": "1"}, json=None,
+            headers=None, timeout=8.0,
+        )
+
+    async def test_http_head_passes_timeout(self):
+        actor = _mock_composite()
+        await actor.http_head("https://example.com/", timeout=3.0)
+        actor.http_client.head.assert_called_once_with(
+            "https://example.com/", timeout=3.0,
+        )

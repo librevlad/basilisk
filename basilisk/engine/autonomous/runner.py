@@ -140,7 +140,7 @@ class AutonomousRunner:
             coverage_tracker = CoverageTracker(vuln_registry=vuln_registry)
             revalidator = ReValidator(confirmer, vuln_registry=vuln_registry)
         except Exception:
-            pass
+            logger.warning("Verification infrastructure failed to load", exc_info=True)
 
         # Campaign memory (opt-in)
         campaign_memory = None
@@ -160,7 +160,9 @@ class AutonomousRunner:
                 campaign_store = None
 
         from basilisk.orchestrator.attack_paths import count_unlockable_paths
+        from basilisk.orchestrator.cost_tracker import CostTracker
 
+        cost_tracker = CostTracker()
         scorer = Scorer(
             graph, history=history,
             hypothesis_engine=hypothesis_engine,
@@ -224,6 +226,7 @@ class AutonomousRunner:
             goal_engine=goal_engine,
             hypothesis_engine=hypothesis_engine,
             evidence_aggregator=evidence_aggregator,
+            cost_tracker=cost_tracker,
             coverage_tracker=coverage_tracker,
             confirmer=confirmer,
             confidence_model=confidence_model,

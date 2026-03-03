@@ -13,7 +13,9 @@ class ResultAdapter:
     """Converts between v3 PluginResult and v4 ScenarioResult."""
 
     @staticmethod
-    def to_v4_finding(v3: V3Finding, plugin_name: str = "") -> V4Finding:
+    def to_v4_finding(
+        v3: V3Finding, plugin_name: str = "", host: str = "",
+    ) -> V4Finding:
         """Convert a v3 Finding to a v4 Finding."""
         proof = None
         if v3.evidence:
@@ -27,13 +29,17 @@ class ResultAdapter:
             tags=frozenset(v3.tags),
             confidence=v3.confidence,
             scenario_name=plugin_name,
+            host=host,
+            verified=v3.verified,
+            false_positive_risk=v3.false_positive_risk,
         )
 
     @staticmethod
     def to_scenario_result(result: PluginResult) -> ScenarioResult:
         """Convert a v3 PluginResult to a v4 ScenarioResult."""
         v4_findings = [
-            ResultAdapter.to_v4_finding(f, result.plugin) for f in result.findings
+            ResultAdapter.to_v4_finding(f, result.plugin, host=result.target)
+            for f in result.findings
         ]
         return ScenarioResult(
             scenario=result.plugin,
@@ -59,6 +65,8 @@ class ResultAdapter:
             remediation=v4.remediation,
             tags=list(v4.tags),
             confidence=v4.confidence,
+            verified=v4.verified,
+            false_positive_risk=v4.false_positive_risk,
         )
 
     @staticmethod

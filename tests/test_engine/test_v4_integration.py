@@ -47,6 +47,7 @@ class TestV4IntegrationPath:
     async def test_scenario_executor_runs_native(self):
         """Native scenario executes via ScenarioExecutor, returns observations."""
         mock_scenario = AsyncMock()
+        mock_scenario.meta.timeout = 30.0
         mock_scenario.run.return_value = ScenarioResult(
             scenario="dns_scenario",
             target="test.com",
@@ -72,6 +73,7 @@ class TestV4IntegrationPath:
     async def test_scenario_executor_runs_legacy(self):
         """Legacy plugin executes via ScenarioExecutor bridge, returns observations."""
         mock_scenario = AsyncMock()
+        mock_scenario.meta.timeout = 30.0
         mock_scenario.run.return_value = ScenarioResult(
             scenario="port_scan", target="test.com",
             data={"open_ports": [{"port": 80, "protocol": "tcp"}]},

@@ -94,9 +94,11 @@ class CompositeActor(BaseActor):
     async def http_get(
         self, url: str, *, headers: dict[str, str] | None = None, timeout: float = 0,
     ) -> HttpResponse:
+        if not self.http_client:
+            return HttpResponse(url=url)
         await self._rate_wait()
         start = time.monotonic()
-        resp = await self.http_client.get(url, headers=headers)
+        resp = await self.http_client.get(url, headers=headers, timeout=timeout or None)
         elapsed = time.monotonic() - start
         return await self._wrap(resp, elapsed)
 
@@ -109,24 +111,32 @@ class CompositeActor(BaseActor):
         headers: dict[str, str] | None = None,
         timeout: float = 0,
     ) -> HttpResponse:
+        if not self.http_client:
+            return HttpResponse(url=url)
         await self._rate_wait()
         start = time.monotonic()
-        resp = await self.http_client.post(url, data=data, json=json, headers=headers)
+        resp = await self.http_client.post(
+            url, data=data, json=json, headers=headers, timeout=timeout or None,
+        )
         elapsed = time.monotonic() - start
         return await self._wrap(resp, elapsed)
 
     async def http_head(
         self, url: str, *, timeout: float = 0,
     ) -> HttpResponse:
+        if not self.http_client:
+            return HttpResponse(url=url)
         await self._rate_wait()
         start = time.monotonic()
-        resp = await self.http_client.head(url)
+        resp = await self.http_client.head(url, timeout=timeout or None)
         elapsed = time.monotonic() - start
         return await self._wrap(resp, elapsed)
 
     async def http_request(
         self, method: str, url: str, **kwargs: Any,
     ) -> HttpResponse:
+        if not self.http_client:
+            return HttpResponse(url=url)
         await self._rate_wait()
         start = time.monotonic()
         resp = await self.http_client.request(method, url, **kwargs)

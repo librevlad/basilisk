@@ -75,13 +75,16 @@ class PortScenario(Scenario):
         open_ports: list[dict[str, Any]] = []
         host = target.host
 
+        remaining = actor.time_remaining
+        conn_timeout = min(3.0, remaining) if remaining != float("inf") else 3.0
+
         # Phase 1: Scan top ports
         for port in _TOP_PORTS:
             if actor.should_stop:
                 break
 
             try:
-                is_open = await actor.tcp_connect(host, port, timeout=3.0)
+                is_open = await actor.tcp_connect(host, port, timeout=conn_timeout)
             except Exception:
                 is_open = False
 
@@ -94,7 +97,7 @@ class PortScenario(Scenario):
             banner = ""
             if not actor.should_stop:
                 with contextlib.suppress(Exception):
-                    banner = await actor.tcp_banner(host, port, timeout=3.0)
+                    banner = await actor.tcp_banner(host, port, timeout=conn_timeout)
 
             port_info = {
                 "port": port,

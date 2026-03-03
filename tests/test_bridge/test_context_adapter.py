@@ -74,3 +74,31 @@ class TestContextAdapter:
         pipeline = {"ssl_check:example.com": MagicMock()}
         ctx = ContextAdapter.build(actor, settings, tools={"pipeline": pipeline})
         assert "ssl_check:example.com" in ctx.pipeline
+
+    def test_emit_from_tools(self):
+        actor = CompositeActor()
+        settings = Settings.load()
+        emit_fn = MagicMock()
+        ctx = ContextAdapter.build(actor, settings, tools={"emit": emit_fn})
+        assert ctx.emit is emit_fn
+
+    def test_emit_default_is_noop(self):
+        from basilisk.core.executor import _noop_emit
+        actor = CompositeActor()
+        settings = Settings.load()
+        ctx = ContextAdapter.build(actor, settings)
+        assert ctx.emit is _noop_emit
+
+    def test_log_from_tools(self):
+        import logging
+        actor = CompositeActor()
+        settings = Settings.load()
+        custom_log = logging.getLogger("custom.test")
+        ctx = ContextAdapter.build(actor, settings, tools={"log": custom_log})
+        assert ctx.log is custom_log
+
+    def test_log_default_is_bridge_logger(self):
+        actor = CompositeActor()
+        settings = Settings.load()
+        ctx = ContextAdapter.build(actor, settings)
+        assert ctx.log.name == "basilisk.bridge"

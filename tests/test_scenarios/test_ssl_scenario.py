@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from basilisk.actor.recording import RecordingActor
 from basilisk.domain.target import LiveTarget
@@ -97,3 +97,30 @@ class TestSslScenario:
         ):
             result = await SslScenario().run(target, actor, [], {})
         assert "ssl_info" in result.data
+
+    async def test_should_stop_returns_skipped(self):
+        actor = RecordingActor(deadline=1.0)  # already expired
+        actor._deadline = 0.001  # force should_stop=True
+        import time
+        actor._deadline = time.monotonic() - 10.0  # well in the past
+        target = LiveTarget.domain("skip.local")
+        result = await SslScenario().run(target, actor, [], {})
+        assert result.status == "skipped"
+        assert result.findings == []
+
+    async def test_timeout_passed_to_cert_info(self):
+        actor = RecordingActor()
+        target = LiveTarget.domain("timeout.local")
+        mock_get_cert = AsyncMock(return_value={
+            "subject": "CN=timeout.local",
+            "issuer": "CN=CA",
+            "not_after": "Dec 31 23:59:59 2027 GMT",
+            "san": [],
+        })
+        with patch(
+            "basilisk.scenarios.scanning.ssl_scenario._get_cert_info",
+            mock_get_cert,
+        ):
+            await SslScenario().run(target, actor, [], {})
+        # With deadline=0, time_remaining=inf → min(30.0, inf, 10.0) = 10.0
+        mock_get_cert.assert_called_once_with("timeout.local", 443, timeout=10.0)

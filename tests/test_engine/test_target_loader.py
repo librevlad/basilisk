@@ -23,6 +23,13 @@ class TestTargetLoader:
         targets = TargetLoader.load(["192.168.1.1:8080"])
         assert len(targets) == 1
         assert targets[0].ports == [8080]
+        assert targets[0].host == "192.168.1.1"
+
+    def test_load_localhost_with_port(self):
+        targets = TargetLoader.load(["localhost:3000"])
+        assert len(targets) == 1
+        assert targets[0].host == "localhost"
+        assert targets[0].ports == [3000]
 
     def test_load_localhost(self):
         targets = TargetLoader.load(["localhost"])

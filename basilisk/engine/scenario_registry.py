@@ -6,6 +6,7 @@ import importlib
 import inspect
 import logging
 import pkgutil
+from typing import ClassVar
 
 from basilisk.bridge.legacy_scenario import LegacyPluginScenario
 from basilisk.core.plugin import BasePlugin
@@ -16,6 +17,8 @@ logger = logging.getLogger(__name__)
 
 class ScenarioRegistry:
     """Discovers and manages all scenarios (native + legacy-wrapped)."""
+
+    _discovery_cache: ClassVar[dict[str, Scenario] | None] = None
 
     def __init__(self) -> None:
         self._scenarios: dict[str, Scenario] = {}
@@ -44,8 +47,12 @@ class ScenarioRegistry:
         """Discover native scenarios and legacy plugins, wrap and register all.
 
         Native scenarios take priority over legacy wrappers with the same name.
-        Returns total count registered.
+        Returns total count registered. Results are cached at the class level.
         """
+        if ScenarioRegistry._discovery_cache is not None:
+            self._scenarios.update(ScenarioRegistry._discovery_cache)
+            return len(self._scenarios)
+
         # 1. Discover native scenarios from basilisk/scenarios/
         native_count = self._discover_native("basilisk.scenarios")
 
@@ -56,7 +63,13 @@ class ScenarioRegistry:
             "ScenarioRegistry: %d native + %d legacy = %d total",
             native_count, legacy_count, len(self._scenarios),
         )
+        ScenarioRegistry._discovery_cache = dict(self._scenarios)
         return len(self._scenarios)
+
+    @classmethod
+    def clear_cache(cls) -> None:
+        """Clear discovery cache (useful for testing)."""
+        cls._discovery_cache = None
 
     def _discover_native(self, package_name: str) -> int:
         """Scan for native Scenario subclasses."""

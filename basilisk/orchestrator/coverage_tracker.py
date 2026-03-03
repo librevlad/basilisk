@@ -127,8 +127,9 @@ class CoverageTracker:
         """Record that a category's findings have been verified."""
         cov = self._ensure_host(host)
         if category:
+            if cov.categories_tested.get(category) != VulnCategoryStatus.VERIFIED:
+                cov.verified_count += 1
             cov.categories_tested[category] = VulnCategoryStatus.VERIFIED
-            cov.verified_count += 1
 
     def host_coverage(self, host: str) -> HostCoverage:
         """Get coverage state for a specific host."""

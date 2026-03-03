@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 from basilisk.knowledge.entities import Entity
@@ -22,6 +23,7 @@ def _make_executor(
         registry.get.return_value = scenario
     else:
         mock_scenario = AsyncMock()
+        mock_scenario.meta.timeout = 30.0
         if scenario_result is not None:
             mock_scenario.run.return_value = scenario_result
         else:
@@ -145,3 +147,41 @@ class TestStatePopulated:
         assert "crawled_urls" in ex.ctx.state
         assert "test.com" in ex.ctx.state["crawled_urls"]
         assert len(ex.ctx.state["crawled_urls"]["test.com"]) == 2
+
+
+class TestScenarioTimeout:
+    async def test_timeout_returns_empty(self):
+        """A scenario that exceeds meta.timeout returns empty observations."""
+        mock_scenario = AsyncMock()
+        mock_scenario.meta.timeout = 0.01  # 10ms
+
+        async def _slow(*_a, **_kw):
+            await asyncio.sleep(5)
+
+        mock_scenario.run.side_effect = _slow
+
+        ex = _make_executor(scenario=mock_scenario)
+        cap = MagicMock()
+        cap.plugin_name = "slow_plugin"
+        graph = KnowledgeGraph()
+        host = Entity.host("test.com")
+        graph.add_entity(host)
+
+        observations = await ex.execute(cap, host, graph)
+        assert observations == []
+
+    async def test_exception_returns_empty(self):
+        """A scenario that raises returns empty observations."""
+        mock_scenario = AsyncMock()
+        mock_scenario.meta.timeout = 30.0
+        mock_scenario.run.side_effect = RuntimeError("boom")
+
+        ex = _make_executor(scenario=mock_scenario)
+        cap = MagicMock()
+        cap.plugin_name = "bad_plugin"
+        graph = KnowledgeGraph()
+        host = Entity.host("test.com")
+        graph.add_entity(host)
+
+        observations = await ex.execute(cap, host, graph)
+        assert observations == []

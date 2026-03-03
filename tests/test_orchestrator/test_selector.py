@@ -431,3 +431,17 @@ class TestMatchesServiceType:
         svc = Entity.service("test.com", 9999)
         svc.data["service"] = "http-proxy"
         assert _matches_service_type(svc, "http") is True
+
+    def test_protocol_http_matches(self):
+        from basilisk.orchestrator.selector import _matches_service_type
+
+        svc = Entity.service("test.com", 9999)
+        svc.data["protocol"] = "http"
+        assert _matches_service_type(svc, "http") is True
+
+    def test_protocol_https_matches_http(self):
+        from basilisk.orchestrator.selector import _matches_service_type
+
+        svc = Entity.service("test.com", 9999)
+        svc.data["protocol"] = "https"
+        assert _matches_service_type(svc, "http") is True

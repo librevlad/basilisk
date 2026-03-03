@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -46,6 +46,8 @@ class Finding(BaseModel, frozen=True):
     host: str = ""
     endpoint: str = ""
     scenario_name: str = ""
+    verified: bool = False
+    false_positive_risk: Literal["low", "medium", "high"] = "low"
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     @model_validator(mode="after")

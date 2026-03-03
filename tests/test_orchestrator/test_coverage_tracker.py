@@ -133,3 +133,21 @@ class TestCoverageTracker:
         cov = ct.host_coverage("example.com")
         assert cov.findings_count == 1
         assert "" not in cov.categories_tested
+
+    def test_record_verification_no_double_increment(self):
+        """record_finding(verified=True) + record_verification should not double-count."""
+        ct = CoverageTracker()
+        ct.record_finding("example.com", "sqli", verified=True)
+        ct.record_verification("example.com", "sqli")
+        cov = ct.host_coverage("example.com")
+        assert cov.categories_tested["sqli"] == VulnCategoryStatus.VERIFIED
+        assert cov.verified_count == 1
+
+    def test_record_verification_increments_from_detected(self):
+        """record_verification on a DETECTED category increments verified_count once."""
+        ct = CoverageTracker()
+        ct.record_finding("example.com", "xss")
+        ct.record_verification("example.com", "xss")
+        cov = ct.host_coverage("example.com")
+        assert cov.categories_tested["xss"] == VulnCategoryStatus.VERIFIED
+        assert cov.verified_count == 1

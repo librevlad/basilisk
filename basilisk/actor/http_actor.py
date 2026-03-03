@@ -35,7 +35,7 @@ class HttpActor(BaseActor):
     ) -> HttpResponse:
         await self._rate_wait()
         start = time.monotonic()
-        resp = await self._http.get(url, headers=headers)
+        resp = await self._http.get(url, headers=headers, timeout=timeout or None)
         elapsed = time.monotonic() - start
         return await self._wrap_response(resp, elapsed)
 
@@ -50,7 +50,9 @@ class HttpActor(BaseActor):
     ) -> HttpResponse:
         await self._rate_wait()
         start = time.monotonic()
-        resp = await self._http.post(url, data=data, json=json, headers=headers)
+        resp = await self._http.post(
+            url, data=data, json=json, headers=headers, timeout=timeout or None,
+        )
         elapsed = time.monotonic() - start
         return await self._wrap_response(resp, elapsed)
 
@@ -59,7 +61,7 @@ class HttpActor(BaseActor):
     ) -> HttpResponse:
         await self._rate_wait()
         start = time.monotonic()
-        resp = await self._http.head(url)
+        resp = await self._http.head(url, timeout=timeout or None)
         elapsed = time.monotonic() - start
         return await self._wrap_response(resp, elapsed)
 
@@ -71,6 +73,23 @@ class HttpActor(BaseActor):
         resp = await self._http.request(method, url, **kwargs)
         elapsed = time.monotonic() - start
         return await self._wrap_response(resp, elapsed)
+
+    # -- DNS/TCP stubs (HTTP-only actor, return empty defaults) --
+
+    async def dns_resolve(
+        self, hostname: str, rdtype: str = "A",
+    ) -> list[str]:
+        return []
+
+    async def tcp_connect(
+        self, host: str, port: int, timeout: float = 3.0,
+    ) -> bool:
+        return False
+
+    async def tcp_banner(
+        self, host: str, port: int, timeout: float = 3.0,
+    ) -> str:
+        return ""
 
     @staticmethod
     async def _wrap_response(resp: Any, elapsed: float) -> HttpResponse:

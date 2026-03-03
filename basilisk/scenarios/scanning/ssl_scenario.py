@@ -46,9 +46,16 @@ class SslScenario(Scenario):
         if target.ports:
             port = target.ports[0] if 443 not in target.ports else 443
 
+        if actor.should_stop:
+            return ScenarioResult(
+                scenario=self.meta.name, target=host,
+                findings=[], data=data, status="skipped",
+            )
+
         # Phase 1: SSL connection
+        connect_timeout = min(self.meta.timeout, actor.time_remaining, 10.0)
         try:
-            cert_info = await _get_cert_info(host, port)
+            cert_info = await _get_cert_info(host, port, timeout=connect_timeout)
         except Exception as e:
             data["ssl_error"] = str(e)
             return ScenarioResult(
@@ -134,7 +141,7 @@ class SslScenario(Scenario):
         )
 
 
-async def _get_cert_info(host: str, port: int = 443) -> dict[str, Any]:
+async def _get_cert_info(host: str, port: int = 443, timeout: float = 10.0) -> dict[str, Any]:
     """Connect to host via SSL and extract certificate information."""
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
@@ -142,7 +149,7 @@ async def _get_cert_info(host: str, port: int = 443) -> dict[str, Any]:
 
     _, writer = await asyncio.wait_for(
         asyncio.open_connection(host, port, ssl=ctx),
-        timeout=10.0,
+        timeout=timeout,
     )
     try:
         ssl_obj = writer.get_extra_info("ssl_object")

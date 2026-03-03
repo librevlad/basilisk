@@ -49,9 +49,8 @@ class TargetLoader:
                 targets.append(LiveTarget.url(raw))
             elif _is_ip_or_local(raw):
                 bare, port = _split_host_port(raw)
-                host = raw if port else bare
                 ports = [port] if port else []
-                targets.append(LiveTarget.ip(host, ports=ports))
+                targets.append(LiveTarget.ip(bare, ports=ports))
             else:
                 targets.append(LiveTarget.domain(raw))
         return targets

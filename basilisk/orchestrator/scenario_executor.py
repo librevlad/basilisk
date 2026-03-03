@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -93,7 +94,16 @@ class ScenarioExecutor:
         }
 
         try:
-            scenario_result = await scenario.run(v4_target, self._actor, [], tools)
+            scenario_result = await asyncio.wait_for(
+                scenario.run(v4_target, self._actor, [], tools),
+                timeout=scenario.meta.timeout,
+            )
+        except TimeoutError:
+            logger.warning(
+                "Scenario %s timed out after %ss on %s",
+                capability.plugin_name, scenario.meta.timeout, v3_target.host,
+            )
+            return []
         except Exception:
             logger.exception(
                 "Failed to execute %s on %s", capability.plugin_name, v3_target.host,

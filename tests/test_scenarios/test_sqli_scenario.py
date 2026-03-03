@@ -93,3 +93,17 @@ class TestSqliScenario:
         surfaces = [Surface(host="test.local", url="http://test.local/", params={"x": "1"})]
         result = await SqliScenario().run(target, actor, surfaces, {})
         assert isinstance(result.data["sqli_tests"], list)
+
+    async def test_should_stop_breaks_early(self):
+        import time
+        actor = RecordingActor()
+        actor._deadline = time.monotonic() - 10.0  # already expired
+        target = LiveTarget.domain("stop.local")
+        surfaces = [Surface(
+            host="stop.local", url="http://stop.local/",
+            params={"id": "1"},
+        )]
+        result = await SqliScenario().run(target, actor, surfaces, {})
+        assert result.ok
+        # Should have no tests since it stopped immediately
+        assert result.data["sqli_tests"] == []

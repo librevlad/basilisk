@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from basilisk.domain.finding import Finding
 from basilisk.domain.surface import Surface
@@ -13,6 +13,12 @@ from basilisk.domain.surface import Surface
 if TYPE_CHECKING:
     from basilisk.actor.base import ActorProtocol
     from basilisk.domain.target import BaseTarget
+
+
+_VALID_KNOWLEDGE_PREFIXES = frozenset({
+    "Host", "Service", "Endpoint", "Technology", "Credential",
+    "Finding", "Vulnerability", "Container", "Image",
+})
 
 
 class ScenarioMeta(BaseModel):
@@ -34,6 +40,18 @@ class ScenarioMeta(BaseModel):
     produces_knowledge: list[str] = Field(default_factory=list)
     cost_score: float = 1.0
     noise_score: float = 1.0
+
+    @field_validator("produces_knowledge", "requires_knowledge")
+    @classmethod
+    def _validate_knowledge_refs(cls, v: list[str]) -> list[str]:
+        for item in v:
+            prefix = item.split(":")[0]
+            if prefix not in _VALID_KNOWLEDGE_PREFIXES:
+                raise ValueError(
+                    f"Invalid knowledge ref '{item}': "
+                    f"prefix must be one of {sorted(_VALID_KNOWLEDGE_PREFIXES)}"
+                )
+        return v
 
 
 class ScenarioResult(BaseModel):

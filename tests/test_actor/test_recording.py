@@ -33,3 +33,25 @@ class TestRecordingActor:
         actor.set_tcp("example.com", 22, True)
         assert await actor.tcp_connect("example.com", 22)
         assert not await actor.tcp_connect("example.com", 23)
+
+    async def test_dns_resolve_recorded(self):
+        actor = RecordingActor()
+        await actor.dns_resolve("example.com")
+        assert len(actor.requests) == 1
+        assert actor.requests[0].method == "DNS"
+        assert "example.com" in actor.requests[0].url
+
+    async def test_tcp_connect_recorded(self):
+        actor = RecordingActor()
+        await actor.tcp_connect("example.com", 22)
+        assert len(actor.requests) == 1
+        assert actor.requests[0].method == "TCP_CONNECT"
+        assert "example.com:22" in actor.requests[0].url
+
+    async def test_tcp_banner_recorded(self):
+        actor = RecordingActor()
+        actor.set_banner("example.com", 22, "SSH-2.0-OpenSSH")
+        banner = await actor.tcp_banner("example.com", 22)
+        assert banner == "SSH-2.0-OpenSSH"
+        assert len(actor.requests) == 1
+        assert actor.requests[0].method == "TCP_BANNER"

@@ -86,7 +86,8 @@ class TestGapSatisfaction:
         )
         assert entity.data.get(GAP_SERVICES_CHECKED) is True
 
-    def test_does_not_mark_services_if_not_productive(self):
+    def test_marks_services_even_if_not_productive(self):
+        """Gap flags are set on execution, not production — prevents re-scanning."""
         handler, _, _ = _make_handler()
         entity = Entity.host("test.com")
         sc = _make_scored(entity=entity, produces=["Service"])
@@ -96,7 +97,7 @@ class TestGapSatisfaction:
         handler._mark_gaps_satisfied(
             [sc], [[]], [decision],
         )
-        assert entity.data.get(GAP_SERVICES_CHECKED) is None
+        assert entity.data.get(GAP_SERVICES_CHECKED) is True
 
     def test_marks_tech_checked(self):
         handler, _, _ = _make_handler()
@@ -114,6 +115,26 @@ class TestGapSatisfaction:
         sc = _make_scored(entity=entity, produces=["Endpoint"])
         decision = _make_decision()
         decision.was_productive = True
+
+        handler._mark_gaps_satisfied([sc], [[]], [decision])
+        assert entity.data.get(GAP_ENDPOINTS_CHECKED) is True
+
+    def test_marks_tech_even_if_not_productive(self):
+        handler, _, _ = _make_handler()
+        entity = Entity.host("test.com")
+        sc = _make_scored(entity=entity, produces=["Technology"])
+        decision = _make_decision()
+        decision.was_productive = False
+
+        handler._mark_gaps_satisfied([sc], [[]], [decision])
+        assert entity.data.get(GAP_TECH_CHECKED) is True
+
+    def test_marks_endpoints_even_if_not_productive(self):
+        handler, _, _ = _make_handler()
+        entity = Entity.host("test.com")
+        sc = _make_scored(entity=entity, produces=["Endpoint"])
+        decision = _make_decision()
+        decision.was_productive = False
 
         handler._mark_gaps_satisfied([sc], [[]], [decision])
         assert entity.data.get(GAP_ENDPOINTS_CHECKED) is True
@@ -197,6 +218,103 @@ class TestHypothesisGeneration:
 
         handler._generate_hypotheses()
         graph.add_hypothesis.assert_called_once_with(hyp)
+
+
+class TestEvidenceRecording:
+    def test_passes_confidence_delta_from_decision(self):
+        """Evidence aggregator receives real confidence delta, not 0.0."""
+        aggregator = MagicMock()
+        handler, _, _ = _make_handler(evidence_aggregator=aggregator)
+
+        obs = Observation(
+            entity_type=EntityType.HOST,
+            key_fields={"host": "test.com"},
+            entity_data={"host": "test.com"},
+            confidence=0.8,
+            source_plugin="port_scan",
+        )
+        decision = _make_decision()
+        decision.outcome_confidence_delta = 0.3
+        decision.outcome_new_entities = 2
+
+        handler._record_evidence([[obs]], [decision])
+        aggregator.record_evidence.assert_called_once()
+        call_args = aggregator.record_evidence.call_args
+        assert call_args[0][2] == 0.3  # delta = 0.3 / 1 obs
+
+    def test_distributes_delta_across_observations(self):
+        """Multiple observations split the total confidence delta."""
+        aggregator = MagicMock()
+        handler, _, _ = _make_handler(evidence_aggregator=aggregator)
+
+        obs1 = Observation(
+            entity_type=EntityType.HOST,
+            key_fields={"host": "a.com"},
+            entity_data={"host": "a.com"},
+            confidence=0.8,
+            source_plugin="dns",
+        )
+        obs2 = Observation(
+            entity_type=EntityType.SERVICE,
+            key_fields={"host": "a.com", "port": "80", "protocol": "tcp"},
+            entity_data={"port": 80},
+            confidence=0.8,
+            source_plugin="dns",
+        )
+        decision = _make_decision()
+        decision.outcome_confidence_delta = 0.6
+        decision.outcome_new_entities = 2
+
+        handler._record_evidence([[obs1, obs2]], [decision])
+        assert aggregator.record_evidence.call_count == 2
+        for call in aggregator.record_evidence.call_args_list:
+            assert abs(call[0][2] - 0.3) < 0.001  # 0.6 / 2
+
+
+class TestHypothesisConfidenceUpdate:
+    def test_passes_was_new_from_decision(self):
+        """Hypothesis engine receives was_new from decision, not hardcoded True."""
+        hyp_engine = MagicMock()
+        hyp_engine.update_from_observation.return_value = []
+        handler, _, _ = _make_handler(hypothesis_engine=hyp_engine)
+
+        obs = Observation(
+            entity_type=EntityType.HOST,
+            key_fields={"host": "test.com"},
+            entity_data={"host": "test.com"},
+            confidence=0.8,
+            source_plugin="port_scan",
+        )
+        decision = _make_decision()
+        decision.outcome_confidence_delta = 0.0
+        decision.outcome_new_entities = 0  # nothing new
+
+        handler._update_hypothesis_confidence([[obs]], [decision])
+        call_args = hyp_engine.update_from_observation.call_args
+        assert call_args.kwargs["was_new"] is False
+        assert call_args.kwargs["confidence_delta"] == 0.0
+
+    def test_passes_positive_delta_when_productive(self):
+        """Hypothesis engine receives real delta when decision was productive."""
+        hyp_engine = MagicMock()
+        hyp_engine.update_from_observation.return_value = []
+        handler, _, _ = _make_handler(hypothesis_engine=hyp_engine)
+
+        obs = Observation(
+            entity_type=EntityType.HOST,
+            key_fields={"host": "test.com"},
+            entity_data={"host": "test.com"},
+            confidence=0.8,
+            source_plugin="port_scan",
+        )
+        decision = _make_decision()
+        decision.outcome_confidence_delta = 0.5
+        decision.outcome_new_entities = 3
+
+        handler._update_hypothesis_confidence([[obs]], [decision])
+        call_args = hyp_engine.update_from_observation.call_args
+        assert call_args.kwargs["was_new"] is True
+        assert call_args.kwargs["confidence_delta"] == 0.5
 
 
 class TestBeliefRevision:

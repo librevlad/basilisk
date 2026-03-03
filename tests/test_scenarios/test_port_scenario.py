@@ -69,3 +69,13 @@ class TestPortScenario:
         result = await PortScenario().run(target, actor, [], {})
         assert "scan_ports_count" in result.data
         assert result.data["scan_ports_count"] > 0
+
+    async def test_should_stop_breaks_early(self):
+        import time
+        actor = RecordingActor()
+        actor._deadline = time.monotonic() - 10.0  # already expired
+        actor.set_tcp("stop.local", 80, True)
+        target = LiveTarget.domain("stop.local")
+        result = await PortScenario().run(target, actor, [], {})
+        assert result.ok
+        assert result.data["open_ports"] == []

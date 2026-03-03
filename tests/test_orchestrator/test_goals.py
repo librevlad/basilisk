@@ -97,12 +97,21 @@ class TestGoalEngine:
             _gap(host, "services", priority=5.0),
         ]
         result = engine.prioritize_gaps(gaps)
-        # "services" should be boosted: 5.0 * 2.0 = 10.0 → now first
+        # "services" effectively 5.0 * 2.0 = 10.0 → sorted first
         assert result[0].missing == "services"
-        assert result[0].priority == 10.0
-        # "technology" unchanged
         assert result[1].missing == "technology"
-        assert result[1].priority == 7.0
+
+    def test_prioritize_gaps_does_not_mutate_priority(self):
+        engine = GoalEngine(goals=[Goal(
+            type=GoalType.RECON, name="Recon", priority=2.0,
+            relevant_gap_types=["services"],
+            relevant_risk_domains=["recon"],
+        )])
+        host = _host()
+        gap = _gap(host, "services", priority=5.0)
+        engine.prioritize_gaps([gap])
+        # Original priority must remain unchanged
+        assert gap.priority == 5.0
 
     def test_should_advance_when_no_matching_gaps(self):
         engine = GoalEngine(goals=[Goal(

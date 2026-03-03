@@ -303,6 +303,37 @@ class TestAdapterEnrichment:
         assert len(dns_enriched) == 1
 
 
+class TestAdapterV4Finding:
+    def test_v4_finding_proof_maps_to_evidence(self):
+        """v4 Finding with proof.description is correctly read as evidence."""
+        from basilisk.domain.finding import Finding as V4Finding
+        from basilisk.domain.finding import Proof
+        from basilisk.observations.adapter import _finding_observation
+        v4 = V4Finding.high(
+            "SQL Injection in /api",
+            proof=Proof(description="' OR 1=1-- error-based"),
+            host="example.com",
+        )
+        obs = _finding_observation("example.com", v4, "sqli_scenario")
+        assert obs.entity_data["evidence"] == "' OR 1=1-- error-based"
+        assert obs.evidence == "' OR 1=1-- error-based"
+
+    def test_v4_finding_no_proof_empty_evidence(self):
+        """v4 Finding without proof produces empty evidence."""
+        from basilisk.domain.finding import Finding as V4Finding
+        from basilisk.observations.adapter import _finding_observation
+        v4 = V4Finding.info("Header info", host="example.com")
+        obs = _finding_observation("example.com", v4, "test")
+        assert obs.entity_data["evidence"] == ""
+
+    def test_v3_finding_evidence_still_works(self):
+        """v3 Finding with evidence field still maps correctly."""
+        from basilisk.observations.adapter import _finding_observation
+        v3 = Finding.high("XSS", evidence="<script>alert(1)</script>")
+        obs = _finding_observation("example.com", v3, "xss_check")
+        assert obs.entity_data["evidence"] == "<script>alert(1)</script>"
+
+
 class TestAdapterFindingVerification:
     def test_finding_propagates_confidence_and_verified(self):
         """Finding observation includes finding_confidence, verified, false_positive_risk."""

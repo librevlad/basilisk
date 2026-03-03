@@ -149,10 +149,15 @@ class PostStepHandler:
                 continue
             d = decisions[idx] if idx < len(decisions) else None
             plugin_name = d.chosen_plugin if d else ""
+            # Use decision-level confidence delta distributed across observations
+            obs_count = len(obs_list)
+            per_obs_delta = (
+                d.outcome_confidence_delta / max(obs_count, 1) if d else 0.0
+            )
             for obs in obs_list:
                 entity_id = Entity.make_id(obs.entity_type, **obs.key_fields)
                 self._evidence_aggregator.record_evidence(
-                    entity_id, plugin_name, 0.0,
+                    entity_id, plugin_name, per_obs_delta,
                 )
 
     def _revise_beliefs(self) -> None:
@@ -187,6 +192,12 @@ class PostStepHandler:
                 continue
             d = decisions[idx] if idx < len(decisions) else None
             plugin_name = d.chosen_plugin if d else ""
+            # Use decision-level outcomes instead of hardcoded values
+            obs_count = len(obs_list)
+            per_obs_delta = (
+                d.outcome_confidence_delta / max(obs_count, 1) if d else 0.0
+            )
+            had_new_entities = d.outcome_new_entities > 0 if d else False
             for obs in obs_list:
                 entity_id = Entity.make_id(obs.entity_type, **obs.key_fields)
                 family = get_source_family(plugin_name)
@@ -194,8 +205,8 @@ class PostStepHandler:
                     entity_id=entity_id,
                     source_plugin=plugin_name,
                     source_family=family,
-                    was_new=True,
-                    confidence_delta=0.0,
+                    was_new=had_new_entities,
+                    confidence_delta=per_obs_delta,
                 )
                 for hyp in changed:
                     if hyp.status == "confirmed":
@@ -250,11 +261,11 @@ class PostStepHandler:
         # prevents re-running the same plugin, and the loop terminates naturally with
         # no_candidates when all matching plugins have been executed.
 
-        # Mark service discovery complete
+        # Mark service discovery complete (flag means "attempted", not "found")
+        # The execution fingerprint tracking prevents re-running the same plugin.
         if (
             "Service" in cap.produces_knowledge
             and entity.type == EntityType.HOST
-            and produced
         ):
             entity.data[GAP_SERVICES_CHECKED] = True
 
@@ -262,7 +273,6 @@ class PostStepHandler:
         if (
             "Technology" in cap.produces_knowledge
             and entity.type == EntityType.HOST
-            and produced
         ):
             entity.data[GAP_TECH_CHECKED] = True
 
@@ -270,7 +280,6 @@ class PostStepHandler:
         if (
             "Endpoint" in cap.produces_knowledge
             and entity.type == EntityType.HOST
-            and produced
         ):
             entity.data[GAP_ENDPOINTS_CHECKED] = True
             if cap.plugin_name in (

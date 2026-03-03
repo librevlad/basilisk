@@ -709,7 +709,12 @@ def _finding_observation(host: str, finding: Any, plugin: str) -> Observation:
     host_id = Entity.make_id(EntityType.HOST, host=host)
     title = finding.title if hasattr(finding, "title") else str(finding)
     severity = finding.severity.name.lower() if hasattr(finding, "severity") else "info"
-    evidence = finding.evidence if hasattr(finding, "evidence") else ""
+    # v3 Finding has .evidence (str), v4 Finding has .proof.description
+    evidence = ""
+    if hasattr(finding, "evidence") and finding.evidence:
+        evidence = finding.evidence
+    elif hasattr(finding, "proof") and finding.proof and finding.proof.description:
+        evidence = finding.proof.description
 
     finding_id = Entity.make_id(EntityType.FINDING, host=host, title=title)
 

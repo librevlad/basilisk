@@ -101,3 +101,49 @@ class TestResultAdapter:
         pr = PluginResult.success("scan", "host")
         sr = ResultAdapter.to_scenario_result(pr)
         assert sr.findings == []
+
+    def test_round_trip_preserves_verified(self):
+        v3_orig = V3Finding(
+            severity=Severity.HIGH,
+            title="Verified SQLi",
+            evidence="error-based",
+            verified=True,
+        )
+        v4 = ResultAdapter.to_v4_finding(v3_orig)
+        assert v4.verified is True
+        v3_back = ResultAdapter.to_v3_finding(v4)
+        assert v3_back.verified is True
+
+    def test_round_trip_preserves_false_positive_risk(self):
+        v3_orig = V3Finding(
+            severity=Severity.MEDIUM,
+            title="Possible XSS",
+            evidence="reflected",
+            false_positive_risk="high",
+        )
+        v4 = ResultAdapter.to_v4_finding(v3_orig)
+        assert v4.false_positive_risk == "high"
+        v3_back = ResultAdapter.to_v3_finding(v4)
+        assert v3_back.false_positive_risk == "high"
+
+    def test_v4_finding_defaults_match_v3(self):
+        v4 = V4Finding.info("Default test")
+        v3 = V3Finding.info("Default test")
+        assert v4.verified == v3.verified
+        assert v4.false_positive_risk == v3.false_positive_risk
+
+    def test_to_v4_finding_preserves_host(self):
+        v3 = V3Finding.info("Test finding")
+        v4 = ResultAdapter.to_v4_finding(v3, "test_plugin", host="example.com")
+        assert v4.host == "example.com"
+        assert v4.scenario_name == "test_plugin"
+
+    def test_to_scenario_result_propagates_host(self):
+        pr = PluginResult.success(
+            "ssl_check", "example.com",
+            findings=[V3Finding.info("SSL OK"), V3Finding.low("Weak cipher")],
+        )
+        sr = ResultAdapter.to_scenario_result(pr)
+        for f in sr.findings:
+            assert f.host == "example.com"
+            assert f.scenario_name == "ssl_check"

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
 
 from basilisk.core.executor import PluginContext
@@ -53,5 +54,7 @@ class ContextAdapter:
             pcap=tools.get("pcap"),
             pipeline=tools.get("pipeline", {}),
             state=state if state is not None else {},
+            emit=tools.get("emit", PluginContext.emit),
+            log=tools.get("log", logging.getLogger("basilisk.bridge")),
             _deadline=actor._deadline,
         )

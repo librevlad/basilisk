@@ -278,6 +278,7 @@ def _matches_service_type(service_entity: Entity, svc_type: str) -> bool:
     if svc_type == "http":
         return (
             port in HTTP_PORTS
+            or protocol in ("http", "https")
             or "http" in service_name
             or any(kw in banner for kw in ("http/", "apache", "nginx", "iis"))
         )

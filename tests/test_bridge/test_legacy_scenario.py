@@ -90,6 +90,7 @@ class TestHelpers:
         assert _noise_from_risk("unknown") == 1.0
 
     def test_wrap_multiple_plugins(self):
+        LegacyPluginScenario.clear_cache()
         s1 = LegacyPluginScenario.wrap(FakePlugin)
 
         class FakePlugin2(BasePlugin):
@@ -104,3 +105,19 @@ class TestHelpers:
         s2 = LegacyPluginScenario.wrap(FakePlugin2)
         assert s1.meta.name == "fake_plugin"
         assert s2.meta.name == "fake_plugin2"
+        LegacyPluginScenario.clear_cache()
+
+    def test_wrap_caching(self):
+        LegacyPluginScenario.clear_cache()
+        s1 = LegacyPluginScenario.wrap(FakePlugin)
+        s2 = LegacyPluginScenario.wrap(FakePlugin)
+        assert s1 is s2
+        LegacyPluginScenario.clear_cache()
+
+    def test_wrap_clear_cache(self):
+        LegacyPluginScenario.clear_cache()
+        s1 = LegacyPluginScenario.wrap(FakePlugin)
+        LegacyPluginScenario.clear_cache()
+        s2 = LegacyPluginScenario.wrap(FakePlugin)
+        assert s1 is not s2
+        LegacyPluginScenario.clear_cache()

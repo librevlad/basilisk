@@ -17,6 +17,7 @@ class LegacyPluginScenario(Scenario):
     """
 
     meta: ClassVar[ScenarioMeta]
+    _wrap_cache: ClassVar[dict[str, LegacyPluginScenario]] = {}
 
     def __init__(self, plugin_cls: type) -> None:
         self._plugin_cls = plugin_cls
@@ -25,6 +26,10 @@ class LegacyPluginScenario(Scenario):
     @classmethod
     def wrap(cls, plugin_cls: type) -> LegacyPluginScenario:
         """Wrap a v3 plugin class into a LegacyPluginScenario instance."""
+        cache_key = plugin_cls.meta.name
+        if cache_key in cls._wrap_cache:
+            return cls._wrap_cache[cache_key]
+
         instance = cls.__new__(cls)
         instance._plugin_cls = plugin_cls
         instance._plugin_instance = plugin_cls()
@@ -52,7 +57,13 @@ class LegacyPluginScenario(Scenario):
                 noise_score=cap.get("noise", _noise_from_risk(pm.risk_level)),
             )},
         )
+        cls._wrap_cache[cache_key] = instance
         return instance
+
+    @classmethod
+    def clear_cache(cls) -> None:
+        """Clear the wrap cache (useful for testing)."""
+        cls._wrap_cache = {}
 
     async def run(
         self,

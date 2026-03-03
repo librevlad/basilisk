@@ -91,14 +91,17 @@ class RecordingActor(BaseActor):
     async def dns_resolve(
         self, hostname: str, rdtype: str = "A",
     ) -> list[str]:
+        self._record("DNS", f"{hostname}/{rdtype}")
         return self._dns_responses.get(hostname, [])
 
     async def tcp_connect(
         self, host: str, port: int, timeout: float = 3.0,
     ) -> bool:
+        self._record("TCP_CONNECT", f"{host}:{port}")
         return self._tcp_responses.get((host, port), False)
 
     async def tcp_banner(
         self, host: str, port: int, timeout: float = 3.0,
     ) -> str:
+        self._record("TCP_BANNER", f"{host}:{port}")
         return self._banner_responses.get((host, port), "")

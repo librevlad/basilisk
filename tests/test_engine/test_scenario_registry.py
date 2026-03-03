@@ -115,3 +115,27 @@ class TestScenarioRegistry:
         reg = ScenarioRegistry()
         reg.register(FakeNativeScenario())
         assert len(reg.all_scenarios()) == 1
+
+    def test_discover_caching(self):
+        ScenarioRegistry.clear_cache()
+        try:
+            reg1 = ScenarioRegistry()
+            count1 = reg1.discover()
+            # Second discover on fresh registry should use cache
+            reg2 = ScenarioRegistry()
+            count2 = reg2.discover()
+            assert count1 == count2
+            assert count2 > 100
+        finally:
+            ScenarioRegistry.clear_cache()
+
+    def test_clear_cache(self):
+        ScenarioRegistry.clear_cache()
+        try:
+            reg = ScenarioRegistry()
+            reg.discover()
+            assert ScenarioRegistry._discovery_cache is not None
+            ScenarioRegistry.clear_cache()
+            assert ScenarioRegistry._discovery_cache is None
+        finally:
+            ScenarioRegistry.clear_cache()
