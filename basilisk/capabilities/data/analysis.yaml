@@ -1,0 +1,122 @@
+tech_detect:
+  requires: [Host, "Service:http"]
+  produces: [Technology]
+  cost: 1
+  noise: 1
+  risk_domain: web
+
+waf_detect:
+  requires: [Host, "Service:http"]
+  produces: ["Technology:waf"]
+  cost: 1
+  noise: 2
+
+waf_bypass:
+  requires: ["Technology:waf"]
+  produces: [Finding]
+  cost: 3
+  noise: 3
+  reduces_uncertainty: ["Technology:waf", Finding]
+
+http_headers:
+  requires: [Host, "Service:http"]
+  produces: [Finding]
+  cost: 1
+  noise: 1
+
+csp_analyzer:
+  requires: [Host, "Service:http"]
+  produces: [Finding]
+  cost: 1
+  noise: 1
+
+cms_detect:
+  requires: [Host, "Service:http"]
+  produces: ["Technology:cms"]
+  cost: 1
+  noise: 1
+
+version_detect:
+  requires: [Technology]
+  produces: [Vulnerability]
+  cost: 1
+  noise: 1
+  reduces_uncertainty: [Technology]
+
+takeover_check:
+  requires: [Host]
+  produces: [Vulnerability]
+  cost: 2
+  noise: 1
+
+favicon_hash:
+  requires: [Host, "Service:http"]
+  produces: [Technology]
+  cost: 1
+  noise: 1
+
+js_api_extract:
+  requires: [Host, "Service:http", Endpoint]
+  produces: [Endpoint, Finding]
+  cost: 3
+  noise: 1
+
+js_secret_scan:
+  requires: [Host, "Service:http"]
+  produces: [Finding]
+  cost: 2
+  noise: 1
+
+openapi_parser:
+  requires: [Host, "Service:http"]
+  produces: [Endpoint]
+  cost: 2
+  noise: 1
+
+api_detect:
+  requires: [Host, "Service:http"]
+  produces: [Endpoint]
+  cost: 1
+  noise: 1
+
+security_txt:
+  requires: [Host, "Service:http"]
+  produces: [Finding]
+  cost: 1
+  noise: 1
+
+meta_extract:
+  requires: [Host, "Service:http"]
+  produces: [Finding]
+  cost: 1
+  noise: 1
+
+link_extractor:
+  requires: [Host, "Service:http"]
+  produces: [Endpoint]
+  cost: 2
+  noise: 1
+
+form_analyzer:
+  requires: [Host, "Service:http"]
+  produces: [Endpoint]
+  cost: 2
+  noise: 1
+
+cloud_detect:
+  requires: [Host, "Service:http"]
+  produces: ["Technology:cloud"]
+  cost: 1
+  noise: 1
+
+prometheus_scrape:
+  requires: [Host, "Service:http"]
+  produces: [Finding]
+  cost: 2
+  noise: 2
+
+comment_finder:
+  requires: [Host, "Service:http"]
+  produces: [Finding]
+  cost: 2
+  noise: 1

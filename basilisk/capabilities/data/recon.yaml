@@ -1,0 +1,138 @@
+dns_enum:
+  requires: [Host]
+  produces: ["Host:dns_data"]
+  cost: 1
+  noise: 1
+  risk_domain: recon
+
+dns_zone_transfer:
+  requires: [Host]
+  produces: ["Host:zone_data"]
+  cost: 1
+  noise: 2
+
+whois:
+  requires: [Host]
+  produces: ["Host:whois_data"]
+  cost: 1
+  noise: 1
+
+asn_lookup:
+  requires: [Host]
+  produces: ["Host:asn_data"]
+  cost: 1
+  noise: 1
+
+reverse_ip:
+  requires: [Host]
+  produces: [Host]
+  cost: 1
+  noise: 1
+
+shodan_lookup:
+  requires: [Host]
+  produces: [Service, Technology]
+  cost: 1
+  noise: 1
+
+subdomain_crtsh:
+  requires: [Host]
+  produces: ["Host:subdomain"]
+  cost: 2
+  noise: 1
+
+subdomain_alienvault:
+  requires: [Host]
+  produces: ["Host:subdomain"]
+  cost: 2
+  noise: 1
+
+subdomain_anubis:
+  requires: [Host]
+  produces: ["Host:subdomain"]
+  cost: 2
+  noise: 1
+
+subdomain_bruteforce:
+  requires: [Host]
+  produces: ["Host:subdomain"]
+  cost: 6
+  noise: 3
+
+subdomain_certspotter:
+  requires: [Host]
+  produces: ["Host:subdomain"]
+  cost: 2
+  noise: 1
+
+subdomain_dnsdumpster:
+  requires: [Host]
+  produces: ["Host:subdomain"]
+  cost: 2
+  noise: 1
+
+subdomain_hackertarget:
+  requires: [Host]
+  produces: ["Host:subdomain"]
+  cost: 2
+  noise: 1
+
+subdomain_rapiddns:
+  requires: [Host]
+  produces: ["Host:subdomain"]
+  cost: 2
+  noise: 1
+
+subdomain_virustotal:
+  requires: [Host]
+  produces: ["Host:subdomain"]
+  cost: 2
+  noise: 1
+
+subdomain_wayback:
+  requires: [Host]
+  produces: ["Host:subdomain", Endpoint]
+  cost: 2
+  noise: 1
+
+web_crawler:
+  requires: [Host, "Service:http"]
+  produces: [Endpoint]
+  cost: 3
+  noise: 2
+
+robots_parser:
+  requires: [Host, "Service:http"]
+  produces: [Endpoint]
+  cost: 1
+  noise: 1
+
+sitemap_parser:
+  requires: [Host, "Service:http"]
+  produces: [Endpoint]
+  cost: 1
+  noise: 1
+
+email_harvest:
+  requires: [Host]
+  produces: [Finding]
+  cost: 2
+  noise: 1
+
+github_dorking:
+  requires: [Host]
+  produces: [Finding]
+  cost: 2
+  noise: 1
+
+s3_bucket_finder:
+  requires: [Host]
+  produces: [Finding]
+  cost: 2
+  noise: 2
+
+cloud_bucket_enum:
+  requires: [Host]
+  produces: [Finding]
+  cost: 2
+  noise: 2

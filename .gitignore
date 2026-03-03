@@ -21,6 +21,7 @@ nul
 reports/
 projects/
 data/
+!basilisk/capabilities/data/
 *.db
 *.state.json
 

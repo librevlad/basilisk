@@ -38,6 +38,17 @@ class Entity(BaseModel):
     last_seen: datetime = Field(default_factory=lambda: datetime.now(UTC))
     observation_count: int = 1
 
+    @property
+    def typed_data(self) -> BaseModel:
+        """Parse self.data into the typed model for this entity type."""
+        from basilisk.knowledge.entity_data import ENTITY_DATA_MODELS
+
+        model_cls = ENTITY_DATA_MODELS.get(self.type)
+        if model_cls is None:
+            msg = f"No data model for entity type {self.type}"
+            raise ValueError(msg)
+        return model_cls.model_validate(self.data)
+
     @staticmethod
     def make_id(entity_type: EntityType, **key_fields: str) -> str:
         """Deterministic ID from type + sorted key fields.

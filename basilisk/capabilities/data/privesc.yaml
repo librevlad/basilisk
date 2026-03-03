@@ -1,0 +1,41 @@
+capability_exploit:
+  requires: [Credential]
+  produces: [Finding]
+  cost: 2
+  noise: 2
+
+cron_exploit:
+  requires: [Credential]
+  produces: [Finding]
+  cost: 3
+  noise: 2
+
+kernel_exploit:
+  requires: [Credential]
+  produces: [Finding]
+  cost: 2
+  noise: 2
+
+sudo_exploit:
+  requires: [Credential]
+  produces: [Finding]
+  cost: 3
+  noise: 2
+
+suid_exploit:
+  requires: [Credential]
+  produces: [Finding]
+  cost: 3
+  noise: 2
+
+win_service_exploit:
+  requires: [Credential]
+  produces: [Finding]
+  cost: 3
+  noise: 2
+
+win_token_exploit:
+  requires: [Credential]
+  produces: [Finding]
+  cost: 2
+  noise: 2

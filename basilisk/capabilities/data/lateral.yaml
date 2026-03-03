@@ -1,0 +1,72 @@
+ad_acl_abuse:
+  requires: ["Service:ldap"]
+  produces: [Finding]
+  cost: 3
+  noise: 3
+
+ad_cert_attack:
+  requires: ["Service:ldap"]
+  produces: [Credential]
+  cost: 4
+  noise: 5
+
+asrep_roast:
+  requires: ["Service:ldap"]
+  produces: [Credential]
+  cost: 4
+  noise: 5
+
+bloodhound_collect:
+  requires: ["Service:ldap"]
+  produces: [Finding]
+  cost: 6
+  noise: 6
+
+constrained_deleg:
+  requires: ["Service:ldap"]
+  produces: [Finding]
+  cost: 4
+  noise: 5
+
+dcsync:
+  requires: [Credential, "Service:ldap"]
+  produces: [Credential]
+  cost: 6
+  noise: 9
+
+gpp_decrypt:
+  requires: ["Service:smb"]
+  produces: [Credential]
+  cost: 3
+  noise: 2
+
+kerberoast:
+  requires: ["Service:ldap"]
+  produces: [Credential]
+  cost: 4
+  noise: 5
+  risk_domain: auth
+
+ntlm_relay:
+  requires: ["Service:smb"]
+  produces: [Finding]
+  cost: 5
+  noise: 6
+
+pass_the_hash:
+  requires: [Credential]
+  produces: [Finding]
+  cost: 5
+  noise: 6
+
+pass_the_ticket:
+  requires: [Credential]
+  produces: [Finding]
+  cost: 5
+  noise: 6
+
+secrets_dump:
+  requires: [Credential, "Service:smb"]
+  produces: [Credential]
+  cost: 6
+  noise: 9

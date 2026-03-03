@@ -1,0 +1,87 @@
+# Crypto
+aes_attack:
+  requires: [Credential]
+  produces: [Finding]
+  cost: 6
+  noise: 1
+
+classical_cipher:
+  requires: [Credential]
+  produces: [Finding]
+  cost: 3
+  noise: 1
+
+custom_crypto:
+  requires: [Credential]
+  produces: [Finding]
+  cost: 2
+  noise: 1
+
+hash_crack:
+  requires: [Credential]
+  produces: [Credential]
+  cost: 6
+  noise: 1
+  risk_domain: crypto
+
+hash_extension:
+  requires: [Credential]
+  produces: [Finding]
+  cost: 2
+  noise: 1
+
+jwt_forge:
+  requires: ["Service:http"]
+  produces: [Finding]
+  cost: 3
+  noise: 1
+
+prng_crack:
+  requires: ["Service:http"]
+  produces: [Finding]
+  cost: 3
+  noise: 1
+
+rsa_attack:
+  requires: [Credential]
+  produces: [Finding]
+  cost: 6
+  noise: 1
+
+# Forensics
+disk_forensics:
+  requires: [Credential]
+  produces: [Finding]
+  cost: 6
+  noise: 1
+
+file_forensics:
+  requires: [Credential]
+  produces: [Finding]
+  cost: 3
+  noise: 1
+
+log_analyze:
+  requires: [Credential]
+  produces: [Finding]
+  cost: 3
+  noise: 1
+  risk_domain: forensics
+
+memory_analyze:
+  requires: [Credential]
+  produces: [Finding, Credential]
+  cost: 8
+  noise: 1
+
+pcap_analyze:
+  requires: [Credential]
+  produces: [Finding, Credential]
+  cost: 6
+  noise: 1
+
+steganography:
+  requires: [Credential]
+  produces: [Finding]
+  cost: 3
+  noise: 1

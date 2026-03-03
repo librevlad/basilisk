@@ -405,7 +405,7 @@ class TestMarkGapSatisfied:
             reason="test",
         )
         graph.add_entity(host_entity)
-        loop._mark_gap_satisfied(sc)
+        loop._post_step._mark_gap_satisfied(sc)
 
         # host_vuln_tested should NOT be in host data
         assert "host_vuln_tested" not in host_entity.data
@@ -482,7 +482,7 @@ class TestVerificationIntegration:
         sc = ScoredCapability(
             capability=cap, target_entity=finding_entity, score=5.0, reason="verify",
         )
-        loop._evaluate_verifications([sc])
+        loop._post_step._evaluate_verifications([sc])
 
         mock_confirmer.evaluate_result.assert_called_once_with(
             finding_entity, loop.executor.ctx.pipeline["xss_verify:v.com"],
@@ -499,7 +499,7 @@ class TestVerificationIntegration:
             capability=cap, target_entity=finding_entity, score=5.0, reason="test",
         )
         # Should not raise
-        loop._evaluate_verifications([sc])
+        loop._post_step._evaluate_verifications([sc])
 
     def test_verification_skipped_for_non_finding(self):
         """Caps targeting non-FINDING entities are skipped."""
@@ -517,7 +517,7 @@ class TestVerificationIntegration:
         sc = ScoredCapability(
             capability=cap, target_entity=host_entity, score=5.0, reason="test",
         )
-        loop._evaluate_verifications([sc])
+        loop._post_step._evaluate_verifications([sc])
         mock_confirmer.evaluate_result.assert_not_called()
 
     def test_verification_skipped_without_reduces_uncertainty(self):
@@ -539,7 +539,7 @@ class TestVerificationIntegration:
             capability=non_verify_cap, target_entity=finding_entity,
             score=5.0, reason="test",
         )
-        loop._evaluate_verifications([sc])
+        loop._post_step._evaluate_verifications([sc])
         mock_confirmer.evaluate_result.assert_not_called()
 
 
@@ -612,7 +612,7 @@ class TestReValidatorIntegration:
         sc = ScoredCapability(
             capability=cap, target_entity=finding_entity, score=5.0, reason="verify",
         )
-        loop._evaluate_verifications([sc])
+        loop._post_step._evaluate_verifications([sc])
 
         mock_revalidator.plan_revalidation.assert_called_once_with(finding_entity)
         assert finding_entity.data["needs_revalidation"] is True
@@ -643,7 +643,7 @@ class TestReValidatorIntegration:
         sc = ScoredCapability(
             capability=cap, target_entity=finding_entity, score=5.0, reason="verify",
         )
-        loop._evaluate_verifications([sc])
+        loop._post_step._evaluate_verifications([sc])
 
         mock_revalidator.plan_revalidation.assert_not_called()
         assert "needs_revalidation" not in finding_entity.data
@@ -671,6 +671,6 @@ class TestReValidatorIntegration:
         sc = ScoredCapability(
             capability=cap, target_entity=finding_entity, score=5.0, reason="verify",
         )
-        loop._evaluate_verifications([sc])
+        loop._post_step._evaluate_verifications([sc])
 
         assert "needs_revalidation" not in finding_entity.data

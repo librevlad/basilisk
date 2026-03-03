@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from basilisk.capabilities.capability import Capability
 from basilisk.knowledge.entities import Entity, EntityType
+from basilisk.knowledge.fingerprint import make_execution_fingerprint
 from basilisk.knowledge.graph import KnowledgeGraph
 
 if TYPE_CHECKING:
@@ -100,11 +101,7 @@ class Scorer:
         # Repetition penalty — prefer History when available
         # Use host-level fingerprint for Endpoint entities (pentesting plugins
         # scan all endpoints on a host in one run)
-        if entity.type == EntityType.ENDPOINT:
-            host = entity.data.get("host", entity.id)
-            fingerprint = f"{cap.plugin_name}:{host}"
-        else:
-            fingerprint = f"{cap.plugin_name}:{entity.id}"
+        fingerprint = make_execution_fingerprint(cap.plugin_name, entity)
         if self._history:
             repetition_penalty = self._history.repetition_penalty(
                 cap.plugin_name, entity.id,

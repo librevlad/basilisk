@@ -1,0 +1,102 @@
+port_scan:
+  requires: [Host]
+  produces: [Service]
+  cost: 3
+  noise: 4
+  risk_domain: network
+
+service_detect:
+  requires: [Service]
+  produces: [Technology]
+  cost: 2
+  noise: 2
+
+ssl_check:
+  requires: ["Service:https"]
+  produces: ["Technology:ssl"]
+  cost: 2
+  noise: 1
+
+ssl_compliance:
+  requires: ["Service:https"]
+  produces: [Finding]
+  cost: 2
+  noise: 1
+
+ssl_protocols:
+  requires: ["Service:https"]
+  produces: [Finding]
+  cost: 2
+  noise: 1
+
+ssl_vulns:
+  requires: ["Service:https"]
+  produces: [Vulnerability]
+  cost: 2
+  noise: 1
+
+ssl_cert_chain:
+  requires: ["Service:https"]
+  produces: [Finding]
+  cost: 2
+  noise: 1
+
+tls_cipher_scan:
+  requires: ["Service:https"]
+  produces: [Finding]
+  cost: 2
+  noise: 1
+
+cors_scan:
+  requires: [Host, "Service:http"]
+  produces: [Finding]
+  cost: 2
+  noise: 2
+
+graphql_detect:
+  requires: [Host, "Service:http"]
+  produces: ["Endpoint:graphql"]
+  cost: 1
+  noise: 2
+
+websocket_detect:
+  requires: [Host, "Service:http"]
+  produces: ["Endpoint:websocket"]
+  cost: 1
+  noise: 1
+
+cdn_detect:
+  requires: [Host]
+  produces: ["Technology:cdn"]
+  cost: 1
+  noise: 1
+
+cookie_scan:
+  requires: [Host, "Service:http"]
+  produces: [Finding]
+  cost: 1
+  noise: 1
+
+dnssec_check:
+  requires: [Host]
+  produces: [Finding]
+  cost: 1
+  noise: 1
+
+http_methods_scan:
+  requires: [Host, "Service:http"]
+  produces: [Finding]
+  cost: 2
+  noise: 2
+
+ipv6_scan:
+  requires: [Host]
+  produces: [Finding]
+  cost: 1
+  noise: 1
+
+redirect_chain:
+  requires: [Host, "Service:http"]
+  produces: [Finding]
+  cost: 1
+  noise: 1
