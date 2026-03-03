@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import html
 import json
+import re
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -177,7 +178,11 @@ def render_html(
         _training_html(data),
         "\n",
         _footer_html(data),
-        "\n</main>\n",
+        '\n<button class="scroll-top"'
+        ' aria-label="Scroll to top"'
+        " onclick=\"window.scrollTo({top:0,behavior:'smooth'})\""
+        ">&uarr;</button>\n"
+        "</main>\n",
         _JS,
         "\n</body>\n</html>",
     ]
@@ -275,6 +280,10 @@ _CSS = (  # noqa: E501
     "}\n"
     "@keyframes scan-line {\n"
     "  from { top: -4px; } to { top: 100%; }\n"
+    "}\n"
+    "@keyframes bar-grow {\n"
+    "  from { transform: scaleY(0); transform-origin: bottom; }\n"
+    "  to { transform: scaleY(1); transform-origin: bottom; }\n"
     "}\n"
     "@media (prefers-reduced-motion: reduce) {\n"
     "  *, *::before, *::after {\n"
@@ -472,6 +481,10 @@ _CSS = (  # noqa: E501
     " gap: 1px;\n"
     "}\n"
     ".severity-bar .seg { transition: width 0.5s; }\n"
+    ".vuln-sev-bar { margin-bottom: var(--sp-3); }\n"
+    ".conf-gauge {"
+    " vertical-align: middle; margin-right: 4px;"
+    " display: inline-block; }\n"
     "\n"
     ".kill-chain {\n"
     "  display: flex; gap: var(--sp-2);"
@@ -515,9 +528,15 @@ _CSS = (  # noqa: E501
     " var(--neon-green), var(--neon-cyan));\n"
     "  border-radius: 2px 2px 0 0;"
     " min-width: 4px; max-width: 20px;\n"
-    "  transition: height 0.3s;"
-    " position: relative; opacity: 0.8;\n"
+    "  position: relative; opacity: 0.8;\n"
+    "  animation: bar-grow 0.6s ease-out both;\n"
     "}\n"
+    ".growth-bar:nth-child(2) { animation-delay: 0.03s; }\n"
+    ".growth-bar:nth-child(3) { animation-delay: 0.06s; }\n"
+    ".growth-bar:nth-child(4) { animation-delay: 0.09s; }\n"
+    ".growth-bar:nth-child(5) { animation-delay: 0.12s; }\n"
+    ".growth-bar:nth-child(6) { animation-delay: 0.15s; }\n"
+    ".growth-bar:nth-child(n+7) { animation-delay: 0.18s; }\n"
     ".growth-bar:hover { opacity: 1; }\n"
     ".growth-bar .tooltip {\n"
     "  display: none; position: absolute;"
@@ -534,6 +553,10 @@ _CSS = (  # noqa: E501
     "  display: flex; gap: var(--sp-2);"
     " align-items: center; flex-wrap: wrap;\n"
     "  margin-bottom: var(--sp-3);\n"
+    "  position: sticky; top: 0; z-index: 50;\n"
+    "  background: var(--surface-1);\n"
+    "  padding: var(--sp-2) 0;\n"
+    "  border-bottom: 1px solid transparent;\n"
     "}\n"
     ".filter-chip {\n"
     "  padding: 3px 10px;"
@@ -563,6 +586,20 @@ _CSS = (  # noqa: E501
     "  background: var(--info);"
     " border-color: var(--info); }\n"
     "button.filter-chip { font-family: inherit; }\n"
+    ".filter-chip:hover { transform: translateY(-1px); }\n"
+    ".filter-chip:active { transform: scale(0.95); }\n"
+    ".findings-stats {\n"
+    "  font-size: var(--text-xs); color: var(--fg-dim);\n"
+    "  white-space: nowrap;\n"
+    "}\n"
+    ".sort-select {\n"
+    "  padding: 3px 8px; background: var(--surface-2);\n"
+    "  border: 1px solid var(--border);\n"
+    "  border-radius: var(--radius-sm); color: var(--fg);\n"
+    "  font-size: var(--text-xs); font-family: inherit;\n"
+    "  cursor: pointer; outline: none;\n"
+    "}\n"
+    ".sort-select:focus { border-color: var(--neon-green); }\n"
     "\n"
     ".search-box {\n"
     "  padding: 4px 10px;"
@@ -634,6 +671,8 @@ _CSS = (  # noqa: E501
     "  max-height: 200px; overflow-y: auto;"
     " color: var(--neon-green);\n"
     "}\n"
+    ".ev-status { color: var(--neon-cyan); font-weight: 700; }\n"
+    ".ev-header-name { color: var(--neon-purple); }\n"
     ".remediation-block {\n"
     "  background: rgba(0,229,255,0.06); padding: var(--sp-3);"
     " border-radius: var(--radius-sm);\n"
@@ -693,8 +732,16 @@ _CSS = (  # noqa: E501
     "}\n"
     ".timeline-item.productive::before {"
     " background: var(--neon-green); }\n"
+    ".timeline-item.productive {\n"
+    "  border-left: 3px solid var(--neon-green);\n"
+    "  background: rgba(0,255,106,0.03);\n"
+    "}\n"
     ".timeline-item.unproductive::before {"
     " background: var(--fg-muted); }\n"
+    ".timeline-item.unproductive {\n"
+    "  border-left: 3px solid var(--fg-muted);\n"
+    "  opacity: 0.75;\n"
+    "}\n"
     ".tl-header {\n"
     "  display: flex; gap: var(--sp-2);"
     " align-items: center; flex-wrap: wrap;\n"
@@ -838,6 +885,26 @@ _CSS = (  # noqa: E501
     ".nm-more {\n"
     "  color: var(--fg-dim); font-size: var(--text-xs);"
     " margin-top: var(--sp-1);\n"
+    "}\n"
+    ".nm-empty-section {\n"
+    "  margin-top: var(--sp-4);\n"
+    "}\n"
+    ".nm-empty-section summary {\n"
+    "  cursor: pointer; color: var(--fg-dim);\n"
+    "  font-size: var(--text-sm); font-weight: 600;\n"
+    "}\n"
+    ".nm-empty-grid {\n"
+    "  display: grid;"
+    " grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));\n"
+    "  gap: var(--sp-1); padding: var(--sp-2) 0;\n"
+    "}\n"
+    ".nm-empty-chip {\n"
+    "  padding: 2px 8px; background: var(--surface-2);\n"
+    "  border: 1px solid var(--border);\n"
+    "  border-radius: var(--radius-sm);\n"
+    "  font-size: var(--text-xs); color: var(--fg-dim);\n"
+    "  overflow: hidden; text-overflow: ellipsis;\n"
+    "  white-space: nowrap;\n"
     "}\n"
     "\n"
     ".nm-stats {\n"
@@ -1185,11 +1252,36 @@ _CSS = (  # noqa: E501
     " color: var(--critical); }\n"
     "\n"
     ".footer {\n"
-    "  text-align: center; padding: var(--sp-4);"
-    " color: var(--fg-muted);\n"
-    "  font-size: var(--text-xs);"
-    " border-top: 1px solid var(--border);\n"
-    "  margin-top: var(--sp-6);\n"
+    "  display: flex; justify-content: space-between;"
+    " align-items: center;\n"
+    "  flex-wrap: wrap; gap: var(--sp-3);"
+    " padding: var(--sp-4);\n"
+    "  color: var(--fg-muted);"
+    " font-size: var(--text-xs);\n"
+    "  border-top: 1px solid var(--border);"
+    " margin-top: var(--sp-6);\n"
+    "}\n"
+    ".footer-stats {"
+    " display: flex; gap: var(--sp-3); align-items: center; }\n"
+    ".footer-meta {"
+    " display: flex; gap: var(--sp-2); align-items: center; }\n"
+    ".scroll-top {\n"
+    "  position: fixed; bottom: 2rem; right: 2rem;\n"
+    "  width: 40px; height: 40px; border-radius: 50%;\n"
+    "  background: var(--neon-green); color: var(--bg);\n"
+    "  border: none; cursor: pointer; font-size: 1.2rem;\n"
+    "  font-family: inherit; font-weight: 700;\n"
+    "  opacity: 0; visibility: hidden;\n"
+    "  transition: opacity 0.25s, visibility 0.25s,"
+    " box-shadow 0.2s;\n"
+    "  z-index: 90;\n"
+    "  box-shadow: 0 2px 8px rgba(0,255,106,0.3);\n"
+    "}\n"
+    ".scroll-top.show {\n"
+    "  opacity: 1; visibility: visible;\n"
+    "}\n"
+    ".scroll-top:hover {\n"
+    "  box-shadow: 0 0 20px rgba(0,255,106,0.5);\n"
     "}\n"
     "\n"
     "/* Hover states */\n"
@@ -1203,17 +1295,26 @@ _CSS = (  # noqa: E501
     "  border-color: var(--border-glow);\n"
     "  background: var(--surface-3);\n"
     "}\n"
-    ".surface-stat { transition: box-shadow 0.2s; }\n"
-    ".surface-stat:hover {\n"
-    "  box-shadow: 0 0 12px rgba(0,255,106,0.1);\n"
+    ".metric-card, .surface-stat, .reasoning-stat, .kc-phase {\n"
+    "  transition: transform 0.2s ease,"
+    " box-shadow 0.2s ease, background 0.2s ease;\n"
     "}\n"
-    ".kc-phase { transition: transform 0.15s, box-shadow 0.15s; }\n"
-    ".kc-phase:hover {\n"
-    "  transform: translateY(-1px);\n"
-    "  box-shadow: var(--shadow-md);\n"
+    ".metric-card:hover, .surface-stat:hover,\n"
+    ".reasoning-stat:hover, .kc-phase:hover {\n"
+    "  transform: translateY(-2px);\n"
+    "  box-shadow: 0 4px 16px rgba(0,255,106,0.1);\n"
     "}\n"
-    ".metric-card { transition: background 0.15s; }\n"
     ".metric-card:hover { background: var(--surface-3); }\n"
+    ".main::after {\n"
+    "  content: ''; position: fixed;"
+    " left: var(--sidebar-w); right: 0;\n"
+    "  height: 4px; z-index: 9998;"
+    " pointer-events: none;\n"
+    "  background: linear-gradient(180deg,"
+    " rgba(0,255,106,0.03) 0%,"
+    " rgba(0,229,255,0.02) 50%, transparent 100%);\n"
+    "  animation: scan-line 8s linear infinite;\n"
+    "}\n"
     ".perf-table tbody tr { transition: background 0.15s; }\n"
     "\n"
     "/* Evidence expand/collapse */\n"
@@ -1288,6 +1389,236 @@ _CSS = (  # noqa: E501
     "  color: var(--fg-dim); font-size: var(--text-xs);\n"
     "  margin-top: var(--sp-1);\n"
     "}\n"
+    ".re-hypothesis {\n"
+    "  color: var(--fg); font-size: var(--text-sm);\n"
+    "  margin-top: var(--sp-1); font-style: italic;\n"
+    "}\n"
+    "\n"
+    "/* Gap trajectory in KG Growth */\n"
+    ".growth-gap-line {\n"
+    "  margin-top: var(--sp-2); position: relative;\n"
+    "  height: 40px;\n"
+    "}\n"
+    ".gap-label {\n"
+    "  font-size: var(--text-xs); color: var(--neon-orange);\n"
+    "  margin-bottom: 2px;\n"
+    "}\n"
+    ".growth-summary {\n"
+    "  font-size: var(--text-xs); color: var(--fg-dim);\n"
+    "  margin-top: var(--sp-2);\n"
+    "}\n"
+    ".growth-summary span { color: var(--neon-cyan); font-weight: 600; }\n"
+    "\n"
+    "/* Findings-by-host bars */\n"
+    ".findings-host-bar {\n"
+    "  display: flex; flex-direction: column; gap: 3px;\n"
+    "  margin-bottom: var(--sp-3); padding: var(--sp-2);\n"
+    "  background: var(--surface-2); border-radius: var(--radius);\n"
+    "}\n"
+    ".findings-host-bar .fhb-title {\n"
+    "  font-size: var(--text-xs); color: var(--fg-dim);\n"
+    "  text-transform: uppercase; margin-bottom: var(--sp-1);\n"
+    "}\n"
+    ".fhb-item {\n"
+    "  display: flex; align-items: center; gap: var(--sp-2);\n"
+    "  cursor: pointer; font-size: var(--text-xs);\n"
+    "}\n"
+    ".fhb-item:hover .fhb-bar { opacity: 1; }\n"
+    ".fhb-label {\n"
+    "  min-width: 140px; max-width: 180px; overflow: hidden;\n"
+    "  text-overflow: ellipsis; white-space: nowrap;\n"
+    "  color: var(--fg-dim);\n"
+    "}\n"
+    ".fhb-bar {\n"
+    "  height: 10px; border-radius: 2px; opacity: 0.8;\n"
+    "  background: linear-gradient(90deg,"
+    " var(--neon-green), var(--neon-cyan));\n"
+    "  transition: opacity 0.15s;\n"
+    "}\n"
+    ".fhb-count {\n"
+    "  color: var(--neon-green); font-weight: 600;\n"
+    "  min-width: 24px;\n"
+    "}\n"
+    "\n"
+    "/* Severity discovery timeline */\n"
+    ".sev-timeline {\n"
+    "  position: relative; height: 34px;\n"
+    "  margin-bottom: var(--sp-3); padding: var(--sp-1) 0;\n"
+    "  background: var(--surface-2); border-radius: var(--radius);\n"
+    "  overflow: hidden;\n"
+    "}\n"
+    ".sev-timeline .stl-label {\n"
+    "  position: absolute; top: 2px; left: var(--sp-2);\n"
+    "  font-size: var(--text-xs); color: var(--fg-dim);\n"
+    "}\n"
+    ".sev-dot {\n"
+    "  position: absolute; width: 8px; height: 8px;\n"
+    "  border-radius: 50%; bottom: 4px;\n"
+    "  opacity: 0.85;\n"
+    "}\n"
+    ".sev-dot:hover { opacity: 1; transform: scale(1.4); }\n"
+    "\n"
+    "/* Decision stats banner reuses metrics-grid */\n"
+    ".decision-stats .metric-value.green { color: var(--neon-green); }\n"
+    ".decision-stats .metric-value.red { color: var(--neon-red); }\n"
+    ".decision-stats .metric-value.orange { color: var(--neon-orange); }\n"
+    "\n"
+    "/* Plugin efficiency summary */\n"
+    ".perf-summary td {\n"
+    "  font-weight: 700; border-top: 2px solid var(--border);\n"
+    "  color: var(--neon-cyan);\n"
+    "}\n"
+    ".perf-top { color: var(--neon-green) !important; font-weight: 700; }\n"
+    "\n"
+    "/* Plugin severity badges in table */\n"
+    ".plugin-sev-cell { white-space: nowrap; }\n"
+    ".psev-dot {\n"
+    "  display: inline-block; padding: 1px 5px;\n"
+    "  border-radius: 3px; font-size: var(--text-xs);\n"
+    "  font-weight: 600; margin-right: 2px;\n"
+    "}\n"
+    ".psev-dot.psev-CRITICAL { background: var(--critical-bg); color: var(--critical); }\n"
+    ".psev-dot.psev-HIGH { background: var(--high-bg); color: var(--high); }\n"
+    ".psev-dot.psev-MEDIUM { background: var(--medium-bg); color: var(--medium); }\n"
+    ".psev-dot.psev-LOW { background: var(--low-bg); color: var(--low); }\n"
+    ".psev-dot.psev-INFO { background: var(--info-bg); color: var(--info); }\n"
+    "\n"
+    "/* Execution cost distribution bar */\n"
+    ".cost-dist {\n"
+    "  margin-top: var(--sp-3); padding: var(--sp-3);\n"
+    "  background: var(--surface-2); border-radius: var(--radius);\n"
+    "}\n"
+    ".cost-dist-title {\n"
+    "  font-size: var(--text-xs); color: var(--fg-dim);\n"
+    "  text-transform: uppercase; margin-bottom: var(--sp-2);\n"
+    "}\n"
+    ".cost-dist-bar {\n"
+    "  display: flex; height: 20px; border-radius: 3px;\n"
+    "  overflow: hidden; margin-bottom: var(--sp-2);\n"
+    "}\n"
+    ".cost-seg { height: 100%; transition: opacity 0.15s; }\n"
+    ".cost-seg:hover { opacity: 0.85; }\n"
+    ".cost-dist-legend {\n"
+    "  display: flex; flex-wrap: wrap; gap: var(--sp-2);\n"
+    "  font-size: var(--text-xs);\n"
+    "}\n"
+    ".cost-legend-item { display: flex; align-items: center; gap: 4px; }\n"
+    ".cost-swatch {\n"
+    "  width: 10px; height: 10px; border-radius: 2px;\n"
+    "  display: inline-block;\n"
+    "}\n"
+    ".cost-outlier {\n"
+    "  margin-top: var(--sp-2); padding: var(--sp-1) var(--sp-2);\n"
+    "  background: var(--high-bg); border-left: 3px solid var(--high);\n"
+    "  font-size: var(--text-xs); color: var(--high);\n"
+    "}\n"
+    "\n"
+    "/* Kill chain plugin drill-down */\n"
+    ".kc-plugins {\n"
+    "  padding: var(--sp-2); display: flex;\n"
+    "  flex-direction: column; gap: 2px;\n"
+    "  font-size: var(--text-xs);\n"
+    "}\n"
+    ".kc-plugin { padding: 1px 0; }\n"
+    ".kc-plugin.executed { color: var(--neon-green); }\n"
+    ".kc-plugin.executed::before { content: '\\2713 '; }\n"
+    ".kc-plugin.skipped { color: var(--fg-muted); }\n"
+    ".kc-plugin.skipped::before { content: '\\2717 '; }\n"
+    "\n"
+    "/* Gap type distribution bars */\n"
+    ".gap-dist {\n"
+    "  margin-bottom: var(--sp-3); padding: var(--sp-2) var(--sp-3);\n"
+    "  background: var(--surface-2); border-radius: var(--radius);\n"
+    "}\n"
+    ".gap-dist-title {\n"
+    "  font-size: var(--text-xs); color: var(--fg-dim);\n"
+    "  text-transform: uppercase; margin-bottom: var(--sp-2);\n"
+    "}\n"
+    ".gap-bar-row {\n"
+    "  display: flex; align-items: center; gap: var(--sp-2);\n"
+    "  margin-bottom: 3px; font-size: var(--text-xs);\n"
+    "}\n"
+    ".gap-bar-label {\n"
+    "  min-width: 130px; color: var(--fg-dim);\n"
+    "  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;\n"
+    "}\n"
+    ".gap-bar-fill {\n"
+    "  height: 10px; border-radius: 2px;\n"
+    "  background: linear-gradient(90deg,"
+    " var(--neon-purple), var(--neon-blue));\n"
+    "  opacity: 0.8; transition: opacity 0.15s;\n"
+    "}\n"
+    ".gap-bar-fill:hover { opacity: 1; }\n"
+    ".gap-bar-count { color: var(--neon-purple); font-weight: 600; }\n"
+    "\n"
+    "/* Hypothesis category groups */\n"
+    ".hyp-categories {\n"
+    "  margin-top: var(--sp-3); display: flex;\n"
+    "  flex-direction: column; gap: var(--sp-3);\n"
+    "}\n"
+    ".hyp-cat-group {\n"
+    "  background: var(--surface-2); border-radius: var(--radius);\n"
+    "  padding: var(--sp-2) var(--sp-3);\n"
+    "}\n"
+    ".hyp-cat-header {\n"
+    "  display: flex; align-items: center; gap: var(--sp-2);\n"
+    "  margin-bottom: var(--sp-2);\n"
+    "}\n"
+    ".hyp-cat-name {\n"
+    "  font-weight: 600; font-size: var(--text-sm);\n"
+    "  color: var(--neon-cyan);\n"
+    "}\n"
+    ".hyp-cat-count {\n"
+    "  font-size: var(--text-xs); color: var(--fg-dim);\n"
+    "  background: var(--bg3); padding: 1px 6px;\n"
+    "  border-radius: 8px;\n"
+    "}\n"
+    ".hyp-cat-item {\n"
+    "  font-size: var(--text-sm); padding: 2px 0;\n"
+    "  color: var(--fg-dim);\n"
+    "}\n"
+    ".hyp-cat-item.confirmed { color: var(--neon-green); }\n"
+    ".hyp-cat-item.rejected {\n"
+    "  color: var(--neon-red); text-decoration: line-through;\n"
+    "}\n"
+    "\n"
+    "/* Entity gain velocity SVG */\n"
+    ".gain-velocity {\n"
+    "  margin-top: var(--sp-2); position: relative;\n"
+    "  height: 50px;\n"
+    "}\n"
+    ".gain-label {\n"
+    "  font-size: var(--text-xs); color: var(--neon-cyan);\n"
+    "  margin-bottom: 2px;\n"
+    "}\n"
+    "\n"
+    "/* Cumulative findings curve */\n"
+    ".cum-findings {\n"
+    "  position: relative; margin-bottom: var(--sp-3);\n"
+    "  padding: var(--sp-2); background: var(--surface-2);\n"
+    "  border-radius: var(--radius); height: 70px;\n"
+    "}\n"
+    ".cum-label {\n"
+    "  font-size: var(--text-xs); color: var(--fg-dim);\n"
+    "  position: absolute; top: 4px; left: var(--sp-2);\n"
+    "}\n"
+    "\n"
+    "/* Subdomain discovery summary */\n"
+    ".subdomain-summary {\n"
+    "  display: flex; gap: var(--sp-4); flex-wrap: wrap;\n"
+    "  margin-bottom: var(--sp-3); padding: var(--sp-2) var(--sp-3);\n"
+    "  background: var(--surface-2); border-radius: var(--radius);\n"
+    "  font-size: var(--text-sm);\n"
+    "}\n"
+    ".sub-stat { color: var(--fg-dim); }\n"
+    ".sub-stat span { color: var(--neon-cyan); font-weight: 600; }\n"
+    ".sub-explored { color: var(--neon-green); }\n"
+    "\n"
+    "/* Risk score color in command center */\n"
+    ".risk-low { color: var(--neon-green); }\n"
+    ".risk-medium { color: var(--neon-yellow); }\n"
+    ".risk-high { color: var(--neon-orange); }\n"
+    ".risk-critical { color: var(--neon-red); }\n"
     "\n"
     "/* Decision timeline extras */\n"
     ".tl-duration { color: var(--fg-dim); font-size: var(--text-xs); }\n"
@@ -1324,6 +1655,21 @@ _CSS = (  # noqa: E501
     ".entity-type { text-transform: capitalize; }\n"
     ".entity-count { color: var(--fg); font-weight: 600; }\n"
     "\n"
+    ".training-table tbody tr:hover td {"
+    " background: rgba(0,255,106,0.03); }\n"
+    ".training-row-yes {"
+    " border-left: 3px solid var(--neon-green); }\n"
+    ".training-row-no {"
+    " border-left: 3px solid var(--critical); }\n"
+    ".step-badge {\n"
+    "  display: inline-block;"
+    " color: var(--neon-cyan);"
+    " background: var(--surface-3);\n"
+    "  padding: 1px 6px;"
+    " border-radius: var(--radius-sm);"
+    " font-size: var(--text-xs);\n"
+    "}\n"
+    "\n"
     "@media (max-width: 800px) {\n"
     "  .sidebar { display: none; }\n"
     "  .main { margin-left: 0; }\n"
@@ -1348,7 +1694,8 @@ _CSS = (  # noqa: E501
     "@media print {\n"
     "  .sidebar { display: none; }\n"
     "  .main { margin-left: 0; }\n"
-    "  body::before, body::after { display: none; }\n"
+    "  body::before, body::after,"
+    " .main::after { display: none !important; }\n"
     "  body { background: #fff; color: #1a1e2e; }\n"
     "  .section {\n"
     "    border: 1px solid #ddd;"
@@ -1359,7 +1706,7 @@ _CSS = (  # noqa: E501
     " .nm-view-btn, .nm-kb-hint,\n"
     "  .evidence-toggle, .evidence-copy, .export-json-btn,"
     " .host-copy, .skip-link,\n"
-    "  .decisions-show-more {"
+    "  .decisions-show-more, .scroll-top {"
     " display: none !important; }\n"
     "  .section, .finding-card, .timeline-item {"
     " page-break-inside: avoid; }\n"
@@ -1509,11 +1856,21 @@ def _command_center_html(data: dict) -> str:
     total_rel = summary.get("total_relations", 0)
     total_findings = summary.get("total_findings", 0)
     total_gaps = summary.get("total_gaps", 0)
+    risk_score = summary.get("risk_score", 0)
     duration = data.get("duration_seconds", 0)
 
     mins, secs = divmod(int(duration), 60)
     elapsed_str = str(mins) + "m " + str(secs) + "s"
     progress_str = _fmt(progress_pct, ".1f")
+    risk_str = _fmt(risk_score, ".1f")
+    if risk_score >= 8:
+        risk_class = "risk-critical"
+    elif risk_score >= 6:
+        risk_class = "risk-high"
+    elif risk_score >= 3:
+        risk_class = "risk-medium"
+    else:
+        risk_class = "risk-low"
 
     sev_counts = summary.get("severity_counts", {})
     total_sev = max(sum(sev_counts.values()), 1)
@@ -1586,6 +1943,10 @@ def _command_center_html(data: dict) -> str:
         '<div class="metric-value">'
         + str(total_gaps) + '</div>'
         '<div class="metric-label">Gaps</div></div>\n'
+        '    <div class="metric-card">'
+        '<div class="metric-value ' + risk_class + '">'
+        + risk_str + '</div>'
+        '<div class="metric-label">Risk Score</div></div>\n'
         "  </div>\n"
         '  <div class="severity-bar">' + sev_bar + "</div>\n"
         "</div>"
@@ -1611,16 +1972,36 @@ def _kill_chain_html(data: dict) -> str:
             else ""
         )
         pct = _fmt(count / total_members * 100, ".0f") if total_members > 0 else "0"
+        # Plugin drill-down list
+        plugin_items: list[str] = []
+        for m in members:
+            if m in plugin_names:
+                plugin_items.append(
+                    '<div class="kc-plugin executed">'
+                    + _e(m) + "</div>"
+                )
+            else:
+                plugin_items.append(
+                    '<div class="kc-plugin skipped">'
+                    + _e(m) + "</div>"
+                )
+        plugins_list = (
+            '<div class="kc-plugins">'
+            + "".join(plugin_items) + "</div>"
+        )
         phases_parts.append(
-            '<div class="kc-phase' + active + '">\n'
-            '      <div class="kc-name">'
+            '<details class="kc-phase' + active + '">\n'
+            "      <summary>\n"
+            '        <div class="kc-name">'
             + _e(name) + "</div>\n"
-            '      <div class="kc-count">'
+            '        <div class="kc-count">'
             + pct + "%</div>\n"
-            '      <div class="kc-label">'
+            '        <div class="kc-label">'
             + str(count) + "/" + str(total_members) + "</div>\n"
-            "      " + arrow + "\n"
-            "    </div>"
+            "        " + arrow + "\n"
+            "      </summary>\n"
+            "      " + plugins_list + "\n"
+            "    </details>"
         )
     phases_html = "".join(phases_parts)
 
@@ -1673,13 +2054,125 @@ def _kg_growth_html(data: dict) -> str:
         )
     bars_html = "".join(bars_parts)
 
+    # Imp 1: Gap trajectory SVG polyline
+    gap_counts = [s.get("gaps", 0) for s in history]
+    max_gap = max(gap_counts) if gap_counts else 1
+    max_gap = max(max_gap, 1)
+    n_points = len(gap_counts)
+    svg_w = 600
+    svg_h = 36
+    gap_points: list[str] = []
+    for i, g in enumerate(gap_counts):
+        x = int(i / max(n_points - 1, 1) * (svg_w - 4)) + 2
+        y = svg_h - 2 - int(g / max_gap * (svg_h - 4))
+        gap_points.append(str(x) + "," + str(y))
+    polyline = " ".join(gap_points)
+    final_gap = gap_counts[-1] if gap_counts else 0
+    gap_svg = (
+        '<div class="growth-gap-line">\n'
+        '  <span class="gap-label">Gaps ('
+        + str(final_gap) + " remaining)</span>\n"
+        '  <svg width="100%" height="' + str(svg_h)
+        + '" viewBox="0 0 ' + str(svg_w) + " " + str(svg_h)
+        + '" preserveAspectRatio="none" role="img">\n'
+        "    <title>Gap trajectory chart showing remaining gaps"
+        " over scan steps</title>\n"
+        '    <polyline points="' + polyline + '" fill="none"'
+        ' stroke="var(--neon-orange)" stroke-width="2"'
+        ' stroke-linejoin="round"/>\n'
+        "  </svg>\n"
+        "</div>\n"
+    )
+
+    # Imp 5: Entity gain velocity SVG with peak/saturation markers
+    gains = [s.get("entities_gained", 0) for s in history]
+    peak_gain = max(gains) if gains else 0
+    peak_idx = gains.index(peak_gain) if gains else 0
+    sat_idx = len(gains) - 1
+    if peak_gain > 0:
+        threshold = peak_gain * 0.05
+        for si in range(peak_idx + 1, len(gains)):
+            if gains[si] < threshold:
+                sat_idx = si
+                break
+    n_gain_pts = len(gains)
+    gv_w = 600
+    gv_h = 40
+    max_gain_val = max(peak_gain, 1)
+    gv_points: list[str] = []
+    for gi, gval in enumerate(gains):
+        gx = int(gi / max(n_gain_pts - 1, 1) * (gv_w - 4)) + 2
+        gy = gv_h - 2 - int(gval / max_gain_val * (gv_h - 4))
+        gv_points.append(str(gx) + "," + str(gy))
+    gv_polyline = " ".join(gv_points)
+    # Peak marker
+    peak_x = int(peak_idx / max(n_gain_pts - 1, 1) * (gv_w - 4)) + 2
+    peak_y = gv_h - 2 - int(peak_gain / max_gain_val * (gv_h - 4))
+    peak_marker = (
+        '<circle cx="' + str(peak_x) + '" cy="' + str(peak_y)
+        + '" r="4" fill="var(--neon-green)"'
+        ' title="Peak: +' + str(peak_gain) + '"/>'
+    )
+    # Saturation marker
+    sat_x = int(sat_idx / max(n_gain_pts - 1, 1) * (gv_w - 4)) + 2
+    sat_gain = gains[sat_idx] if sat_idx < len(gains) else 0
+    sat_y = gv_h - 2 - int(sat_gain / max_gain_val * (gv_h - 4))
+    sat_marker = (
+        '<circle cx="' + str(sat_x) + '" cy="' + str(sat_y)
+        + '" r="4" fill="var(--neon-orange)"'
+        ' title="Saturation: +' + str(sat_gain) + '"/>'
+    )
+    velocity_svg = (
+        '<div class="gain-velocity">\n'
+        '  <span class="gain-label">Entity gain velocity'
+        ' (peak: +' + str(peak_gain) + ' at step '
+        + str(history[peak_idx].get("step", peak_idx))
+        + ')</span>\n'
+        '  <svg width="100%" height="' + str(gv_h)
+        + '" viewBox="0 0 ' + str(gv_w) + " " + str(gv_h)
+        + '" preserveAspectRatio="none" role="img">\n'
+        "    <title>Entity gain velocity chart showing"
+        " discovery rate per step</title>\n"
+        '    <polyline points="' + gv_polyline + '" fill="none"'
+        ' stroke="var(--neon-cyan)" stroke-width="2"'
+        ' stroke-linejoin="round"/>\n'
+        '    ' + peak_marker + '\n'
+        '    ' + sat_marker + '\n'
+        '  </svg>\n'
+        '</div>\n'
+    )
+
+    # Imp 8: Step history summary text
+    first = history[0]
+    last = history[-1]
+    first_ent = first.get("entities", 0)
+    last_ent = last.get("entities", 0)
+    last_rel = last.get("relations", 0)
+    first_step = first.get("step", 1)
+    last_step = last.get("step", len(history))
+    delta = last_ent - first_ent
+    summary_line = (
+        '<div class="growth-summary">'
+        "Step <span>" + str(first_step) + "</span>: "
+        + str(first_ent) + " entities &rarr; "
+        "Step <span>" + str(last_step) + "</span>: "
+        + str(last_ent) + " entities"
+        " (+" + str(delta) + "). "
+        "Relations: <span>" + str(last_rel) + "</span>. "
+        "Remaining gaps: <span>" + str(final_gap)
+        + "</span>.</div>\n"
+    )
+
     return (
         '<div class="section" id="kg-growth">\n'
         '  <div class="section-title">'
         "Knowledge Graph Growth</div>\n"
         '  <div class="growth-chart">'
         + bars_html + "</div>\n"
-        "</div>"
+        + gap_svg
+        + velocity_svg
+        + summary_line
+        + "</div>"
     )
 
 
@@ -1754,10 +2247,14 @@ def _findings_html(data: dict) -> str:
             else ""
         )
 
+        conf_attr = _fmt(conf, ".2f")
         card_parts.append(
             '<details class="finding-card" id="finding-'
             + str(idx) + '" data-sev="'
-            + sev + '">\n'
+            + sev + '" data-conf="'
+            + conf_attr + '" data-host="'
+            + host + '" data-step="'
+            + str(step) + '">\n'
             "  <summary>\n"
             '    <span class="sev-badge sev-'
             + sev + '">' + sev + "</span>\n"
@@ -1791,16 +2288,165 @@ def _findings_html(data: dict) -> str:
     else:
         cards = "".join(card_parts)
 
+    total_count = len(findings)
+
+    # Imp 1: Cumulative findings curve SVG
+    cum_findings_html = ""
+    if findings:
+        # Group findings by step
+        step_sevs: dict[int, list[str]] = {}
+        for f in findings:
+            fs = f.get("step", 0)
+            step_sevs.setdefault(fs, []).append(
+                f.get("severity", "INFO").upper()
+            )
+        sorted_steps = sorted(step_sevs.keys())
+        cum_count = 0
+        cum_data: list[tuple[int, int, str]] = []  # (step, cumulative, dominant_sev)
+        sev_rank = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1, "INFO": 0}
+        for st in sorted_steps:
+            sevs = step_sevs[st]
+            cum_count += len(sevs)
+            dom = max(sevs, key=lambda s: sev_rank.get(s, 0))
+            cum_data.append((st, cum_count, dom))
+
+        if cum_data:
+            cf_w = 600
+            cf_h = 50
+            max_cum = cum_data[-1][1]
+            max_cum = max(max_cum, 1)
+            max_st = max(d[0] for d in cum_data)
+            max_st = max(max_st, 1)
+            cf_sev_colors = {
+                "CRITICAL": "var(--critical)", "HIGH": "var(--high)",
+                "MEDIUM": "var(--medium)", "LOW": "var(--low)",
+                "INFO": "var(--info)",
+            }
+            # Build line segments colored by dominant severity
+            cf_segments: list[str] = []
+            cf_dots: list[str] = []
+            prev_x = prev_y = None
+            for cd_step, cd_cum, cd_sev in cum_data:
+                cx = int(cd_step / max_st * (cf_w - 4)) + 2
+                cy = cf_h - 2 - int(cd_cum / max_cum * (cf_h - 6))
+                color = cf_sev_colors.get(cd_sev, "var(--fg-dim)")
+                if prev_x is not None:
+                    cf_segments.append(
+                        '<line x1="' + str(prev_x) + '" y1="'
+                        + str(prev_y) + '" x2="' + str(cx)
+                        + '" y2="' + str(cy) + '" stroke="'
+                        + color + '" stroke-width="2"/>'
+                    )
+                cf_dots.append(
+                    '<circle cx="' + str(cx) + '" cy="' + str(cy)
+                    + '" r="3" fill="' + color
+                    + '" title="Step ' + str(cd_step) + ": "
+                    + str(cd_cum) + ' total"/>'
+                )
+                prev_x, prev_y = cx, cy
+
+            cum_findings_html = (
+                '<div class="cum-findings">\n'
+                '  <span class="cum-label">Cumulative Findings ('
+                + str(max_cum) + ' total)</span>\n'
+                '  <svg width="100%" height="' + str(cf_h)
+                + '" viewBox="0 0 ' + str(cf_w) + " " + str(cf_h)
+                + '" preserveAspectRatio="none" role="img">\n'
+                "    <title>Cumulative findings chart showing"
+                " total discoveries over time</title>\n"
+                + "".join(cf_segments)
+                + "".join(cf_dots)
+                + "\n  </svg>\n"
+                "</div>\n"
+            )
+
+    # Imp 6: Severity discovery timeline dots
+    sev_timeline_html = ""
+    if findings:
+        sev_color_map = {
+            "CRITICAL": "var(--critical)", "HIGH": "var(--high)",
+            "MEDIUM": "var(--medium)", "LOW": "var(--low)",
+            "INFO": "var(--info)",
+        }
+        max_step = max((f.get("step", 0) for f in findings), default=1)
+        max_step = max(max_step, 1)
+        dot_parts: list[str] = []
+        for f in findings:
+            fs = f.get("severity", "INFO").upper()
+            fstep = f.get("step", 0)
+            left_pct = _fmt(fstep / max_step * 95 + 2.5, ".1f")
+            color = sev_color_map.get(fs, "var(--fg-dim)")
+            dot_parts.append(
+                '<div class="sev-dot" title="'
+                + _e(f.get("title", "")) + " (step "
+                + str(fstep) + ')" style="left:'
+                + left_pct + "%;background:"
+                + color + '"></div>'
+            )
+        sev_timeline_html = (
+            '<div class="sev-timeline">\n'
+            '  <span class="stl-label">'
+            "Severity Timeline</span>\n"
+            + "".join(dot_parts)
+            + "\n</div>\n"
+        )
+
+    # Imp 4: Findings-by-host top 5
+    host_bar_html = ""
+    if findings:
+        host_counts: dict[str, int] = {}
+        for f in findings:
+            h = f.get("host", "unknown")
+            host_counts[h] = host_counts.get(h, 0) + 1
+        sorted_hosts = sorted(host_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+        if sorted_hosts:
+            host_max = sorted_hosts[0][1]
+            bar_items: list[str] = []
+            for h, cnt in sorted_hosts:
+                w_pct = _fmt(cnt / host_max * 100, ".0f")
+                bar_items.append(
+                    '<div class="fhb-item"'
+                    ' onclick="filterByHost(\''
+                    + _e(h).replace("'", "\\'") + "')\">\n"
+                    '  <span class="fhb-label"'
+                    ' title="' + _e(h) + '">' + _e(h) + "</span>\n"
+                    '  <span class="fhb-bar"'
+                    ' style="width:' + w_pct + '%"></span>\n'
+                    '  <span class="fhb-count">' + str(cnt) + "</span>\n"
+                    "</div>"
+                )
+            host_bar_html = (
+                '<div class="findings-host-bar">\n'
+                '  <span class="fhb-title">Top hosts by findings</span>\n'
+                + "".join(bar_items)
+                + "\n</div>\n"
+            )
+
     return (
         '<div class="section" id="findings">\n'
         '  <div class="section-title">'
         "Findings (War Board)</div>\n"
-        '  <div class="filter-bar">\n'
+        + cum_findings_html
+        + sev_timeline_html
+        + host_bar_html
+        + '  <div class="filter-bar">\n'
         "    " + chips + "\n"
         '    <input type="text" class="search-box"'
         ' aria-label="Search findings"'
         ' placeholder="Search findings..."'
         ' oninput="applyFilters()">\n'
+        '    <select class="sort-select"'
+        ' aria-label="Sort findings"'
+        ' onchange="sortFindings(this.value)">\n'
+        '      <option value="discovery">Discovery Order</option>\n'
+        '      <option value="severity">Severity</option>\n'
+        '      <option value="confidence">Confidence</option>\n'
+        '      <option value="host">Host</option>\n'
+        "    </select>\n"
+        '    <span class="findings-stats">Showing '
+        '<span id="findings-visible">'
+        + str(total_count) + "</span>"
+        " of " + str(total_count) + "</span>\n"
         '    <button class="nm-toggle-btn"'
         ' onclick="toggleAll(true)">Expand All</button>\n'
         '    <button class="nm-toggle-btn"'
@@ -1822,7 +2468,31 @@ def _vulnerabilities_html(data: dict) -> str:
         sev = _e(v.get("severity", "INFO").upper())
         vtype = _e(v.get("vuln_type", "unknown"))
         surfaces = ", ".join(_e(s) for s in v.get("affected_surfaces", [])[:5])
-        conf = _fmt(v.get("confidence_aggregate", 0) * 100, ".0f") + "%"
+        conf_val = v.get("confidence_aggregate", 0)
+        conf = _fmt(conf_val * 100, ".0f") + "%"
+        # Inline SVG confidence gauge
+        circ = 2 * 3.14159 * 8  # circumference for r=8
+        dash = _fmt(conf_val * circ, ".1f")
+        gap = _fmt(circ, ".1f")
+        gauge_color = (
+            "var(--neon-green)" if conf_val >= 0.8
+            else ("var(--medium)" if conf_val >= 0.5
+                  else "var(--critical)")
+        )
+        gauge_svg = (
+            '<svg class="conf-gauge" width="20" height="20"'
+            ' viewBox="0 0 20 20" role="img">'
+            "<title>Confidence: " + conf + "</title>"
+            '<circle cx="10" cy="10" r="8"'
+            ' fill="none" stroke="var(--surface-3)"'
+            ' stroke-width="3"/>'
+            '<circle cx="10" cy="10" r="8"'
+            ' fill="none" stroke="' + gauge_color + '"'
+            ' stroke-width="3"'
+            ' stroke-dasharray="' + dash + " " + gap + '"'
+            ' transform="rotate(-90 10 10)"/>'
+            "</svg>"
+        )
         proofs = v.get("proofs", [])
         proof_preview = _e(proofs[0][:80] + "..." if proofs and len(proofs[0]) > 80
                           else proofs[0] if proofs else "")
@@ -1848,7 +2518,7 @@ def _vulnerabilities_html(data: dict) -> str:
             + sev + '">' + sev + "</span></td>\n"
             "  <td>" + vtype + "</td>\n"
             "  <td>" + surfaces + "</td>\n"
-            "  <td>" + conf + "</td>\n"
+            "  <td>" + gauge_svg + conf + "</td>\n"
             "  <td>" + scenarios + "</td>\n"
             '  <td style="max-width:200px;overflow:hidden;'
             'text-overflow:ellipsis;white-space:nowrap"'
@@ -1858,11 +2528,40 @@ def _vulnerabilities_html(data: dict) -> str:
         )
 
     rows = "".join(row_parts)
+
+    # Severity mini-bar
+    sev_order = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
+    sev_colors = {
+        "CRITICAL": "var(--critical)", "HIGH": "var(--high)",
+        "MEDIUM": "var(--medium)", "LOW": "var(--low)",
+        "INFO": "var(--info)",
+    }
+    sev_counts: dict[str, int] = {}
+    for v in vulns:
+        s = v.get("severity", "INFO").upper()
+        sev_counts[s] = sev_counts.get(s, 0) + 1
+    total_vulns = len(vulns)
+    seg_parts: list[str] = []
+    for s in sev_order:
+        cnt = sev_counts.get(s, 0)
+        if cnt > 0:
+            pct = _fmt(cnt / total_vulns * 100, ".1f")
+            seg_parts.append(
+                '<div class="seg" style="width:' + pct
+                + "%;background:" + sev_colors.get(s, "var(--fg-dim)")
+                + '" title="' + s + ": " + str(cnt) + '"></div>'
+            )
+    sev_bar_html = (
+        '  <div class="severity-bar vuln-sev-bar">'
+        + "".join(seg_parts) + "</div>\n"
+    )
+
     return (
         '<div class="section" id="vulnerabilities">\n'
         '  <div class="section-title">'
         "Vulnerabilities (Deduplicated)</div>\n"
-        '  <table class="perf-table sortable">\n'
+        + sev_bar_html
+        + '  <table class="perf-table sortable">\n'
         "    <caption>Deduplicated vulnerabilities</caption>\n"
         "    <thead><tr>"
         '<th scope="col">Severity</th><th scope="col">Type</th>'
@@ -1877,6 +2576,113 @@ def _vulnerabilities_html(data: dict) -> str:
 
 def _decisions_html(data: dict) -> str:
     decisions = data.get("decisions", [])
+
+    # Imp 2: Decision summary stats banner
+    stats_banner = ""
+    if decisions:
+        prod_count = sum(1 for d in decisions if d.get("productive", False))
+        total_dec = len(decisions)
+        prod_pct = prod_count / total_dec * 100 if total_dec > 0 else 0
+        prod_color = "green" if prod_pct >= 50 else "red"
+
+        scores = [d.get("score", 0) for d in decisions]
+        avg_score = sum(scores) / len(scores) if scores else 0
+
+        total_ent_gained = sum(d.get("new_entities", 0) for d in decisions)
+
+        durations = [d.get("duration", 0) or 0 for d in decisions]
+        total_dur = sum(durations)
+        dur_mins = int(total_dur // 60)
+        dur_secs = int(total_dur % 60)
+        dur_str = str(dur_mins) + "m " + str(dur_secs) + "s"
+
+        plugin_prod: dict[str, int] = {}
+        for d in decisions:
+            if d.get("productive", False):
+                p = d.get("plugin", "unknown")
+                plugin_prod[p] = plugin_prod.get(p, 0) + 1
+        top_plugin = max(plugin_prod, key=plugin_prod.get) if plugin_prod else "\u2014"
+
+        stats_banner = (
+            '  <div class="metrics-grid decision-stats">\n'
+            '    <div class="metric-card">'
+            '<div class="metric-value ' + prod_color + '">'
+            + _fmt(prod_pct, ".0f") + '%</div>'
+            '<div class="metric-label">Productive</div></div>\n'
+            '    <div class="metric-card">'
+            '<div class="metric-value">'
+            + _fmt(avg_score, ".3f") + '</div>'
+            '<div class="metric-label">Avg Score</div></div>\n'
+            '    <div class="metric-card">'
+            '<div class="metric-value">'
+            + str(total_ent_gained) + '</div>'
+            '<div class="metric-label">Entities Gained</div></div>\n'
+            '    <div class="metric-card">'
+            '<div class="metric-value">'
+            + dur_str + '</div>'
+            '<div class="metric-label">Total Duration</div></div>\n'
+            '    <div class="metric-card">'
+            '<div class="metric-value" style="font-size:var(--text-sm)">'
+            + _e(top_plugin) + '</div>'
+            '<div class="metric-label">Top Plugin</div></div>\n'
+            "  </div>\n"
+        )
+
+    # Imp 3: Gap type distribution bars
+    gap_dist_html = ""
+    if decisions:
+        gap_pattern = re.compile(r"^Gap:\s*(.+?)\.\s+Selected")
+        gap_types: dict[str, int] = {}
+        _gap_keywords = [
+            (["no known services", "services"], "No Services"),
+            (["no dns", "dns records"], "No DNS"),
+            (["no technology", "technology"], "No Technology"),
+            (["no endpoints", "endpoints"], "No Endpoints"),
+            (["vulnerability", "vuln testing", "vuln_test"], "Vuln Testing"),
+            (["verification", "verify", "confirm"], "Verification"),
+            (["container", "docker"], "Containers"),
+            (["credential", "cred"], "Credentials"),
+            (["forms", "form detection"], "Form Detection"),
+            (["version", "fingerprint"], "Version Detection"),
+        ]
+        for d in decisions:
+            reason = d.get("reasoning", "")
+            m = gap_pattern.match(reason)
+            if m:
+                gap_desc = m.group(1).lower()
+                categorized = False
+                for keywords, cat_name in _gap_keywords:
+                    if any(kw in gap_desc for kw in keywords):
+                        gap_types[cat_name] = gap_types.get(cat_name, 0) + 1
+                        categorized = True
+                        break
+                if not categorized:
+                    gap_types["Other"] = gap_types.get("Other", 0) + 1
+
+        if gap_types:
+            sorted_gaps = sorted(gap_types.items(), key=lambda x: x[1], reverse=True)[:8]
+            gap_max = sorted_gaps[0][1] if sorted_gaps else 1
+            gap_bar_items: list[str] = []
+            for gap_name, gap_cnt in sorted_gaps:
+                gw = _fmt(gap_cnt / gap_max * 100, ".0f")
+                gap_bar_items.append(
+                    '<div class="gap-bar-row">\n'
+                    '  <span class="gap-bar-label">'
+                    + _e(gap_name) + "</span>\n"
+                    '  <span class="gap-bar-fill"'
+                    ' style="width:' + gw + '%"></span>\n'
+                    '  <span class="gap-bar-count">'
+                    + str(gap_cnt) + "</span>\n"
+                    "</div>"
+                )
+            gap_dist_html = (
+                '  <div class="gap-dist">\n'
+                '    <div class="gap-dist-title">'
+                "Gap type distribution</div>\n"
+                + "".join(gap_bar_items)
+                + "\n  </div>\n"
+            )
+
     item_parts: list[str] = []
     for d in decisions:
         prod = d.get("productive", False)
@@ -1933,27 +2739,41 @@ def _decisions_html(data: dict) -> str:
             '<div style="color:var(--fg-dim);'
             'padding:var(--sp-3)">No decisions yet</div>'
         )
-    elif len(item_parts) > 10:
-        overflow_count = len(item_parts) - 10
-        label = "Show " + str(overflow_count) + " more decisions"
-        items = (
-            "".join(item_parts[:10])
-            + '<div id="decisions-overflow" style="display:none">'
-            + "".join(item_parts[10:])
-            + "</div>"
-            + '<button class="decisions-show-more"'
-            ' data-label="' + _e(label) + '"'
-            ' onclick="toggleDecisions(this)">'
-            + label + "</button>"
-        )
     else:
-        items = "".join(item_parts)
+        # Split into productive and unproductive groups
+        productive_parts: list[str] = []
+        unproductive_parts: list[str] = []
+        for i, d in enumerate(decisions):
+            part = item_parts[i]
+            if d.get("productive", False):
+                productive_parts.append(part)
+            else:
+                unproductive_parts.append(part)
+
+        items = ""
+        if productive_parts:
+            items += "".join(productive_parts)
+        if unproductive_parts:
+            unprod_label = (
+                str(len(unproductive_parts))
+                + " unproductive decision"
+                + ("s" if len(unproductive_parts) != 1 else "")
+            )
+            items += (
+                '<details id="decisions-unproductive">\n'
+                '<summary class="decisions-show-more">'
+                + unprod_label + "</summary>\n"
+                + "".join(unproductive_parts)
+                + "\n</details>"
+            )
 
     return (
         '<div class="section" id="decisions">\n'
         '  <div class="section-title">'
         "Decision Timeline</div>\n"
-        '  <div class="timeline">' + items + "</div>\n"
+        + stats_banner
+        + gap_dist_html
+        + '  <div class="timeline">' + items + "</div>\n"
         "</div>"
     )
 
@@ -1997,11 +2817,49 @@ def _attack_surface_html(data: dict) -> str:
         )
 
     cards = "".join(card_parts)
+
+    # Imp 6: Subdomain discovery stats
+    subdomain_html = ""
+    topology = data.get("topology", {})
+    if topology:
+        findings_hosts = {
+            f.get("host", "") for f in data.get("findings", [])
+        }
+        root_count = 0
+        sub_count = 0
+        examined = 0
+        for host_name, topo in topology.items():
+            is_sub = topo.get("is_subdomain", False)
+            if is_sub:
+                sub_count += 1
+            else:
+                root_count += 1
+            # Examined = has services or has findings
+            has_svcs = bool(topo.get("services"))
+            if has_svcs or host_name in findings_hosts:
+                examined += 1
+        total_hosts = root_count + sub_count
+        exam_pct = (
+            _fmt(examined / total_hosts * 100, ".0f")
+            if total_hosts > 0 else "0"
+        )
+        subdomain_html = (
+            '  <div class="subdomain-summary">\n'
+            '    <span class="sub-stat">'
+            '<span>' + str(root_count) + '</span> root hosts</span>\n'
+            '    <span class="sub-stat">'
+            '<span>' + str(sub_count) + '</span> subdomains</span>\n'
+            '    <span class="sub-stat sub-explored">'
+            '<span>' + exam_pct + '%</span> examined</span>\n'
+            '  </div>\n'
+        )
+
     return (
         '<div class="section" id="attack-surface">\n'
         '  <div class="section-title">'
         "Attack Surface</div>\n"
-        '  <div class="surface-stats-grid">\n'
+        + subdomain_html
+        + '  <div class="surface-stats-grid">\n'
         + cards
         + "\n  </div>\n"
         "</div>"
@@ -2364,9 +3222,22 @@ def _network_map_html(data: dict) -> str:
         " of " + str(total_hosts) + " hosts</div>\n"
     )
 
-    # Build cards
+    # Split hosts into rich (have data) and empty
+    def _is_rich(host_name: str, topo: dict) -> bool:
+        if topo.get("services"):
+            return True
+        if topo.get("endpoints"):
+            return True
+        if findings_count_by_host.get(host_name, 0) > 0:
+            return True
+        return bool(topo.get("technologies"))
+
+    rich_ordered = [(h, t) for h, t in ordered if _is_rich(h, t)]
+    empty_ordered = [(h, t) for h, t in ordered if not _is_rich(h, t)]
+
+    # Build cards (rich hosts only)
     cards: list[str] = []
-    for host_name, topo in ordered:
+    for host_name, topo in rich_ordered:
         safe_host = _e(host_name)
         is_sub = topo.get("is_subdomain", False)
         card_class = "host-card subdomain" if is_sub else "host-card"
@@ -2627,6 +3498,24 @@ def _network_map_html(data: dict) -> str:
         ' id="nm-filter-indicator"></div>\n'
     )
 
+    # Empty hosts collapsed section
+    empty_hosts_html = ""
+    if empty_ordered:
+        chip_parts: list[str] = []
+        for h, _t in empty_ordered:
+            chip_parts.append(
+                '<span class="nm-empty-chip">' + _e(h) + "</span>"
+            )
+        empty_hosts_html = (
+            '<details class="nm-empty-section">\n'
+            "  <summary>" + str(len(empty_ordered))
+            + " host" + ("s" if len(empty_ordered) != 1 else "")
+            + " with no data</summary>\n"
+            '  <div class="nm-empty-grid">'
+            + "".join(chip_parts) + "</div>\n"
+            "</details>\n"
+        )
+
     # Keyboard hint
     kb_hint_html = (
         '<div class="nm-kb-hint">'
@@ -2657,6 +3546,7 @@ def _network_map_html(data: dict) -> str:
         + '  <div class="nm-grid">\n'
         + "".join(cards)
         + "\n  </div>\n"
+        + empty_hosts_html
         + compact_table_html
         + '  <div class="nm-no-matches" id="nm-no-matches">'
         "No hosts match your search</div>\n"
@@ -2667,11 +3557,30 @@ def _network_map_html(data: dict) -> str:
 
 def _plugin_perf_html(data: dict) -> str:
     plugins = data.get("plugins", [])
+    findings = data.get("findings", [])
+
+    # Imp 4: Build step→plugin mapping and attribute findings to plugins
+    step_plugin: dict[int, str] = {}
+    for p in plugins:
+        step_plugin[p.get("step", -1)] = p.get("name", "")
+    plugin_sevs: dict[str, dict[str, int]] = {}
+    for f in findings:
+        fstep = f.get("step", -1)
+        pname = step_plugin.get(fstep, "")
+        if pname:
+            if pname not in plugin_sevs:
+                plugin_sevs[pname] = {}
+            fs = f.get("severity", "INFO").upper()
+            plugin_sevs[pname][fs] = plugin_sevs[pname].get(fs, 0) + 1
+
     row_parts: list[str] = []
+    max_findings = max((p.get("findings_count", 0) for p in plugins), default=0)
     for p in plugins:
         name = _e(p.get("name", ""))
+        raw_name = p.get("name", "")
         target = _e(p.get("target", ""))
-        dur = _fmt(p.get("duration", 0), ".2f")
+        dur_val = p.get("duration", 0)
+        dur = _fmt(dur_val, ".2f")
         fc = p.get("findings_count", 0)
         step = p.get("step", 0)
         fc_style = (
@@ -2679,24 +3588,122 @@ def _plugin_perf_html(data: dict) -> str:
             if fc > 0
             else ""
         )
+        top_class = " class=\"perf-top\"" if fc > 0 and fc == max_findings else ""
+
+        # Imp 3: Efficiency = findings per minute
+        if dur_val > 0:
+            eff = fc / (dur_val / 60)
+            eff_str = _fmt(eff, ".1f")
+        else:
+            eff_str = "\u2014"
+
+        # Imp 4: Severity breakdown badges
+        sev_badges = ""
+        psev = plugin_sevs.get(raw_name, {})
+        if psev:
+            badge_parts: list[str] = []
+            for sv in ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]:
+                sc = psev.get(sv, 0)
+                if sc > 0:
+                    short = sv[0]
+                    badge_parts.append(
+                        '<span class="psev-dot psev-' + sv + '">'
+                        + str(sc) + short + "</span>"
+                    )
+            sev_badges = "".join(badge_parts)
+
         row_parts.append(
             "<tr>\n"
-            "  <td>" + name + "</td>"
+            "  <td" + top_class + ">" + name + "</td>"
             "<td>" + target + "</td>"
             "<td>" + dur + "s</td>\n"
             "  <td" + fc_style + ">"
             + str(fc) + "</td>"
+            '<td class="plugin-sev-cell">' + sev_badges + "</td>"
+            "<td>" + eff_str + "</td>"
             "<td>" + str(step) + "</td>\n"
             "</tr>"
         )
 
+    # Imp 3: Summary row
+    summary_row = ""
+    if plugins:
+        total_findings = sum(p.get("findings_count", 0) for p in plugins)
+        total_dur = sum(p.get("duration", 0) for p in plugins)
+        total_dur_str = _fmt(total_dur, ".1f")
+        overall_rate = (
+            _fmt(total_findings / (total_dur / 60), ".1f") if total_dur > 0 else "\u2014"
+        )
+        summary_row = (
+            '<tr class="perf-summary">'
+            "<td>Total</td><td></td>"
+            "<td>" + total_dur_str + "s</td>"
+            "<td>" + str(total_findings) + "</td>"
+            "<td></td><td>" + overall_rate + "</td>"
+            "<td></td></tr>"
+        )
+
     if not plugins:
         rows = (
-            '<tr><td colspan="5" style="color:var(--fg-dim)">'
+            '<tr><td colspan="7" style="color:var(--fg-dim)">'
             "No plugins executed yet</td></tr>"
         )
     else:
-        rows = "".join(row_parts)
+        rows = "".join(row_parts) + summary_row
+
+    # Imp 8: Execution cost distribution stacked bar
+    cost_dist_html = ""
+    if plugins:
+        plugin_durations: dict[str, float] = {}
+        for p in plugins:
+            pn = p.get("name", "unknown")
+            plugin_durations[pn] = plugin_durations.get(pn, 0) + p.get("duration", 0)
+        sorted_costs = sorted(
+            plugin_durations.items(), key=lambda x: x[1], reverse=True,
+        )[:10]
+        total_cost = sum(d for _, d in sorted_costs)
+        if total_cost > 0:
+            _cost_colors = [
+                "#4d7cff", "#00e5ff", "#00ff6a", "#b44dff", "#ff8a00",
+                "#ffe100", "#ff2d7b", "#ff6b35", "#ff1744", "#6d7a94",
+            ]
+            seg_parts: list[str] = []
+            legend_parts: list[str] = []
+            outlier_html = ""
+            for ci, (cn, cd) in enumerate(sorted_costs):
+                c_pct = cd / total_cost * 100
+                c_color = _cost_colors[ci % len(_cost_colors)]
+                seg_parts.append(
+                    '<div class="cost-seg" style="width:'
+                    + _fmt(c_pct, ".1f") + "%;background:"
+                    + c_color + '" title="' + _e(cn) + ": "
+                    + _fmt(cd, ".1f") + 's"></div>'
+                )
+                legend_parts.append(
+                    '<span class="cost-legend-item">'
+                    '<span class="cost-swatch" style="background:'
+                    + c_color + '"></span>'
+                    + _e(cn) + " (" + _fmt(c_pct, ".0f")
+                    + "%)</span>"
+                )
+                if ci == 0 and c_pct > 50:
+                    outlier_html = (
+                        '<div class="cost-outlier">'
+                        "Outlier: " + _e(cn) + " consumed "
+                        + _fmt(c_pct, ".0f")
+                        + "% of total runtime</div>"
+                    )
+            cost_dist_html = (
+                '<div class="cost-dist">\n'
+                '  <div class="cost-dist-title">'
+                "Runtime cost distribution</div>\n"
+                '  <div class="cost-dist-bar">'
+                + "".join(seg_parts) + "</div>\n"
+                '  <div class="cost-dist-legend">'
+                + "".join(legend_parts) + "</div>\n"
+                + outlier_html
+                + "\n</div>\n"
+            )
 
     return (
         '<div class="section" id="plugins">\n'
@@ -2707,11 +3714,14 @@ def _plugin_perf_html(data: dict) -> str:
         "    <thead><tr>"
         '<th scope="col">Plugin</th><th scope="col">Target</th>'
         '<th scope="col">Duration</th><th scope="col">Findings</th>'
+        '<th scope="col">Sev.</th>'
+        '<th scope="col">Eff.</th>'
         '<th scope="col">Step</th>'
         "</tr></thead>\n"
         "    <tbody>" + rows + "</tbody>\n"
         "  </table>\n"
-        "</div>"
+        + cost_dist_html
+        + "</div>"
     )
 
 
@@ -2763,10 +3773,23 @@ def _reasoning_html(data: dict) -> str:
             }
             color = _ev_colors.get(etype, "neon-cyan")
 
+            # Imp 7: Extract hypothesis as primary text (fallback to statement key)
+            hypothesis = _e(
+                str(edata.get("hypothesis", "") or edata.get("statement", ""))
+            )
             detail_parts: list[str] = []
             for k, v in edata.items():
+                if k in ("hypothesis", "statement", "hypothesis_id"):
+                    continue
                 detail_parts.append(_e(str(k)) + ": " + _e(str(v)))
             detail = " &middot; ".join(detail_parts) if detail_parts else ""
+
+            hypothesis_html = (
+                '  <div class="re-hypothesis">'
+                + hypothesis + "</div>\n"
+                if hypothesis
+                else ""
+            )
 
             event_parts.append(
                 '<div class="reasoning-event" style="border-left:3px solid'
@@ -2774,6 +3797,7 @@ def _reasoning_html(data: dict) -> str:
                 '  <span class="re-type">' + etype + "</span>\n"
                 '  <span class="re-step">step '
                 + str(estep) + "</span>\n"
+                + hypothesis_html
                 + ('  <div class="re-detail">'
                    + detail + "</div>\n" if detail else "")
                 + "</div>"
@@ -2788,6 +3812,67 @@ def _reasoning_html(data: dict) -> str:
             "</details>\n"
         )
 
+    # Imp 7: Hypothesis category breakdown
+    hyp_cats_html = ""
+    if events:
+        _hyp_cat_keywords = [
+            (["spring", "django", "rails", "flask", "express",
+              "laravel", "react", "angular", "vue", "framework",
+              "wordpress", "joomla", "drupal"], "Framework Detection"),
+            (["systematic", "vulnerability", "vuln", "injection",
+              "xss", "sqli", "csrf"], "Systematic Vulnerabilities"),
+            (["shodan", "wayback", "dns", "asn", "whois",
+              "external", "osint", "intelligence", "cert"], "External Intelligence"),
+            (["waf", "firewall", "cloudflare", "akamai",
+              "security", "protection"], "Security Controls"),
+        ]
+        cat_groups: dict[str, list[tuple[str, str]]] = {}  # cat -> [(stmt, status)]
+        for ev in events:
+            etype = ev.get("type", "")
+            edata = ev.get("data", {})
+            stmt = str(
+                edata.get("hypothesis", "") or edata.get("statement", "")
+            )
+            if not stmt:
+                continue
+            status = "confirmed" if "confirmed" in etype else (
+                "rejected" if "rejected" in etype else "active"
+            )
+            stmt_lower = stmt.lower()
+            categorized = False
+            for keywords, cat_name in _hyp_cat_keywords:
+                if any(kw in stmt_lower for kw in keywords):
+                    cat_groups.setdefault(cat_name, []).append((stmt, status))
+                    categorized = True
+                    break
+            if not categorized:
+                cat_groups.setdefault("Other", []).append((stmt, status))
+
+        if cat_groups:
+            cat_parts: list[str] = []
+            for cat_name, items in cat_groups.items():
+                item_htmls: list[str] = []
+                for stmt, status in items:
+                    item_htmls.append(
+                        '<div class="hyp-cat-item ' + status + '">'
+                        + _e(stmt) + "</div>"
+                    )
+                cat_parts.append(
+                    '<div class="hyp-cat-group">\n'
+                    '  <div class="hyp-cat-header">'
+                    '<span class="hyp-cat-name">'
+                    + _e(cat_name) + "</span>"
+                    '<span class="hyp-cat-count">'
+                    + str(len(items)) + "</span></div>\n"
+                    + "".join(item_htmls)
+                    + "\n</div>"
+                )
+            hyp_cats_html = (
+                '<div class="hyp-categories">\n'
+                + "".join(cat_parts)
+                + "\n</div>\n"
+            )
+
     return (
         '<div class="section" id="reasoning">\n'
         '  <div class="section-title">Reasoning</div>\n'
@@ -2799,6 +3884,7 @@ def _reasoning_html(data: dict) -> str:
         + _stat(weakened, "neon-orange", "Weakened")
         + "  </div>\n"
         + events_html
+        + hyp_cats_html
         + "</div>"
     )
 
@@ -2840,9 +3926,14 @@ def _training_html(data: dict) -> str:
                 else "-"
             )
         )
-        step_html = str(step) if step is not None else "-"
+        step_html = (
+            '<span class="step-badge">' + str(step) + "</span>"
+            if step is not None
+            else "-"
+        )
+        row_class = "training-row-yes" if disc else "training-row-no"
         row_parts.append(
-            "<tr><td>" + title + "</td>"
+            '<tr class="' + row_class + '"><td>' + title + "</td>"
             "<td>" + sev + "</td>"
             "<td>" + disc_html + "</td>"
             "<td>" + verif_html + "</td>"
@@ -2887,11 +3978,27 @@ def _training_html(data: dict) -> str:
 def _footer_html(data: dict) -> str:
     ts = _e(data.get("timestamp", ""))
     v = _e(data.get("version", _VERSION))
+    summary = data.get("summary", {})
+    total_findings = summary.get("total_findings", 0)
+    total_entities = summary.get("total_entities", 0)
+    risk = summary.get("risk_score", 0)
+    risk_str = _fmt(risk, ".1f")
+    risk_color = "high" if risk >= 7.0 else ("medium" if risk >= 4.0 else "low")
     return (
         '<div class="footer">\n'
-        "  Basilisk v" + v
-        + " &middot; " + ts
-        + " &middot; Confidential\n"
+        '  <div class="footer-stats">\n'
+        "    <span>Findings: <strong>"
+        + str(total_findings) + "</strong></span>\n"
+        '    <span>Risk: <strong class="risk-'
+        + risk_color + '">' + risk_str + "</strong></span>\n"
+        "    <span>Entities: <strong>"
+        + str(total_entities) + "</strong></span>\n"
+        "  </div>\n"
+        '  <div class="footer-meta">\n'
+        "    <span>Basilisk v" + v + "</span>\n"
+        "    <span>" + ts + "</span>\n"
+        "    <span>Confidential</span>\n"
+        "  </div>\n"
         '  <button class="export-json-btn"'
         ' onclick="downloadJson()">Export JSON</button>\n'
         "</div>"
@@ -2920,6 +4027,7 @@ _JS = (
     "  var q = '';\n"
     "  var box = document.querySelector('.search-box');\n"
     "  if (box) q = box.value.toLowerCase();\n"
+    "  var visible = 0;\n"
     "  document.querySelectorAll('.finding-card')"
     ".forEach(function(card) {\n"
     "    var sev = card.dataset.sev;\n"
@@ -2927,9 +4035,12 @@ _JS = (
     "    var sevMatch = active.length === 0"
     " || active.indexOf(sev) !== -1;\n"
     "    var textMatch = !q || text.indexOf(q) !== -1;\n"
-    "    card.style.display ="
-    " (sevMatch && textMatch) ? '' : 'none';\n"
+    "    var show = sevMatch && textMatch;\n"
+    "    card.style.display = show ? '' : 'none';\n"
+    "    if (show) visible++;\n"
     "  });\n"
+    "  var counter = document.getElementById('findings-visible');\n"
+    "  if (counter) counter.textContent = visible;\n"
     "}\n"
     "\n"
     "function toggleAll(open) {\n"
@@ -2937,6 +4048,35 @@ _JS = (
     ".forEach(function(d) {\n"
     "    d.open = open;\n"
     "  });\n"
+    "}\n"
+    "\n"
+    "function filterByHost(host) {\n"
+    "  var box = document.querySelector('.search-box');\n"
+    "  if (box) { box.value = host; }\n"
+    "  applyFilters();\n"
+    "}\n"
+    "\n"
+    "function sortFindings(criteria) {\n"
+    "  var sevRank = {CRITICAL:4,HIGH:3,MEDIUM:2,LOW:1,INFO:0};\n"
+    "  var list = document.getElementById('findings-list');\n"
+    "  if (!list) return;\n"
+    "  var cards = Array.from(list.querySelectorAll('.finding-card'));\n"
+    "  cards.sort(function(a, b) {\n"
+    "    if (criteria === 'severity') {\n"
+    "      return (sevRank[b.dataset.sev]||0)"
+    " - (sevRank[a.dataset.sev]||0);\n"
+    "    } else if (criteria === 'confidence') {\n"
+    "      return parseFloat(b.dataset.conf||0)"
+    " - parseFloat(a.dataset.conf||0);\n"
+    "    } else if (criteria === 'host') {\n"
+    "      return (a.dataset.host||'')"
+    ".localeCompare(b.dataset.host||'');\n"
+    "    } else {\n"
+    "      return parseInt(a.dataset.step||0)"
+    " - parseInt(b.dataset.step||0);\n"
+    "    }\n"
+    "  });\n"
+    "  cards.forEach(function(c) { list.appendChild(c); });\n"
     "}\n"
     "\n"
     "var obs = new IntersectionObserver(function(entries)"
@@ -3005,11 +4145,18 @@ _JS = (
     "document.querySelectorAll('.evidence-block')"
     ".forEach(function(block) {\n"
     "  var h = block.innerHTML;\n"
-    "  block.innerHTML ="
-    " h.replace(/(https?:\\/\\/[^\\s<&]+)/g,\n"
+    "  h = h.replace(/(https?:\\/\\/[^\\s<&]+)/g,\n"
     "    '<a href=\"$1\" target=\"_blank\"'"
     " + ' rel=\"noopener\"'"
     " + ' style=\"color:var(--neon-cyan)\">$1</a>');\n"
+    "  /* HTTP header highlighting */\n"
+    "  h = h.replace("
+    "/^(HTTP\\/[\\d.]+ \\d+ .*)$/gm,\n"
+    "    '<span class=\"ev-status\">$1</span>');\n"
+    "  h = h.replace("
+    "/^([A-Z][A-Za-z0-9-]+)(: )/gm,\n"
+    "    '<span class=\"ev-header-name\">$1</span>$2');\n"
+    "  block.innerHTML = h;\n"
     "\n"
     "  /* Evidence expand/collapse toggle */\n"
     "  if (block.scrollHeight > block.offsetHeight + 2) {\n"
@@ -3251,5 +4398,15 @@ _JS = (
     " ? 'Hide extra decisions'"
     " : btn.dataset.label;\n"
     "}\n"
+    "\n"
+    "/* Scroll-to-top FAB */\n"
+    "(function() {\n"
+    "  var fab = document.querySelector('.scroll-top');\n"
+    "  if (!fab) return;\n"
+    "  window.addEventListener('scroll', function() {\n"
+    "    if (window.scrollY > 300) fab.classList.add('show');\n"
+    "    else fab.classList.remove('show');\n"
+    "  }, {passive: true});\n"
+    "})();\n"
     "</script>"
 )

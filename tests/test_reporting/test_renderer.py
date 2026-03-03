@@ -1383,12 +1383,12 @@ class TestDecisionsShowMore:
         assert '<button class="decisions-show-more"' not in result
         assert 'id="decisions-overflow"' not in result
 
-    def test_decisions_show_more_present_when_many(self):
+    def test_decisions_grouped_when_many(self):
         data = _data_with_many_decisions(15)
         result = render_html(data)
-        assert 'id="decisions-overflow"' in result
-        assert '<button class="decisions-show-more"' in result
-        assert "Show 5 more decisions" in result
+        # Productive/unproductive grouping replaces old overflow pagination
+        assert 'id="decisions-unproductive"' in result
+        assert "unproductive decision" in result
 
     def test_decisions_toggle_js(self):
         data = assemble_data(_sample_collector())
@@ -1624,3 +1624,1328 @@ class TestEndpointTree:
         assert _is_interesting_endpoint("/.env") is True
         assert _is_interesting_endpoint("/admin/dashboard") is True
         assert _is_interesting_endpoint("/static/logo.png") is False
+
+
+# ===== UX Batch 4 tests =====
+
+
+class TestScrollToTopFab:
+    """Fix 1: scroll-to-top floating action button."""
+
+    def test_scroll_top_button_present(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert 'class="scroll-top"' in result
+        assert 'aria-label="Scroll to top"' in result
+
+    def test_scroll_top_css(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert ".scroll-top {" in result
+        assert ".scroll-top.show" in result
+
+    def test_scroll_top_js(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert "scroll-top" in result
+        assert "scrollY > 300" in result
+
+    def test_scroll_top_hidden_in_print(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert ".scroll-top" in result
+        # scroll-top in print hidden list
+        assert "scroll-top {" in result
+
+
+class TestFindingsSortControls:
+    """Fix 2: findings sort dropdown and data attributes."""
+
+    def test_sort_select_present(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert 'class="sort-select"' in result
+        assert 'aria-label="Sort findings"' in result
+
+    def test_sort_options(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert "Discovery Order" in result
+        assert "Severity" in result
+        assert "Confidence" in result
+        assert "Host" in result
+
+    def test_finding_card_data_attributes(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert 'data-conf="' in result
+        assert 'data-host="' in result
+        assert 'data-step="' in result
+
+    def test_sort_findings_js(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert "function sortFindings(criteria)" in result
+
+    def test_sort_by_severity_logic_in_js(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert "criteria === 'severity'" in result
+        assert "criteria === 'confidence'" in result
+        assert "criteria === 'host'" in result
+
+
+class TestFindingsVisibleCounter:
+    """Fix 3: visible findings counter in filter bar."""
+
+    def test_findings_stats_present(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert 'class="findings-stats"' in result
+        assert 'id="findings-visible"' in result
+
+    def test_counter_shows_total(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        total = len(data["findings"])
+        assert f"of {total}</span>" in result
+
+    def test_apply_filters_updates_counter(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert "getElementById('findings-visible')" in result
+        assert "counter.textContent = visible" in result
+
+
+class TestNetworkMapEmptyHosts:
+    """Fix 4: hide empty hosts in collapsed section."""
+
+    def test_empty_hosts_collapsed(self):
+        c = _sample_collector()
+        data = assemble_data(c)
+        data["topology"] = {
+            "rich.example.com": {
+                "services": [{"port": 80, "service": "http", "protocol": "tcp"}],
+                "endpoints": [],
+                "technologies": [],
+            },
+            "empty1.example.com": {
+                "services": [],
+                "endpoints": [],
+                "technologies": [],
+            },
+            "empty2.example.com": {
+                "services": [],
+                "endpoints": [],
+                "technologies": [],
+                "is_subdomain": True,
+                "parent": "rich.example.com",
+            },
+        }
+        result = render_html(data)
+        assert "nm-empty-section" in result
+        assert "nm-empty-chip" in result
+        assert "2 hosts with no data" in result
+
+    def test_rich_hosts_in_grid(self):
+        c = _sample_collector()
+        data = assemble_data(c)
+        data["topology"] = {
+            "rich.example.com": {
+                "services": [{"port": 443, "service": "https", "protocol": "tcp"}],
+                "endpoints": ["/api"],
+                "technologies": [{"name": "nginx"}],
+            },
+        }
+        result = render_html(data)
+        assert "nm-grid" in result
+        assert "rich.example.com" in result
+        # No empty section element when all hosts are rich
+        assert '<details class="nm-empty-section">' not in result
+
+    def test_empty_hosts_css(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert ".nm-empty-section" in result
+        assert ".nm-empty-grid" in result
+        assert ".nm-empty-chip" in result
+
+
+class TestDecisionsGrouping:
+    """Fix 5: productive/unproductive decision grouping."""
+
+    def test_productive_shown_first(self):
+        data = _data_with_many_decisions(6)
+        result = render_html(data)
+        # Productive decisions should appear before unproductive section
+        prod_pos = result.find("timeline-item productive")
+        unprod_section = result.find('id="decisions-unproductive"')
+        assert prod_pos < unprod_section
+
+    def test_unproductive_in_details(self):
+        data = _data_with_many_decisions(6)
+        result = render_html(data)
+        assert 'id="decisions-unproductive"' in result
+        assert "unproductive decision" in result
+
+    def test_productive_green_border_css(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert ".timeline-item.productive {" in result
+        assert "border-left: 3px solid var(--neon-green)" in result
+
+    def test_unproductive_dimmed_css(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert ".timeline-item.unproductive {" in result
+        assert "opacity: 0.75" in result
+
+    def test_no_grouping_when_empty(self):
+        data = assemble_data(ReportCollector())
+        result = render_html(data)
+        assert "No decisions yet" in result
+        assert "decisions-unproductive" not in result
+
+
+class TestStickyFilterBar:
+    """Fix 6: sticky findings filter bar."""
+
+    def test_sticky_css(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert "position: sticky" in result
+        assert "z-index: 50" in result
+
+
+class TestEvidenceHeaderHighlighting:
+    """Fix 7: HTTP header highlighting in evidence blocks."""
+
+    def test_ev_status_css(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert ".ev-status" in result
+        assert ".ev-header-name" in result
+
+    def test_header_highlight_js(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert "ev-status" in result
+        assert "ev-header-name" in result
+        # JS regex uses escaped slash
+        assert "HTTP\\/" in result
+
+
+class TestKgGrowthBarAnimation:
+    """Fix 8: KG growth bar CSS animation."""
+
+    def test_bar_grow_keyframes(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert "@keyframes bar-grow" in result
+        assert "scaleY(0)" in result
+
+    def test_growth_bar_animation_applied(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert "animation: bar-grow" in result
+
+    def test_growth_bar_staggered_delay(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert ".growth-bar:nth-child(2)" in result
+        assert "animation-delay: 0.03s" in result
+
+
+# ---------------------------------------------------------------------------
+# Information Enrichment Batch Tests
+# ---------------------------------------------------------------------------
+
+
+def _enriched_collector() -> ReportCollector:
+    """Build collector with rich data for enrichment tests."""
+    from basilisk.reporting.collector import ReasoningEvent
+
+    c = ReportCollector(target="app.example.com", mode="auto", max_steps=50)
+    c.step = 20
+    c.total_entities = 500
+    c.total_relations = 400
+    c.gap_count = 15
+    c.entity_counts["host"] = 10
+    c.entity_counts["service"] = 30
+    c.entity_counts["endpoint"] = 120
+    c.entity_counts["technology"] = 20
+    c.findings = [
+        ReportFinding(
+            title="SQL Injection", severity="high",
+            host="app.example.com", step=5,
+            evidence="payload", confidence=0.9, verified=True,
+        ),
+        ReportFinding(
+            title="XSS Reflected", severity="medium",
+            host="app.example.com", step=8,
+            confidence=0.7,
+        ),
+        ReportFinding(
+            title="Open Redirect", severity="low",
+            host="api.example.com", step=12,
+            confidence=0.6,
+        ),
+        ReportFinding(
+            title="Missing HSTS", severity="info",
+            host="api.example.com", step=3,
+        ),
+        ReportFinding(
+            title="CSRF Token Missing", severity="high",
+            host="admin.example.com", step=15,
+            evidence="no token", confidence=0.85,
+        ),
+    ]
+    c.decisions = [
+        ReportDecision(
+            step=1, plugin="port_scan", target="app.example.com",
+            score=0.95, reasoning="initial", duration=1.5,
+        ),
+        ReportDecision(
+            step=5, plugin="sqli_basic", target="app.example.com",
+            score=0.87, reasoning="gap fill", productive=True,
+            new_entities=10, duration=3.2,
+        ),
+        ReportDecision(
+            step=8, plugin="xss_scanner", target="app.example.com",
+            score=0.75, reasoning="vuln scan", productive=True,
+            new_entities=5, duration=2.1,
+        ),
+        ReportDecision(
+            step=12, plugin="redirect_check", target="api.example.com",
+            score=0.6, reasoning="low priority", productive=True,
+            new_entities=2, duration=0.8,
+        ),
+    ]
+    c.plugins = [
+        ReportPlugin(name="port_scan", target="app.example.com",
+                     duration=1.5, findings_count=0, step=1),
+        ReportPlugin(name="sqli_basic", target="app.example.com",
+                     duration=3.2, findings_count=2, step=5),
+        ReportPlugin(name="xss_scanner", target="app.example.com",
+                     duration=2.1, findings_count=1, step=8),
+        ReportPlugin(name="redirect_check", target="api.example.com",
+                     duration=0.8, findings_count=1, step=12),
+    ]
+    c.step_history = [
+        StepSnapshot(step=1, entities=20, relations=10, gaps=25, entities_gained=20),
+        StepSnapshot(step=5, entities=100, relations=80, gaps=30, entities_gained=40),
+        StepSnapshot(step=10, entities=300, relations=250, gaps=20, entities_gained=30),
+        StepSnapshot(step=15, entities=420, relations=350, gaps=18, entities_gained=15),
+        StepSnapshot(step=20, entities=500, relations=400, gaps=15, entities_gained=8),
+    ]
+    c.hypotheses_confirmed = 5
+    c.hypotheses_rejected = 1
+    c.beliefs_strengthened = 8
+    c.beliefs_weakened = 2
+    c.reasoning_events = [
+        ReasoningEvent(
+            event_type="hypothesis_confirmed",
+            data={"hypothesis": "Target likely uses django"},
+            step=7,
+        ),
+        ReasoningEvent(
+            event_type="hypothesis_rejected",
+            data={"hypothesis": "WAF is CloudFlare", "reason": "no cf headers"},
+            step=10,
+        ),
+        ReasoningEvent(
+            event_type="belief_strengthened",
+            data={"hypothesis": "SQL injection present in auth"},
+            step=12,
+        ),
+    ]
+    return c
+
+
+class TestImp5RiskScoreCommandCenter:
+    """Imp 5: Risk score card in command center."""
+
+    def test_risk_score_in_metrics_grid(self):
+        data = assemble_data(_enriched_collector())
+        result = render_html(data)
+        assert "Risk Score" in result
+        # enriched collector has 2 HIGH + 1 MEDIUM + 1 LOW + 1 INFO
+        # = 2*2.5 + 1*1.0 + 1*0.3 + 1*0.0 = 6.3
+        assert "6.3" in result
+
+    def test_risk_color_high(self):
+        data = assemble_data(_enriched_collector())
+        result = render_html(data)
+        # 6.3 → risk-high (6-8 range)
+        assert "risk-high" in result
+
+    def test_risk_color_low(self):
+        c = ReportCollector(target="safe.com")
+        # No findings → risk 0.0
+        data = assemble_data(c)
+        result = render_html(data)
+        assert "risk-low" in result
+
+    def test_risk_color_critical(self):
+        c = ReportCollector(target="danger.com")
+        # 4 CRITICAL findings → 4*4.0 = 16 → capped at 10.0 → risk-critical
+        c.findings = [
+            ReportFinding(title=f"Crit{i}", severity="critical", host="danger.com")
+            for i in range(4)
+        ]
+        data = assemble_data(c)
+        result = render_html(data)
+        assert "risk-critical" in result
+
+    def test_risk_css_classes_present(self):
+        data = assemble_data(_enriched_collector())
+        result = render_html(data)
+        assert ".risk-low" in result
+        assert ".risk-medium" in result
+        assert ".risk-high" in result
+        assert ".risk-critical" in result
+
+
+class TestImp8StepHistorySummary:
+    """Imp 8: Step history multi-metric summary text."""
+
+    def test_growth_summary_present(self):
+        data = assemble_data(_enriched_collector())
+        result = render_html(data)
+        assert "growth-summary" in result
+
+    def test_summary_shows_entity_progression(self):
+        data = assemble_data(_enriched_collector())
+        result = render_html(data)
+        assert "20 entities" in result  # first step
+        assert "500 entities" in result  # last step
+        assert "+480" in result  # delta
+
+    def test_summary_shows_relations_and_gaps(self):
+        data = assemble_data(_enriched_collector())
+        result = render_html(data)
+        assert "Relations:" in result
+        assert "Remaining gaps:" in result
+
+
+class TestImp1GapTrajectory:
+    """Imp 1: Gap trajectory SVG overlay in KG Growth."""
+
+    def test_gap_trajectory_svg(self):
+        data = assemble_data(_enriched_collector())
+        result = render_html(data)
+        assert "growth-gap-line" in result
+        assert "<polyline" in result
+        assert 'stroke="var(--neon-orange)"' in result
+
+    def test_gap_label_shows_count(self):
+        data = assemble_data(_enriched_collector())
+        result = render_html(data)
+        assert "gap-label" in result
+        assert "15 remaining" in result
+
+    def test_gap_css_present(self):
+        data = assemble_data(_enriched_collector())
+        result = render_html(data)
+        assert ".growth-gap-line" in result
+        assert ".gap-label" in result
+
+
+class TestImp2DecisionStatsBanner:
+    """Imp 2: Decision summary stats banner."""
+
+    def test_decision_stats_present(self):
+        data = assemble_data(_enriched_collector())
+        result = render_html(data)
+        assert "decision-stats" in result
+
+    def test_productive_percentage(self):
+        data = assemble_data(_enriched_collector())
+        result = render_html(data)
+        # 3 out of 4 productive = 75%
+        assert "75%" in result
+
+    def test_avg_score_shown(self):
+        data = assemble_data(_enriched_collector())
+        result = render_html(data)
+        assert "Avg Score" in result
+
+    def test_entities_gained_total(self):
+        data = assemble_data(_enriched_collector())
+        result = render_html(data)
+        assert "Entities Gained" in result
+
+    def test_total_duration_shown(self):
+        data = assemble_data(_enriched_collector())
+        result = render_html(data)
+        assert "Total Duration" in result
+
+    def test_top_plugin_shown(self):
+        data = assemble_data(_enriched_collector())
+        result = render_html(data)
+        assert "Top Plugin" in result
+
+    def test_no_stats_when_empty(self):
+        data = assemble_data(ReportCollector())
+        result = render_html(data)
+        # CSS definition exists, but no HTML metrics-grid with decision-stats
+        assert 'class="metrics-grid decision-stats"' not in result
+
+
+class TestImp3PluginEfficiency:
+    """Imp 3: Plugin efficiency column and summary row."""
+
+    def test_efficiency_column_header(self):
+        data = assemble_data(_enriched_collector())
+        result = render_html(data)
+        assert "Eff." in result
+
+    def test_efficiency_values(self):
+        data = assemble_data(_enriched_collector())
+        result = render_html(data)
+        # sqli_basic: 2 findings / (3.2s / 60) = 37.5 findings/min
+        assert "37.5" in result
+
+    def test_summary_row_present(self):
+        data = assemble_data(_enriched_collector())
+        result = render_html(data)
+        assert "perf-summary" in result
+        assert "Total" in result
+
+    def test_top_producer_highlighted(self):
+        data = assemble_data(_enriched_collector())
+        result = render_html(data)
+        assert "perf-top" in result
+
+
+class TestImp7ReasoningHypothesisDetail:
+    """Imp 7: Hypothesis text shown in reasoning events."""
+
+    def test_hypothesis_text_displayed(self):
+        data = assemble_data(_enriched_collector())
+        result = render_html(data)
+        assert "Target likely uses django" in result
+
+    def test_hypothesis_css_class(self):
+        data = assemble_data(_enriched_collector())
+        result = render_html(data)
+        assert "re-hypothesis" in result
+
+    def test_rejected_hypothesis_shown(self):
+        data = assemble_data(_enriched_collector())
+        result = render_html(data)
+        assert "WAF is CloudFlare" in result
+
+    def test_extra_data_still_shown(self):
+        data = assemble_data(_enriched_collector())
+        result = render_html(data)
+        # "reason: no cf headers" should be in detail
+        assert "no cf headers" in result
+
+
+class TestImp4FindingsByHost:
+    """Imp 4: Findings-by-host top 5 horizontal bars."""
+
+    def test_host_bar_section(self):
+        data = assemble_data(_enriched_collector())
+        result = render_html(data)
+        assert "findings-host-bar" in result
+        assert "fhb-title" in result
+
+    def test_top_hosts_shown(self):
+        data = assemble_data(_enriched_collector())
+        result = render_html(data)
+        assert "app.example.com" in result
+        assert "api.example.com" in result
+
+    def test_host_counts_shown(self):
+        data = assemble_data(_enriched_collector())
+        result = render_html(data)
+        assert "fhb-count" in result
+
+    def test_filter_by_host_js(self):
+        data = assemble_data(_enriched_collector())
+        result = render_html(data)
+        assert "filterByHost" in result
+
+    def test_no_host_bar_when_empty(self):
+        data = assemble_data(ReportCollector())
+        result = render_html(data)
+        assert 'class="findings-host-bar"' not in result
+
+
+class TestImp6SeverityTimeline:
+    """Imp 6: Severity discovery timeline dots."""
+
+    def test_severity_timeline_present(self):
+        data = assemble_data(_enriched_collector())
+        result = render_html(data)
+        assert "sev-timeline" in result
+
+    def test_severity_dots(self):
+        data = assemble_data(_enriched_collector())
+        result = render_html(data)
+        assert "sev-dot" in result
+
+    def test_timeline_label(self):
+        data = assemble_data(_enriched_collector())
+        result = render_html(data)
+        assert "Severity Timeline" in result
+
+    def test_no_timeline_when_empty(self):
+        data = assemble_data(ReportCollector())
+        result = render_html(data)
+        assert 'class="sev-timeline"' not in result
+
+    def test_dot_colors_use_severity_vars(self):
+        data = assemble_data(_enriched_collector())
+        result = render_html(data)
+        assert "var(--high)" in result
+        assert "var(--medium)" in result
+
+
+# ---------------------------------------------------------------------------
+# Batch 2 enrichment test fixture
+# ---------------------------------------------------------------------------
+
+def _batch2_collector() -> ReportCollector:
+    """Build collector with rich data for batch 2 enrichment tests."""
+    from basilisk.reporting.collector import ReasoningEvent
+
+    c = ReportCollector(target="app.example.com", mode="auto", max_steps=50)
+    c.step = 20
+    c.total_entities = 500
+    c.total_relations = 400
+    c.gap_count = 15
+    c.entity_counts["host"] = 10
+    c.entity_counts["service"] = 30
+    c.entity_counts["endpoint"] = 120
+    c.entity_counts["technology"] = 20
+    c.findings = [
+        ReportFinding(
+            title="SQL Injection", severity="high",
+            host="app.example.com", step=5,
+            evidence="payload", confidence=0.9, verified=True,
+        ),
+        ReportFinding(
+            title="XSS Reflected", severity="medium",
+            host="app.example.com", step=8,
+            confidence=0.7,
+        ),
+        ReportFinding(
+            title="Open Redirect", severity="low",
+            host="api.example.com", step=12,
+            confidence=0.6,
+        ),
+        ReportFinding(
+            title="Missing HSTS", severity="info",
+            host="api.example.com", step=3,
+        ),
+        ReportFinding(
+            title="CSRF Token Missing", severity="high",
+            host="admin.example.com", step=15,
+            evidence="no token", confidence=0.85,
+        ),
+    ]
+    c.decisions = [
+        ReportDecision(
+            step=1, plugin="port_scan", target="app.example.com",
+            score=0.95,
+            reasoning="Gap: Host app.example.com has no known services. Selected port_scan",
+            duration=1.5,
+        ),
+        ReportDecision(
+            step=5, plugin="sqli_basic", target="app.example.com",
+            score=0.87,
+            reasoning="Gap: Host app.example.com has no vulnerability testing. Selected sqli_basic",
+            productive=True, new_entities=10, duration=3.2,
+        ),
+        ReportDecision(
+            step=8, plugin="xss_scanner", target="app.example.com",
+            score=0.75,
+            reasoning="Gap: Host app.example.com has no endpoints. Selected xss_scanner",
+            productive=True, new_entities=5, duration=2.1,
+        ),
+        ReportDecision(
+            step=12, plugin="redirect_check", target="api.example.com",
+            score=0.6,
+            reasoning="Gap: Host api.example.com has no known services. Selected redirect_check",
+            productive=True, new_entities=2, duration=0.8,
+        ),
+    ]
+    c.plugins = [
+        ReportPlugin(name="port_scan", target="app.example.com",
+                     duration=1.5, findings_count=0, step=1),
+        ReportPlugin(name="sqli_basic", target="app.example.com",
+                     duration=3.2, findings_count=2, step=5),
+        ReportPlugin(name="xss_scanner", target="app.example.com",
+                     duration=2.1, findings_count=1, step=8),
+        ReportPlugin(name="redirect_check", target="api.example.com",
+                     duration=0.8, findings_count=1, step=12),
+        ReportPlugin(name="shodan_lookup", target="app.example.com",
+                     duration=120.0, findings_count=0, step=2),
+    ]
+    c.step_history = [
+        StepSnapshot(step=1, entities=20, relations=10, gaps=25, entities_gained=20),
+        StepSnapshot(step=5, entities=100, relations=80, gaps=30, entities_gained=40),
+        StepSnapshot(step=10, entities=300, relations=250, gaps=20, entities_gained=30),
+        StepSnapshot(step=15, entities=420, relations=350, gaps=18, entities_gained=15),
+        StepSnapshot(step=20, entities=500, relations=400, gaps=15, entities_gained=1),
+    ]
+    c.hypotheses_confirmed = 5
+    c.hypotheses_rejected = 1
+    c.beliefs_strengthened = 8
+    c.beliefs_weakened = 2
+    c.reasoning_events = [
+        ReasoningEvent(
+            event_type="hypothesis_confirmed",
+            data={"hypothesis": "Target likely uses django"},
+            step=7,
+        ),
+        ReasoningEvent(
+            event_type="hypothesis_rejected",
+            data={"hypothesis": "WAF is CloudFlare", "reason": "no cf headers"},
+            step=10,
+        ),
+        ReasoningEvent(
+            event_type="belief_strengthened",
+            data={"statement": "SQL injection present in auth"},
+            step=12,
+        ),
+        ReasoningEvent(
+            event_type="hypothesis_confirmed",
+            data={"statement": "Shodan reveals open redis port",
+                   "hypothesis_id": "hyp-123"},
+            step=14,
+        ),
+    ]
+    # Topology with subdomains
+    c.topology = {
+        "app.example.com": HostTopology(
+            is_subdomain=False,
+            services=[{"port": 443, "service": "https"}],
+        ),
+        "api.example.com": HostTopology(
+            is_subdomain=True,
+            services=[{"port": 443, "service": "https"}],
+        ),
+        "admin.example.com": HostTopology(
+            is_subdomain=True,
+            services=[],
+        ),
+        "empty.example.com": HostTopology(
+            is_subdomain=True,
+            services=[],
+        ),
+    }
+    return c
+
+
+# ---------------------------------------------------------------------------
+# Batch 2: Bugfix — Hypothesis key fallback
+# ---------------------------------------------------------------------------
+
+class TestBugfixHypothesisKeyFallback:
+    """Bugfix: hypothesis key fallback to statement."""
+
+    def test_statement_key_displayed(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert "SQL injection present in auth" in result
+
+    def test_hypothesis_id_excluded(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        # hypothesis_id should not appear as visible detail text in reasoning events
+        assert "hypothesis_id: hyp-123" not in result
+
+    def test_both_keys_work(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        # "hypothesis" key event
+        assert "Target likely uses django" in result
+        # "statement" key event
+        assert "Shodan reveals open redis port" in result
+
+
+# ---------------------------------------------------------------------------
+# Batch 2 Imp 1: Cumulative Findings Curve
+# ---------------------------------------------------------------------------
+
+class TestB2Imp1CumFindings:
+    """Imp 1: Cumulative findings curve SVG."""
+
+    def test_cum_findings_present(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert "cum-findings" in result
+
+    def test_cum_findings_svg_lines(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert "<line" in result
+
+    def test_cum_findings_dots(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        # Circle dots at discovery points
+        assert 'class="cum-findings"' in result
+        # SVG circles
+        assert "<circle" in result
+
+    def test_cum_label_shows_total(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert "Cumulative Findings (5 total)" in result
+
+    def test_no_cum_findings_when_empty(self):
+        data = assemble_data(ReportCollector())
+        result = render_html(data)
+        assert 'class="cum-findings"' not in result
+
+    def test_cum_findings_css(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert ".cum-findings" in result
+        assert ".cum-label" in result
+
+
+# ---------------------------------------------------------------------------
+# Batch 2 Imp 2: Kill Chain Plugin Drill-down
+# ---------------------------------------------------------------------------
+
+class TestB2Imp2KillChainDrilldown:
+    """Imp 2: Kill chain phase details with plugin list."""
+
+    def test_kc_phase_is_details(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert '<details class="kc-phase' in result
+
+    def test_kc_plugins_listed(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert "kc-plugins" in result
+
+    def test_kc_plugin_executed_class(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert 'kc-plugin executed' in result
+
+    def test_kc_plugin_skipped_class(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert 'kc-plugin skipped' in result
+
+    def test_kc_plugins_css(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert ".kc-plugins" in result
+        assert ".kc-plugin.executed" in result
+        assert ".kc-plugin.skipped" in result
+
+
+# ---------------------------------------------------------------------------
+# Batch 2 Imp 3: Decision Gap Type Distribution
+# ---------------------------------------------------------------------------
+
+class TestB2Imp3GapDistribution:
+    """Imp 3: Gap type distribution bars in decisions."""
+
+    def test_gap_dist_present(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert "gap-dist" in result
+
+    def test_gap_dist_shows_types(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert "No Services" in result
+
+    def test_gap_dist_bar_rows(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert "gap-bar-row" in result
+        assert "gap-bar-fill" in result
+
+    def test_gap_dist_title(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert "Gap type distribution" in result
+
+    def test_no_gap_dist_when_no_gap_reasoning(self):
+        data = assemble_data(_enriched_collector())
+        result = render_html(data)
+        # enriched collector has non-Gap reasoning, so no gap distribution section
+        assert "Gap type distribution</div>" not in result
+
+    def test_gap_dist_css(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert ".gap-dist" in result
+        assert ".gap-bar-row" in result
+        assert ".gap-bar-count" in result
+
+
+# ---------------------------------------------------------------------------
+# Batch 2 Imp 4: Plugin Findings by Severity
+# ---------------------------------------------------------------------------
+
+class TestB2Imp4PluginSeverity:
+    """Imp 4: Severity column in plugin performance table."""
+
+    def test_sev_column_header(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert ">Sev.<" in result
+
+    def test_sev_badges_present(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        # sqli_basic at step=5 produces 2 findings (HIGH + MEDIUM via step match)
+        assert "psev-dot" in result
+
+    def test_psev_high_badge(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert "psev-HIGH" in result
+
+    def test_plugin_sev_cell_class(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert "plugin-sev-cell" in result
+
+    def test_psev_css(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert ".psev-dot" in result
+        assert ".psev-dot.psev-HIGH" in result
+
+
+# ---------------------------------------------------------------------------
+# Batch 2 Imp 5: Entity Gain Velocity SVG
+# ---------------------------------------------------------------------------
+
+class TestB2Imp5GainVelocity:
+    """Imp 5: Entity gain velocity SVG with markers."""
+
+    def test_gain_velocity_present(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert "gain-velocity" in result
+
+    def test_gain_velocity_polyline(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        # Two polylines total — gap + velocity
+        assert 'stroke="var(--neon-cyan)"' in result
+
+    def test_peak_marker_present(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        # Peak is step 5 with 40 gained
+        assert 'fill="var(--neon-green)"' in result
+
+    def test_saturation_marker_present(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert 'fill="var(--neon-orange)"' in result
+
+    def test_gain_label_peak_value(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert "peak: +40" in result
+
+    def test_gain_velocity_css(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert ".gain-velocity" in result
+        assert ".gain-label" in result
+
+
+# ---------------------------------------------------------------------------
+# Batch 2 Imp 6: Subdomain Discovery Stats
+# ---------------------------------------------------------------------------
+
+class TestB2Imp6SubdomainStats:
+    """Imp 6: Subdomain discovery stats in attack surface."""
+
+    def test_subdomain_summary_present(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert "subdomain-summary" in result
+
+    def test_root_count(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        # 1 root (app.example.com)
+        assert ">1</span> root hosts" in result
+
+    def test_subdomain_count(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        # 3 subdomains
+        assert ">3</span> subdomains" in result
+
+    def test_examined_percentage(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert "examined" in result
+        assert "sub-explored" in result
+
+    def test_no_subdomain_without_topology(self):
+        data = assemble_data(ReportCollector())
+        result = render_html(data)
+        assert 'class="subdomain-summary"' not in result
+
+    def test_subdomain_css(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert ".subdomain-summary" in result
+        assert ".sub-stat" in result
+
+
+# ---------------------------------------------------------------------------
+# Batch 2 Imp 7: Hypothesis Category Breakdown
+# ---------------------------------------------------------------------------
+
+class TestB2Imp7HypothesisCategories:
+    """Imp 7: Hypothesis category groups in reasoning."""
+
+    def test_hyp_categories_present(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert "hyp-categories" in result
+
+    def test_framework_detection_group(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert "Framework Detection" in result
+
+    def test_external_intelligence_group(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert "External Intelligence" in result
+
+    def test_confirmed_class(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert 'hyp-cat-item confirmed' in result
+
+    def test_rejected_class(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert 'hyp-cat-item rejected' in result
+
+    def test_cat_count_badge(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert "hyp-cat-count" in result
+
+    def test_hyp_categories_css(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert ".hyp-categories" in result
+        assert ".hyp-cat-group" in result
+        assert ".hyp-cat-item.confirmed" in result
+        assert ".hyp-cat-item.rejected" in result
+
+
+# ---------------------------------------------------------------------------
+# Batch 2 Imp 8: Execution Cost Distribution
+# ---------------------------------------------------------------------------
+
+class TestB2Imp8CostDistribution:
+    """Imp 8: Execution cost distribution stacked bar."""
+
+    def test_cost_dist_present(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert "cost-dist" in result
+
+    def test_cost_dist_bar(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert "cost-dist-bar" in result
+        assert "cost-seg" in result
+
+    def test_cost_dist_legend(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert "cost-dist-legend" in result
+        assert "cost-legend-item" in result
+
+    def test_cost_dist_title(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert "Runtime cost distribution" in result
+
+    def test_cost_outlier_warning(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        # shodan_lookup is 120s out of ~127.6s total → >50%
+        assert "cost-outlier" in result
+        assert "shodan_lookup" in result
+
+    def test_cost_dist_css(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert ".cost-dist" in result
+        assert ".cost-seg" in result
+        assert ".cost-outlier" in result
+
+
+# ---------------------------------------------------------------------------
+# Design Polish Batch 3
+# ---------------------------------------------------------------------------
+
+
+def _batch3_training_collector() -> ReportCollector:
+    """Build collector with training data for batch 3 tests."""
+    c = ReportCollector(target="train.example.com", mode="auto", max_steps=30)
+    c.step = 10
+    c.total_entities = 50
+    c.total_relations = 25
+    c.findings = [
+        ReportFinding(
+            title="SQLi in /api", severity="high",
+            host="train.example.com", step=5,
+            evidence="1=1", confidence=0.9, verified=True,
+        ),
+    ]
+    c.step_history = [
+        StepSnapshot(step=1, entities=10, relations=5, gaps=8, entities_gained=10),
+        StepSnapshot(step=5, entities=30, relations=15, gaps=4, entities_gained=15),
+        StepSnapshot(step=10, entities=50, relations=25, gaps=2, entities_gained=5),
+    ]
+    c.training = {
+        "profile_name": "webapp_basic",
+        "coverage": 0.80,
+        "verification_rate": 0.60,
+        "passed": True,
+        "expected_findings": [
+            {"title": "SQL Injection", "severity": "HIGH",
+             "discovered": True, "verified": True, "discovery_step": 5},
+            {"title": "XSS Reflected", "severity": "MEDIUM",
+             "discovered": False, "verified": False, "discovery_step": None},
+            {"title": "Open Redirect", "severity": "LOW",
+             "discovered": True, "verified": False, "discovery_step": 8},
+        ],
+    }
+    return c
+
+
+class TestUnifiedCardHover:
+    """Imp 1: Consistent card hover effects."""
+
+    def test_unified_transition_rule(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert ".metric-card, .surface-stat, .reasoning-stat, .kc-phase" in result
+
+    def test_hover_translatey(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert "translateY(-2px)" in result
+
+    def test_reasoning_stat_hover(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert ".reasoning-stat:hover" in result
+
+
+class TestTrainingTablePolish:
+    """Imp 2: Training table row classes and step badges."""
+
+    def test_row_class_yes(self):
+        data = assemble_data(_batch3_training_collector())
+        result = render_html(data)
+        assert "training-row-yes" in result
+
+    def test_row_class_no(self):
+        data = assemble_data(_batch3_training_collector())
+        result = render_html(data)
+        assert "training-row-no" in result
+
+    def test_step_badge_present(self):
+        data = assemble_data(_batch3_training_collector())
+        result = render_html(data)
+        assert "step-badge" in result
+
+    def test_training_hover_css(self):
+        data = assemble_data(_batch3_training_collector())
+        result = render_html(data)
+        assert ".training-table tbody tr:hover td" in result
+
+
+class TestVulnSeverityBar:
+    """Imp 3: Vulnerability severity mini-bar."""
+
+    def test_vuln_sev_bar_present(self):
+        data = assemble_data(_sample_collector())
+        data["vulnerabilities"] = [
+            {"vulnerability_id": "v1", "vuln_type": "sqli", "severity": "HIGH",
+             "affected_surfaces": ["/login"], "scenarios": ["sqli_basic"],
+             "confidence_aggregate": 0.9, "proofs": ["proof"], "reproduction_steps": []},
+            {"vulnerability_id": "v2", "vuln_type": "xss", "severity": "MEDIUM",
+             "affected_surfaces": ["/search"], "scenarios": ["xss_scan"],
+             "confidence_aggregate": 0.7, "proofs": [], "reproduction_steps": []},
+        ]
+        result = render_html(data)
+        assert "vuln-sev-bar" in result
+
+    def test_vuln_sev_bar_segments_match(self):
+        data = assemble_data(_sample_collector())
+        data["vulnerabilities"] = [
+            {"vulnerability_id": "v1", "vuln_type": "sqli", "severity": "HIGH",
+             "affected_surfaces": [], "scenarios": [],
+             "confidence_aggregate": 0.9, "proofs": [], "reproduction_steps": []},
+            {"vulnerability_id": "v2", "vuln_type": "xss", "severity": "HIGH",
+             "affected_surfaces": [], "scenarios": [],
+             "confidence_aggregate": 0.7, "proofs": [], "reproduction_steps": []},
+            {"vulnerability_id": "v3", "vuln_type": "redirect", "severity": "LOW",
+             "affected_surfaces": [], "scenarios": [],
+             "confidence_aggregate": 0.5, "proofs": [], "reproduction_steps": []},
+        ]
+        result = render_html(data)
+        assert 'title="HIGH: 2"' in result
+        assert 'title="LOW: 1"' in result
+
+    def test_vuln_sev_bar_absent_no_vulns(self):
+        data = assemble_data(_sample_collector())
+        data["vulnerabilities"] = []
+        result = render_html(data)
+        # HTML element should not appear (CSS class def still present)
+        assert 'class="severity-bar vuln-sev-bar"' not in result
+
+
+class TestFilterChipAnimation:
+    """Imp 4: Filter chip hover/active micro-interactions."""
+
+    def test_filter_chip_hover_translatey(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert ".filter-chip:hover" in result
+        assert "translateY(-1px)" in result
+
+    def test_filter_chip_active_scale(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert ".filter-chip:active" in result
+        assert "scale(0.95)" in result
+
+    def test_filter_chip_transition_exists(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert "transition: all 0.15s" in result
+
+
+class TestScanLineEffect:
+    """Imp 5: Scan-line cyberpunk effect on .main."""
+
+    def test_scan_line_applied(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert ".main::after" in result
+        assert "scan-line" in result
+
+    def test_scan_line_hidden_in_print(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert ".main::after { display: none" in result
+
+    def test_reduced_motion_covers_after(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert "*, *::before, *::after" in result
+
+
+class TestFooterEnrichment:
+    """Imp 6: Footer with findings count, risk score, entities."""
+
+    def test_footer_findings_count(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert "Findings:" in result
+        assert "footer-stats" in result
+
+    def test_footer_risk_score_color(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert "risk-" in result
+
+    def test_footer_entities_count(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert "Entities:" in result
+
+    def test_footer_flex_layout_css(self):
+        data = assemble_data(_sample_collector())
+        result = render_html(data)
+        assert ".footer-stats" in result
+        assert ".footer-meta" in result
+
+
+class TestSvgAccessibility:
+    """Imp 7: SVG charts have role=img and <title>."""
+
+    def test_gap_trajectory_accessible(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert "Gap trajectory chart" in result
+        assert 'role="img"' in result
+
+    def test_entity_velocity_accessible(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert "Entity gain velocity chart" in result
+
+    def test_cumulative_findings_accessible(self):
+        data = assemble_data(_batch2_collector())
+        result = render_html(data)
+        assert "Cumulative findings chart" in result
+
+
+class TestConfidenceGauge:
+    """Imp 8: Inline SVG confidence gauge in vulnerabilities."""
+
+    def test_conf_gauge_present(self):
+        data = assemble_data(_sample_collector())
+        data["vulnerabilities"] = [
+            {"vulnerability_id": "v1", "vuln_type": "sqli", "severity": "HIGH",
+             "affected_surfaces": [], "scenarios": [],
+             "confidence_aggregate": 0.9, "proofs": [], "reproduction_steps": []},
+        ]
+        result = render_html(data)
+        assert "conf-gauge" in result
+
+    def test_conf_gauge_high_color(self):
+        data = assemble_data(_sample_collector())
+        data["vulnerabilities"] = [
+            {"vulnerability_id": "v1", "vuln_type": "sqli", "severity": "HIGH",
+             "affected_surfaces": [], "scenarios": [],
+             "confidence_aggregate": 0.9, "proofs": [], "reproduction_steps": []},
+        ]
+        result = render_html(data)
+        assert "var(--neon-green)" in result
+
+    def test_conf_gauge_medium_color(self):
+        data = assemble_data(_sample_collector())
+        data["vulnerabilities"] = [
+            {"vulnerability_id": "v1", "vuln_type": "sqli", "severity": "HIGH",
+             "affected_surfaces": [], "scenarios": [],
+             "confidence_aggregate": 0.6, "proofs": [], "reproduction_steps": []},
+        ]
+        result = render_html(data)
+        assert "var(--medium)" in result
+
+    def test_conf_gauge_low_color(self):
+        data = assemble_data(_sample_collector())
+        data["vulnerabilities"] = [
+            {"vulnerability_id": "v1", "vuln_type": "sqli", "severity": "HIGH",
+             "affected_surfaces": [], "scenarios": [],
+             "confidence_aggregate": 0.3, "proofs": [], "reproduction_steps": []},
+        ]
+        result = render_html(data)
+        # Low confidence (<0.5) uses critical color
+        assert "var(--critical)" in result
